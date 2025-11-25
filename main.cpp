@@ -36,8 +36,8 @@
 #include <cstdlib>
 
  // Simulation parameters
-const int SIM_WIDTH = 1920;
-const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
+const int SIM_WIDTH = 512;
+const int SIM_HEIGHT = 384;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
 const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.995f;
@@ -45,8 +45,8 @@ const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 0.35f;
 
 // Window dimensions
-int windowWidth = 1920;
-int windowHeight = 1080;
+int windowWidth = 1024;
+int windowHeight = 768;
 
 // Mouse state
 int mouseX = 0, mouseY = 0;
@@ -838,13 +838,17 @@ void addObstacle(float x, float y, float radius, bool add) {
  * Add or remove obstacles using a sprite texture as a stamp.
  *
  * @param stampTexture  OpenGL texture ID of the sprite to use as stamp
- * @param centerX       X position of stamp center in normalized coords [0,1]
- * @param centerY       Y position of stamp center in normalized coords [0,1]
+ * @param pixelX        X position of stamp's top-left corner in simulation pixels
+ * @param pixelY        Y position of stamp's top-left corner in simulation pixels
+ *                      (0,0) is the top-left corner of the simulation
  * @param pixelWidth    Width of the stamp in simulation pixels
  * @param pixelHeight   Height of the stamp in simulation pixels
  * @param add           true to add obstacles, false to remove them
  * @param threshold     Alpha/intensity threshold for considering a pixel solid (default 0.5)
  * @param useAlpha      true to use alpha channel, false to use luminance of RGB
+ *
+ * The coordinate system uses top-left as origin (0,0), with X increasing to the right
+ * and Y increasing downward, matching typical image/screen coordinates.
  *
  * The stamp will appear with the correct aspect ratio regardless of the
  * simulation's aspect ratio. For example, a 100x100 pixel stamp will appear
@@ -854,16 +858,16 @@ void addObstacle(float x, float y, float radius, bool add) {
  *   // Load a sprite texture (e.g., a star shape with transparency)
  *   GLuint starTex = loadTexture("star.png");
  *
- *   // Stamp a 64x64 pixel star-shaped obstacle at the center of the simulation
- *   addObstacleStamp(starTex, 0.5f, 0.5f, 64, 64, true, 0.5f, true);
+ *   // Stamp a 64x64 pixel star at position (100, 50) from top-left
+ *   addObstacleStamp(starTex, 100, 50, 64, 64, true, 0.5f, true);
  *
- *   // Stamp a 100x50 pixel rectangle (will appear as 2:1 aspect ratio)
- *   addObstacleStamp(rectTex, 0.3f, 0.7f, 100, 50, true, 0.5f, true);
+ *   // Stamp a 100x50 pixel rectangle at the top-left corner
+ *   addObstacleStamp(rectTex, 0, 0, 100, 50, true, 0.5f, true);
  *
- *   // Remove obstacles using a 32x32 pixel circular eraser
- *   addObstacleStamp(circleTex, 0.3f, 0.7f, 32, 32, false, 0.5f, true);
+ *   // Remove obstacles using a 32x32 pixel circular eraser at (200, 150)
+ *   addObstacleStamp(circleTex, 200, 150, 32, 32, false, 0.5f, true);
  */
-void addObstacleStamp(GLuint stampTexture, float centerX, float centerY,
+void addObstacleStamp(GLuint stampTexture, int pixelX, int pixelY,
     int pixelWidth, int pixelHeight, bool add,
     float threshold = 0.5f, bool useAlpha = true) {
     glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
@@ -875,14 +879,26 @@ void addObstacleStamp(GLuint stampTexture, float centerX, float centerY,
     setTextureUniform(obstacleStampProgram, "obstacles", 0, obstacleTex);
     setTextureUniform(obstacleStampProgram, "stampTexture", 1, stampTexture);
 
-    // Convert pixel dimensions to normalized texture coordinates
-    // This accounts for the non-square simulation grid
-    // Half-size in normalized coords: pixels / simulation_dimension
+    // Convert pixel coordinates to normalized texture coordinates
+    // Input: top-left origin (0,0), Y increases downward
+    // OpenGL texture coords: bottom-left origin (0,0), Y increases upward
+
+    // Calculate center position from top-left corner
+    // Center in pixel coords (top-left origin)
+    float centerPixelX = pixelX + pixelWidth / 2.0f;
+    float centerPixelY = pixelY + pixelHeight / 2.0f;
+
+    // Convert to normalized coords [0,1] with bottom-left origin
+    // Flip Y: OpenGL's Y=0 is at bottom, our input Y=0 is at top
+    float centerNormX = centerPixelX / (float)SIM_WIDTH;
+    float centerNormY = 1.0f - (centerPixelY / (float)SIM_HEIGHT);
+
+    // Half-size in normalized coords
     float halfSizeX = (float)pixelWidth / (2.0f * SIM_WIDTH);
     float halfSizeY = (float)pixelHeight / (2.0f * SIM_HEIGHT);
 
     // Set uniforms
-    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampCenter"), centerX, centerY);
+    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampCenter"), centerNormX, centerNormY);
     glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampHalfSize"), halfSizeX, halfSizeY);
     glUniform1f(glGetUniformLocation(obstacleStampProgram, "threshold"), threshold);
     glUniform1f(glGetUniformLocation(obstacleStampProgram, "addOrRemove"), add ? 1.0f : 0.0f);
@@ -1133,42 +1149,52 @@ void keyboard(unsigned char key, int x, int y) {
     case '1':
         // Place stamp at mouse position (add obstacle)
     {
-        float mx = (float)mouseX / windowWidth;
-        float my = 1.0f - (float)mouseY / windowHeight;
+        // Convert window mouse coords to simulation pixel coords
+        // Mouse coords: top-left origin, matches our new coordinate system
+        int simX = (int)((float)mouseX / windowWidth * SIM_WIDTH);
+        int simY = (int)((float)mouseY / windowHeight * SIM_HEIGHT);
+
         GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
         // Use 80x80 pixels for circle/star, 100x60 for rectangle
         int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
-        addObstacleStamp(stamps[currentStampType], mx, my,
-            stampSizes[currentStampType][0],
-            stampSizes[currentStampType][1],
-            true, 0.5f, true);
-        std::cout << "Stamped " << stampSizes[currentStampType][0] << "x"
-            << stampSizes[currentStampType][1] << " pixel obstacle at ("
-            << mx << ", " << my << ")" << std::endl;
+        int w = stampSizes[currentStampType][0];
+        int h = stampSizes[currentStampType][1];
+
+        // Center the stamp on the mouse position
+        int stampX = simX - w / 2;
+        int stampY = simY - h / 2;
+
+        addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, true, 0.5f, true);
+        std::cout << "Stamped " << w << "x" << h << " pixel obstacle at ("
+            << stampX << ", " << stampY << ")" << std::endl;
     }
     break;
     case '2':
         // Place stamp at mouse position (remove obstacle)
     {
-        float mx = (float)mouseX / windowWidth;
-        float my = 1.0f - (float)mouseY / windowHeight;
+        int simX = (int)((float)mouseX / windowWidth * SIM_WIDTH);
+        int simY = (int)((float)mouseY / windowHeight * SIM_HEIGHT);
+
         GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
         int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
-        addObstacleStamp(stamps[currentStampType], mx, my,
-            stampSizes[currentStampType][0],
-            stampSizes[currentStampType][1],
-            false, 0.5f, true);
-        std::cout << "Erased " << stampSizes[currentStampType][0] << "x"
-            << stampSizes[currentStampType][1] << " pixel area at ("
-            << mx << ", " << my << ")" << std::endl;
+        int w = stampSizes[currentStampType][0];
+        int h = stampSizes[currentStampType][1];
+
+        int stampX = simX - w / 2;
+        int stampY = simY - h / 2;
+
+        addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, false, 0.5f, true);
+        std::cout << "Erased " << w << "x" << h << " pixel area at ("
+            << stampX << ", " << stampY << ")" << std::endl;
     }
     break;
     case '3':
         // Demo: place multiple stamps in a pattern
     {
+        int startX = 50;  // Start 50 pixels from left
+        int y = SIM_HEIGHT / 2 - 25;  // Vertically centered
         for (int i = 0; i < 5; i++) {
-            float x = 0.2f + i * 0.15f;
-            float y = 0.5f;
+            int x = startX + i * 80;  // 80 pixel spacing
             // 50x50 pixel stars in a row
             addObstacleStamp(starStampTex, x, y, 50, 50, true, 0.5f, true);
         }
@@ -1240,7 +1266,6 @@ void printControls() {
 
 #pragma comment(lib, "freeglut")
 #pragma comment(lib, "glew32")
-
 
 int main(int argc, char** argv) {
     // Initialize GLUT
