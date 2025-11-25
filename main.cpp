@@ -24,14 +24,6 @@
  *   'q'/ESC: Quit
  */
 
-/*
-implement a C++ 2D Navier-Stokes simulation using OpenGL 4 fragment shaders. use GLEW, GLM, and GLUT libraries. include vorticity confinement. include obstacle texture. include adding mouse-based velocity and density sources. make sure you take into account rectangular (non-square) texture sizes. use one source file main.cpp, no separate shader files
-*/
-
-
-
-
-
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <glm/glm.hpp>
@@ -44,8 +36,8 @@ implement a C++ 2D Navier-Stokes simulation using OpenGL 4 fragment shaders. use
 #include <cstdlib>
 
  // Simulation parameters
-const int SIM_WIDTH = 512;
-const int SIM_HEIGHT = 384;  // Non-square to demonstrate rectangular handling
+const int SIM_WIDTH = 1920;
+const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
 const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.995f;
@@ -53,8 +45,8 @@ const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 0.35f;
 
 // Window dimensions
-int windowWidth = 1024;
-int windowHeight = 768;
+int windowWidth = 1920;
+int windowHeight = 1080;
 
 // Mouse state
 int mouseX = 0, mouseY = 0;
@@ -67,6 +59,12 @@ bool shiftDown = false;
 // Simulation state
 bool vorticityEnabled = true;
 float vorticityStrength = VORTICITY_SCALE;
+
+// Demo stamp textures
+GLuint circleStampTex = 0;
+GLuint starStampTex = 0;
+GLuint rectangleStampTex = 0;
+int currentStampType = 0;  // 0=circle, 1=star, 2=rectangle
 
 // OpenGL objects
 GLuint velocityFBO[2], pressureFBO[2], densityFBO[2];
@@ -91,6 +89,7 @@ GLuint displayProgram;
 GLuint vorticityProgram;
 GLuint vorticityForceProgram;
 GLuint obstacleProgram;
+GLuint obstacleStampProgram;
 GLuint copyProgram;
 
 // Quad VAO
@@ -375,6 +374,64 @@ void main() {
 }
 )";
 
+// Obstacle stamp shader - uses a sprite texture as a stamp
+const char* obstacleStampFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D obstacles;      // Current obstacle field
+uniform sampler2D stampTexture;   // Sprite texture to stamp
+uniform vec2 stampCenter;         // Center position in normalized coords [0,1]
+uniform vec2 stampHalfSize;       // Half-size of stamp in normalized coords (already aspect-corrected)
+uniform float threshold;          // Alpha/intensity threshold for stamp (default 0.5)
+uniform float addOrRemove;        // 1.0 to add obstacles, 0.0 to remove
+uniform int useAlpha;             // 1 = use alpha channel, 0 = use red/luminance
+
+void main() {
+    float current = texture(obstacles, texCoord).x;
+    
+    // Calculate position relative to stamp center in normalized texture space
+    vec2 diff = texCoord - stampCenter;
+    
+    // Check if we're within the stamp bounds
+    // stampHalfSize is pre-computed to account for aspect ratio
+    vec2 relPos = diff / (stampHalfSize * 2.0) + 0.5;
+    
+    if (relPos.x >= 0.0 && relPos.x <= 1.0 && relPos.y >= 0.0 && relPos.y <= 1.0) {
+        // Sample the stamp texture (flip Y for typical image coordinates)
+        vec2 stampUV = vec2(relPos.x, 1.0 - relPos.y);
+        vec4 stampSample = texture(stampTexture, stampUV);
+        
+        // Get stamp value based on mode
+        float stampValue;
+        if (useAlpha == 1) {
+            stampValue = stampSample.a;
+        } else {
+            // Use luminance of RGB
+            stampValue = dot(stampSample.rgb, vec3(0.299, 0.587, 0.114));
+        }
+        
+        // Apply threshold
+        if (stampValue >= threshold) {
+            if (addOrRemove > 0.5) {
+                // Add mode: set obstacle where stamp is solid
+                fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            } else {
+                // Remove mode: clear obstacle where stamp is solid
+                fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            }
+        } else {
+            // Below threshold, keep current value
+            fragColor = vec4(current, 0.0, 0.0, 1.0);
+        }
+    } else {
+        // Outside stamp bounds, keep current value
+        fragColor = vec4(current, 0.0, 0.0, 1.0);
+    }
+}
+)";
+
 const char* displayFragmentSource = R"(
 #version 400 core
 in vec2 texCoord;
@@ -551,6 +608,7 @@ void initShaders() {
     vorticityProgram = createProgram(vertexShaderSource, vorticityFragmentSource);
     vorticityForceProgram = createProgram(vertexShaderSource, vorticityForceFragmentSource);
     obstacleProgram = createProgram(vertexShaderSource, obstacleFragmentSource);
+    obstacleStampProgram = createProgram(vertexShaderSource, obstacleStampFragmentSource);
     copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
 }
 
@@ -776,6 +834,173 @@ void addObstacle(float x, float y, float radius, bool add) {
     drawQuad();
 }
 
+/**
+ * Add or remove obstacles using a sprite texture as a stamp.
+ *
+ * @param stampTexture  OpenGL texture ID of the sprite to use as stamp
+ * @param centerX       X position of stamp center in normalized coords [0,1]
+ * @param centerY       Y position of stamp center in normalized coords [0,1]
+ * @param pixelWidth    Width of the stamp in simulation pixels
+ * @param pixelHeight   Height of the stamp in simulation pixels
+ * @param add           true to add obstacles, false to remove them
+ * @param threshold     Alpha/intensity threshold for considering a pixel solid (default 0.5)
+ * @param useAlpha      true to use alpha channel, false to use luminance of RGB
+ *
+ * The stamp will appear with the correct aspect ratio regardless of the
+ * simulation's aspect ratio. For example, a 100x100 pixel stamp will appear
+ * as a square even on a non-square simulation grid.
+ *
+ * Example usage:
+ *   // Load a sprite texture (e.g., a star shape with transparency)
+ *   GLuint starTex = loadTexture("star.png");
+ *
+ *   // Stamp a 64x64 pixel star-shaped obstacle at the center of the simulation
+ *   addObstacleStamp(starTex, 0.5f, 0.5f, 64, 64, true, 0.5f, true);
+ *
+ *   // Stamp a 100x50 pixel rectangle (will appear as 2:1 aspect ratio)
+ *   addObstacleStamp(rectTex, 0.3f, 0.7f, 100, 50, true, 0.5f, true);
+ *
+ *   // Remove obstacles using a 32x32 pixel circular eraser
+ *   addObstacleStamp(circleTex, 0.3f, 0.7f, 32, 32, false, 0.5f, true);
+ */
+void addObstacleStamp(GLuint stampTexture, float centerX, float centerY,
+    int pixelWidth, int pixelHeight, bool add,
+    float threshold = 0.5f, bool useAlpha = true) {
+    glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
+    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+
+    glUseProgram(obstacleStampProgram);
+
+    // Bind textures
+    setTextureUniform(obstacleStampProgram, "obstacles", 0, obstacleTex);
+    setTextureUniform(obstacleStampProgram, "stampTexture", 1, stampTexture);
+
+    // Convert pixel dimensions to normalized texture coordinates
+    // This accounts for the non-square simulation grid
+    // Half-size in normalized coords: pixels / simulation_dimension
+    float halfSizeX = (float)pixelWidth / (2.0f * SIM_WIDTH);
+    float halfSizeY = (float)pixelHeight / (2.0f * SIM_HEIGHT);
+
+    // Set uniforms
+    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampCenter"), centerX, centerY);
+    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampHalfSize"), halfSizeX, halfSizeY);
+    glUniform1f(glGetUniformLocation(obstacleStampProgram, "threshold"), threshold);
+    glUniform1f(glGetUniformLocation(obstacleStampProgram, "addOrRemove"), add ? 1.0f : 0.0f);
+    glUniform1i(glGetUniformLocation(obstacleStampProgram, "useAlpha"), useAlpha ? 1 : 0);
+
+    drawQuad();
+
+    // Copy back to obstacle texture
+    glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+    glUseProgram(copyProgram);
+    setTextureUniform(copyProgram, "source", 0, tempTex);
+    drawQuad();
+}
+
+/**
+ * Helper function to load a texture from raw RGBA pixel data.
+ * Useful for creating stamp textures programmatically or from loaded images.
+ *
+ * @param data    Pointer to RGBA pixel data (4 bytes per pixel)
+ * @param width   Width of the texture in pixels
+ * @param height  Height of the texture in pixels
+ * @return        OpenGL texture ID
+ */
+GLuint createStampTextureFromData(const unsigned char* data, int width, int height) {
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return tex;
+}
+
+/**
+ * Create a circular stamp texture programmatically.
+ *
+ * @param radius  Radius in pixels
+ * @return        OpenGL texture ID of a circle stamp
+ */
+GLuint createCircleStamp(int radius) {
+    int size = radius * 2;
+    std::vector<unsigned char> data(size * size * 4, 0);
+
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float dx = x - radius + 0.5f;
+            float dy = y - radius + 0.5f;
+            float dist = sqrtf(dx * dx + dy * dy);
+
+            int idx = (y * size + x) * 4;
+            if (dist <= radius) {
+                data[idx + 0] = 255;  // R
+                data[idx + 1] = 255;  // G
+                data[idx + 2] = 255;  // B
+                data[idx + 3] = 255;  // A
+            }
+        }
+    }
+
+    return createStampTextureFromData(data.data(), size, size);
+}
+
+/**
+ * Create a star-shaped stamp texture programmatically.
+ *
+ * @param outerRadius  Outer radius of star points in pixels
+ * @param innerRadius  Inner radius (between points) in pixels
+ * @param points       Number of star points
+ * @return             OpenGL texture ID of a star stamp
+ */
+GLuint createStarStamp(int outerRadius, int innerRadius, int points) {
+    int size = outerRadius * 2;
+    std::vector<unsigned char> data(size * size * 4, 0);
+
+    float angleStep = 3.14159265f / points;
+
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float dx = x - outerRadius + 0.5f;
+            float dy = y - outerRadius + 0.5f;
+            float dist = sqrtf(dx * dx + dy * dy);
+            float angle = atan2f(dy, dx);
+            if (angle < 0) angle += 2.0f * 3.14159265f;
+
+            // Calculate the radius at this angle for the star shape
+            int sector = (int)(angle / angleStep);
+            float localAngle = fmodf(angle, angleStep * 2.0f);
+            if (localAngle > angleStep) localAngle = angleStep * 2.0f - localAngle;
+
+            float starRadius = innerRadius + (outerRadius - innerRadius) * (1.0f - localAngle / angleStep);
+
+            int idx = (y * size + x) * 4;
+            if (dist <= starRadius) {
+                data[idx + 0] = 255;
+                data[idx + 1] = 255;
+                data[idx + 2] = 255;
+                data[idx + 3] = 255;
+            }
+        }
+    }
+
+    return createStampTextureFromData(data.data(), size, size);
+}
+
+/**
+ * Create a rectangular stamp texture.
+ *
+ * @param width   Width in pixels
+ * @param height  Height in pixels
+ * @return        OpenGL texture ID of a rectangle stamp
+ */
+GLuint createRectangleStamp(int width, int height) {
+    std::vector<unsigned char> data(width * height * 4, 255);  // All white, fully opaque
+    return createStampTextureFromData(data.data(), width, height);
+}
+
 void simulate() {
     // Advect velocity
     advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
@@ -896,6 +1121,60 @@ void keyboard(unsigned char key, int x, int y) {
         vorticityStrength = std::max(0.0f, vorticityStrength - 0.05f);
         std::cout << "Vorticity strength: " << vorticityStrength << std::endl;
         break;
+    case 's':
+    case 'S':
+        // Cycle through stamp types
+        currentStampType = (currentStampType + 1) % 3;
+        {
+            const char* stampNames[] = { "Circle", "Star", "Rectangle" };
+            std::cout << "Stamp type: " << stampNames[currentStampType] << std::endl;
+        }
+        break;
+    case '1':
+        // Place stamp at mouse position (add obstacle)
+    {
+        float mx = (float)mouseX / windowWidth;
+        float my = 1.0f - (float)mouseY / windowHeight;
+        GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
+        // Use 80x80 pixels for circle/star, 100x60 for rectangle
+        int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
+        addObstacleStamp(stamps[currentStampType], mx, my,
+            stampSizes[currentStampType][0],
+            stampSizes[currentStampType][1],
+            true, 0.5f, true);
+        std::cout << "Stamped " << stampSizes[currentStampType][0] << "x"
+            << stampSizes[currentStampType][1] << " pixel obstacle at ("
+            << mx << ", " << my << ")" << std::endl;
+    }
+    break;
+    case '2':
+        // Place stamp at mouse position (remove obstacle)
+    {
+        float mx = (float)mouseX / windowWidth;
+        float my = 1.0f - (float)mouseY / windowHeight;
+        GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
+        int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
+        addObstacleStamp(stamps[currentStampType], mx, my,
+            stampSizes[currentStampType][0],
+            stampSizes[currentStampType][1],
+            false, 0.5f, true);
+        std::cout << "Erased " << stampSizes[currentStampType][0] << "x"
+            << stampSizes[currentStampType][1] << " pixel area at ("
+            << mx << ", " << my << ")" << std::endl;
+    }
+    break;
+    case '3':
+        // Demo: place multiple stamps in a pattern
+    {
+        for (int i = 0; i < 5; i++) {
+            float x = 0.2f + i * 0.15f;
+            float y = 0.5f;
+            // 50x50 pixel stars in a row
+            addObstacleStamp(starStampTex, x, y, 50, 50, true, 0.5f, true);
+        }
+        std::cout << "Demo: placed row of 50x50 pixel star obstacles" << std::endl;
+    }
+    break;
     }
 }
 
@@ -944,18 +1223,24 @@ void printControls() {
     std::cout << "\nControls:" << std::endl;
     std::cout << "  Left mouse button:    Add density (colored smoke)" << std::endl;
     std::cout << "  Right mouse button:   Add velocity" << std::endl;
-    std::cout << "  Middle mouse / Shift+Left: Add obstacles" << std::endl;
+    std::cout << "  Middle mouse / Shift+Left: Add obstacles (brush)" << std::endl;
     std::cout << "  'r': Reset simulation" << std::endl;
     std::cout << "  'o': Clear obstacles" << std::endl;
     std::cout << "  'v': Toggle vorticity confinement" << std::endl;
     std::cout << "  '+'/'-': Adjust vorticity strength" << std::endl;
-    std::cout << "  'q'/ESC: Quit" << std::endl;
+    std::cout << "\nStamp Controls:" << std::endl;
+    std::cout << "  's': Cycle stamp type (Circle/Star/Rectangle)" << std::endl;
+    std::cout << "  '1': Place current stamp at mouse (add obstacle)" << std::endl;
+    std::cout << "  '2': Place current stamp at mouse (remove obstacle)" << std::endl;
+    std::cout << "  '3': Demo: place row of star obstacles" << std::endl;
+    std::cout << "\n  'q'/ESC: Quit" << std::endl;
     std::cout << "\nVorticity confinement: ON" << std::endl;
     std::cout << "========================================\n" << std::endl;
 }
 
 #pragma comment(lib, "freeglut")
 #pragma comment(lib, "glew32")
+
 
 int main(int argc, char** argv) {
     // Initialize GLUT
@@ -984,6 +1269,12 @@ int main(int argc, char** argv) {
     initShaders();
     initTextures();
     initQuad();
+
+    // Create demo stamp textures
+    circleStampTex = createCircleStamp(64);
+    starStampTex = createStarStamp(64, 25, 5);
+    rectangleStampTex = createRectangleStamp(100, 60);
+    std::cout << "Demo stamp textures created (Circle, Star, Rectangle)" << std::endl;
 
     printControls();
 
