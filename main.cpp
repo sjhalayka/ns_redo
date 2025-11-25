@@ -29,6 +29,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -66,6 +69,11 @@ GLuint starStampTex = 0;
 GLuint rectangleStampTex = 0;
 int currentStampType = 0;  // 0=circle, 1=star, 2=rectangle
 
+// Protagonist sprite texture
+GLuint protagonistTex = 0;
+int protagonistWidth = 0;
+int protagonistHeight = 0;
+
 // OpenGL objects
 GLuint velocityFBO[2], pressureFBO[2], densityFBO[2];
 GLuint velocityTex[2], pressureTex[2], densityTex[2];
@@ -91,6 +99,7 @@ GLuint vorticityForceProgram;
 GLuint obstacleProgram;
 GLuint obstacleStampProgram;
 GLuint copyProgram;
+GLuint spriteProgram;
 
 // Quad VAO
 GLuint quadVAO, quadVBO;
@@ -484,6 +493,41 @@ void main() {
 }
 )";
 
+// Sprite drawing shader - draws a texture at a specific screen position
+const char* spriteVertexSource = R"(
+#version 400 core
+layout(location = 0) in vec2 position;
+out vec2 texCoord;
+
+uniform vec2 spritePos;      // Position in normalized device coords [-1, 1]
+uniform vec2 spriteSize;     // Size in normalized device coords
+
+void main() {
+    // position is in [-1, 1] range for the quad
+    // Map to sprite position and size
+    vec2 pos = spritePos + (position * 0.5 + 0.5) * spriteSize;
+    texCoord = position * 0.5 + 0.5;
+    // Flip texCoord.y for correct image orientation (top-left origin for images)
+    texCoord.y = 1.0 - texCoord.y;
+    gl_Position = vec4(pos, 0.0, 1.0);
+}
+)";
+
+const char* spriteFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D spriteTexture;
+
+void main() {
+    vec4 color = texture(spriteTexture, texCoord);
+    // Discard fully transparent pixels
+    if (color.a < 0.01) discard;
+    fragColor = color;
+}
+)";
+
 const char* boundaryFragmentSource = R"(
 #version 400 core
 in vec2 texCoord;
@@ -610,6 +654,7 @@ void initShaders() {
     obstacleProgram = createProgram(vertexShaderSource, obstacleFragmentSource);
     obstacleStampProgram = createProgram(vertexShaderSource, obstacleStampFragmentSource);
     copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
+    spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
 }
 
 void initTextures() {
@@ -1017,6 +1062,112 @@ GLuint createRectangleStamp(int width, int height) {
     return createStampTextureFromData(data.data(), width, height);
 }
 
+/**
+ * Load a texture from an image file using stb_image.
+ * Supports PNG, JPG, BMP, TGA, and other common formats.
+ *
+ * @param filename    Path to the image file
+ * @param outWidth    Output parameter for the image width in pixels
+ * @param outHeight   Output parameter for the image height in pixels
+ * @return            OpenGL texture ID, or 0 if loading failed
+ */
+GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) {
+    int width, height, channels;
+
+    // stb_image loads with (0,0) at top-left, which matches our coordinate system
+    stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
+
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 4);  // Force RGBA
+    if (!data) {
+        std::cerr << "Failed to load texture: " << filename << std::endl;
+        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+        if (outWidth) *outWidth = 0;
+        if (outHeight) *outHeight = 0;
+        return 0;
+    }
+
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    stbi_image_free(data);
+
+    if (outWidth) *outWidth = width;
+    if (outHeight) *outHeight = height;
+
+    std::cout << "Loaded texture: " << filename << " (" << width << "x" << height << ")" << std::endl;
+    return tex;
+}
+
+/**
+ * Draw a texture to the screen using pixel-based coordinates.
+ *
+ * @param texture     OpenGL texture ID of the sprite to draw
+ * @param pixelX      X position of the sprite's top-left corner in window pixels
+ * @param pixelY      Y position of the sprite's top-left corner in window pixels
+ *                    (0,0) is the top-left corner of the window
+ * @param pixelWidth  Width to draw the sprite in window pixels
+ * @param pixelHeight Height to draw the sprite in window pixels
+ *
+ * The coordinate system uses top-left as origin (0,0), with X increasing to the right
+ * and Y increasing downward, matching typical screen/image coordinates.
+ *
+ * Example usage:
+ *   // Draw a sprite at position (100, 50) with size 64x64 pixels
+ *   drawSprite(myTexture, 100, 50, 64, 64);
+ *
+ *   // Draw a sprite at the top-left corner of the window
+ *   drawSprite(myTexture, 0, 0, spriteWidth, spriteHeight);
+ *
+ *   // Draw a sprite scaled to 2x its original size
+ *   drawSprite(myTexture, 200, 100, originalWidth * 2, originalHeight * 2);
+ */
+void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight) {
+    if (texture == 0) return;
+
+    // Enable blending for transparency
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glUseProgram(spriteProgram);
+
+    // Convert pixel coordinates to normalized device coordinates [-1, 1]
+    // Window coordinate system: (0,0) at top-left, Y increases downward
+    // NDC: (-1,-1) at bottom-left, (1,1) at top-right
+
+    // Convert top-left corner position from pixel coords to NDC
+    // pixelX=0 -> ndcX=-1, pixelX=windowWidth -> ndcX=1
+    // pixelY=0 -> ndcY=1 (top), pixelY=windowHeight -> ndcY=-1 (bottom)
+    float ndcX = (2.0f * pixelX / windowWidth) - 1.0f;
+    float ndcY = 1.0f - (2.0f * pixelY / windowHeight);  // Flip Y
+
+    // Convert size from pixels to NDC units
+    float ndcWidth = 2.0f * pixelWidth / windowWidth;
+    float ndcHeight = 2.0f * pixelHeight / windowHeight;
+
+    // The sprite shader expects position as top-left corner in NDC
+    // and size as the full width/height in NDC
+    // Adjust Y position since we draw from bottom-left of the sprite quad
+    float spritePosX = ndcX;
+    float spritePosY = ndcY - ndcHeight;  // Move down by height (NDC Y is flipped)
+
+    glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
+    glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(glGetUniformLocation(spriteProgram, "spriteTexture"), 0);
+
+    drawQuad();
+
+    glDisable(GL_BLEND);
+}
+
 void simulate() {
     // Advect velocity
     advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
@@ -1085,6 +1236,12 @@ void display() {
     setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
 
     drawQuad();
+
+    // Draw protagonist sprite on top of the fluid simulation
+    // Draw at position (100, 100) with its original size
+    if (protagonistTex != 0) {
+        drawSprite(protagonistTex, 100, 100, protagonistWidth, protagonistHeight);
+    }
 
     glutSwapBuffers();
     glutPostRedisplay();
@@ -1187,7 +1344,7 @@ void keyboard(unsigned char key, int x, int y) {
         addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, false, 0.5f, true);
         std::cout << "Erased " << w << "x" << h << " pixel area at ("
             << stampX << ", " << stampY << ")" << std::endl;
-    } 
+    }
     break;
     case '3':
         // Demo: place multiple stamps in a pattern
@@ -1260,6 +1417,8 @@ void printControls() {
     std::cout << "  '1': Place current stamp at mouse (add obstacle)" << std::endl;
     std::cout << "  '2': Place current stamp at mouse (remove obstacle)" << std::endl;
     std::cout << "  '3': Demo: place row of star obstacles" << std::endl;
+    std::cout << "\nSprite:" << std::endl;
+    std::cout << "  protagonist.png is loaded and drawn at (100, 100)" << std::endl;
     std::cout << "\n  'q'/ESC: Quit" << std::endl;
     std::cout << "\nVorticity confinement: ON" << std::endl;
     std::cout << "========================================\n" << std::endl;
@@ -1301,6 +1460,12 @@ int main(int argc, char** argv) {
     starStampTex = createStarStamp(64, 25, 5);
     rectangleStampTex = createRectangleStamp(100, 60);
     std::cout << "Demo stamp textures created (Circle, Star, Rectangle)" << std::endl;
+
+    // Load protagonist texture
+    protagonistTex = loadTextureFromFile("media/protagonist.png", &protagonistWidth, &protagonistHeight);
+    if (protagonistTex == 0) {
+        std::cout << "Warning: Could not load protagonist.png - sprite drawing will be disabled" << std::endl;
+    }
 
     printControls();
 
