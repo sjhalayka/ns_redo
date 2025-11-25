@@ -36,17 +36,17 @@
 #include <cstdlib>
 
  // Simulation parameters
-const int SIM_WIDTH = 512;
-const int SIM_HEIGHT = 384;  // Non-square to demonstrate rectangular handling
+const int SIM_WIDTH = 1920;
+const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
 const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.995f;
 const float VELOCITY_DISSIPATION = 0.99f;
-const float VORTICITY_SCALE = 0.35f;
+const float VORTICITY_SCALE = 0.1f;
 
 // Window dimensions
-int windowWidth = 1024;
-int windowHeight = 768;
+int windowWidth = 1920;
+int windowHeight = 1080;
 
 // Mouse state
 int mouseX = 0, mouseY = 0;
@@ -1160,9 +1160,9 @@ void keyboard(unsigned char key, int x, int y) {
         int w = stampSizes[currentStampType][0];
         int h = stampSizes[currentStampType][1];
 
-        // Center the stamp on the mouse position
-        int stampX = simX - w / 2;
-        int stampY = simY - h / 2;
+        // DO NOT Center the stamp on the mouse position
+        int stampX = simX;// -w / 2;
+        int stampY = simY;// -h / 2;
 
         addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, true, 0.5f, true);
         std::cout << "Stamped " << w << "x" << h << " pixel obstacle at ("
@@ -1180,13 +1180,14 @@ void keyboard(unsigned char key, int x, int y) {
         int w = stampSizes[currentStampType][0];
         int h = stampSizes[currentStampType][1];
 
-        int stampX = simX - w / 2;
-        int stampY = simY - h / 2;
+        // DO NOT Center the stamp on the mouse position
+        int stampX = simX;// -w / 2;
+        int stampY = simY;// -h / 2;
 
         addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, false, 0.5f, true);
         std::cout << "Erased " << w << "x" << h << " pixel area at ("
             << stampX << ", " << stampY << ")" << std::endl;
-    }
+    } 
     break;
     case '3':
         // Demo: place multiple stamps in a pattern
