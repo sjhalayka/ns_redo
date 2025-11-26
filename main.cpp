@@ -464,10 +464,10 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     float obstacle = texture(obstacles, texCoord).x;
-    if (obstacle > 0.5) {
-        fragColor = vec4(0.3, 0.3, 0.35, 1.0);
-        return;
-    }
+    //if (obstacle > 0.5) {
+    //   fragColor = vec4(0.3, 0.3, 0.35, 1.0);
+    //    return;
+    //}
     
     vec3 d = texture(density, texCoord).rgb;
     vec2 v = texture(velocity, texCoord).xy;
@@ -1260,9 +1260,9 @@ void display() {
     }
 
 
-    if (foregroundTex != 0) {
-        drawSprite(foregroundTex, 0, 0, foregroundWidth, foregroundHeight);
-    }
+    //if (foregroundTex != 0) {
+    //    drawSprite(foregroundTex, -100, 0, foregroundWidth, foregroundHeight);
+    //}
 
 
     glutSwapBuffers();
