@@ -478,8 +478,8 @@ void main()
     }
   
     // Get density and colors at adjusted position
-    float redIntensity = texture(density, texCoord).r;
-    float blueIntensity = texture(density, texCoord).b;
+    float redIntensity = texture(density, texCoord).x;
+    float blueIntensity = texture(density, texCoord).y;
 
     float d = redIntensity + blueIntensity;
 
@@ -722,7 +722,7 @@ void initTextures() {
 
     // Density textures (RGB for colored smoke)
     for (int i = 0; i < 2; i++) {
-        createTexture(densityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RGBA32F, GL_RGBA, GL_FLOAT);
+        createTexture(densityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RG32F, GL_RG, GL_FLOAT);
         createFBO(densityFBO[i], densityTex[i]);
     }
 
@@ -1268,7 +1268,7 @@ void display() {
         if(red_mode)
             addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
         else
-            addSource(densityTex, densityFBO, currentDensity, x, y, 0, 0, 1, 0.0008f);
+            addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
     }
 
     if (rightMouseDown) {
@@ -1322,8 +1322,10 @@ void reshape(int w, int h) {
     windowHeight = h;
 }
 
-void keyboard(unsigned char key, int x, int y) {
-    switch (key) {
+void keyboard(unsigned char key, int x, int y) 
+{
+    switch (key) 
+    {
 
     case 'x':
     {
