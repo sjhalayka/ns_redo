@@ -1170,8 +1170,8 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 
 }
 
-void simulate() {
-
+void simulate() 
+{
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
