@@ -1166,9 +1166,19 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
     drawQuad();
 
     glDisable(GL_BLEND);
+
+
 }
 
 void simulate() {
+
+    GLuint clearColor[4] = { 0, 0, 0, 0 };
+    glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
+
+    addObstacleStamp(protagonistTex, 100, 100,
+        protagonistWidth, protagonistHeight, true,
+        0.5f, true);
+
     // Advect velocity
     advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
     currentVelocity = 1 - currentVelocity;
