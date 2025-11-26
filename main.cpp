@@ -45,7 +45,7 @@ const int JACOBI_ITERATIONS = 40;
 const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.995f;
 const float VELOCITY_DISSIPATION = 0.99f;
-const float VORTICITY_SCALE = 0.1f;
+const float VORTICITY_SCALE = 10.0f;
 
 // Window dimensions
 int windowWidth = 1920;
@@ -73,6 +73,12 @@ int currentStampType = 0;  // 0=circle, 1=star, 2=rectangle
 GLuint protagonistTex = 0;
 int protagonistWidth = 0;
 int protagonistHeight = 0;
+
+GLuint foregroundTex = 0;
+int foregroundWidth = 0;
+int foregroundHeight = 0;
+
+
 
 // OpenGL objects
 GLuint velocityFBO[2], pressureFBO[2], densityFBO[2];
@@ -1253,6 +1259,12 @@ void display() {
         drawSprite(protagonistTex, 100, 100, protagonistWidth, protagonistHeight);
     }
 
+
+    if (foregroundTex != 0) {
+        drawSprite(foregroundTex, 0, 0, foregroundWidth, foregroundHeight);
+    }
+
+
     glutSwapBuffers();
     glutPostRedisplay();
 }
@@ -1475,7 +1487,19 @@ int main(int argc, char** argv) {
     protagonistTex = loadTextureFromFile("media/protagonist.png", &protagonistWidth, &protagonistHeight);
     if (protagonistTex == 0) {
         std::cout << "Warning: Could not load protagonist.png - sprite drawing will be disabled" << std::endl;
+   
+        return 1;
     }
+
+    foregroundTex = loadTextureFromFile("media/foreground.png", &foregroundWidth, &foregroundHeight);
+    if (foregroundTex == 0) {
+        std::cout << "Warning: Could not load foreground.png - sprite drawing will be disabled" << std::endl;
+  
+        return 2;
+    }
+
+
+
 
     printControls();
 
