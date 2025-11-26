@@ -47,6 +47,9 @@ const float DENSITY_DISSIPATION = 0.995f;
 const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 10.0f;
 
+bool red_mode = true;
+
+
 // Window dimensions
 int windowWidth = 1920;
 int windowHeight = 1080;
@@ -462,28 +465,69 @@ vec3 hsv2rgb(vec3 c) {
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-void main() {
+void main() 
+{
     float obstacle = texture(obstacles, texCoord).x;
-    //if (obstacle > 0.5) {
+    
+    if (obstacle > 0.5) 
+    {
+    
     //   fragColor = vec4(0.3, 0.3, 0.35, 1.0);
-    //    return;
-    //}
-    
-    vec3 d = texture(density, texCoord).rgb;
-    vec2 v = texture(velocity, texCoord).xy;
-    
-    // Color based on density with slight velocity influence
-    float speed = length(v);
-    float hue = 0.6 - speed * 0.002;  // Blue to red based on speed
-    float sat = 0.7;
-    float val = clamp(d.r * 2.0, 0.0, 1.0);
-    
-    vec3 color = hsv2rgb(vec3(hue, sat, val));
-    
-    // Add some base color for visibility
-    color = mix(vec3(0.02, 0.02, 0.05), color, val);
-    
-    fragColor = vec4(color, 1.0);
+        
+        return;
+    }
+  
+    // Get density and colors at adjusted position
+    float redIntensity = texture(density, texCoord).r;
+    float blueIntensity = texture(density, texCoord).b;
+
+    float d = redIntensity + blueIntensity;
+
+    // Create color vectors based on intensity
+    vec4 redFluidColor = vec4(redIntensity, 0.0, 0.0, redIntensity);
+    vec4 blueFluidColor = vec4(0.0, 0.0, blueIntensity, blueIntensity);
+
+    // Combine both colors
+    vec4 combinedColor = redFluidColor + blueFluidColor;
+
+    vec4 blendedBackground = vec4(0.0, 0.0, 0.0, 0.0);
+
+    vec4 color1 = blendedBackground;
+    vec4 color2 = vec4(0.0, 0.125, 0.25, 1.0);
+    vec4 color3 = combinedColor;
+    vec4 color4 = vec4(0.0, 0.0, 0.0, 1.0);
+
+    if(length(redFluidColor.r) > 0.5)
+        color4 = vec4(0.0, 0.0, 0.0, 0.0);
+    else
+        color4 = vec4(1.0, 1.0, 1.0, 0.0);
+
+    // toon shading:
+    if (d < 0.25) {
+        fragColor = color1;
+    } else if (d < 0.5) {
+        fragColor = color2;
+    } else if (d < 0.75) {
+        fragColor = color3;
+    } else {
+        fragColor = color4;
+    }
+
+    //vec3 d = texture(density, texCoord).rgb;
+    //vec2 v = texture(velocity, texCoord).xy;
+    //
+    //// Color based on density with slight velocity influence
+    //float speed = length(v);
+    //float hue = 0.6 - speed * 0.002;  // Blue to red based on speed
+    //float sat = 0.7;
+    //float val = clamp(d.r * 2.0, 0.0, 1.0);
+    //
+    //vec3 color = hsv2rgb(vec3(hue, sat, val));
+    //
+    //// Add some base color for visibility
+    //color = mix(vec3(0.02, 0.02, 0.05), color, val);
+    //
+    //fragColor = vec4(color, 1.0);
 }
 )";
 
@@ -1216,11 +1260,15 @@ void display() {
         float y = 1.0f - (float)mouseY / windowHeight;
 
         // Add density with varying color based on position
-        float hue = fmod(glutGet(GLUT_ELAPSED_TIME) * 0.001f, 1.0f);
-        float r = 0.5f + 0.5f * sin(hue * 6.28318f);
-        float g = 0.5f + 0.5f * sin(hue * 6.28318f + 2.094f);
-        float b = 0.5f + 0.5f * sin(hue * 6.28318f + 4.189f);
-        addSource(densityTex, densityFBO, currentDensity, x, y, r * 0.8f, g * 0.8f, b * 0.8f, 0.0008f);
+        //float hue = fmod(glutGet(GLUT_ELAPSED_TIME) * 0.001f, 1.0f);
+        //float r = 0.5f + 0.5f * sin(hue * 6.28318f);
+        //float g = 0.5f + 0.5f * sin(hue * 6.28318f + 2.094f);
+        //float b = 0.5f + 0.5f * sin(hue * 6.28318f + 4.189f);
+
+        if(red_mode)
+            addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
+        else
+            addSource(densityTex, densityFBO, currentDensity, x, y, 0, 0, 1, 0.0008f);
     }
 
     if (rightMouseDown) {
@@ -1276,6 +1324,13 @@ void reshape(int w, int h) {
 
 void keyboard(unsigned char key, int x, int y) {
     switch (key) {
+
+    case 'x':
+    {
+        red_mode = !red_mode;
+        break;
+    }
+
     case 27:  // ESC
     case 'q':
     case 'Q':
