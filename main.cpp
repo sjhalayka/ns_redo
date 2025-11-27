@@ -1686,19 +1686,36 @@ void display()
 
 
 
-    // Run simulation step
-    //simulate();
+
+		// Fixed time step
+	//static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//static double accumulator = 0.0;
+
+	//double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//double frameTime = newTime - currentTime;
+	//currentTime = newTime;
+
+	//if (frameTime > DT)
+	//	frameTime = DT;
+
+	//accumulator += frameTime;
+
+	//while (accumulator >= DT)
+	//{
+	//	simulate();
+	//	accumulator -= DT;
+	//	GLOBAL_TIME += DT;
+	//}
+
+
+
+
+
 
     // Add continuous sources based on mouse input
     if (leftMouseDown && !shiftDown) {
         float x = (float)mouseX / windowWidth;
         float y = 1.0f - (float)mouseY / windowHeight;
-
-        // Add density with varying color based on position
-        //float hue = fmod(glutGet(GLUT_ELAPSED_TIME) * 0.001f, 1.0f);
-        //float r = 0.5f + 0.5f * sin(hue * 6.28318f);
-        //float g = 0.5f + 0.5f * sin(hue * 6.28318f + 2.094f);
-        //float b = 0.5f + 0.5f * sin(hue * 6.28318f + 4.189f);
 
         if(red_mode)
             addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
@@ -1741,7 +1758,6 @@ void display()
     if (protagonistTex != 0) {
         drawSprite(protagonistTex, 100, 100, protagonistWidth, protagonistHeight);
     }
-
 
     //if (foregroundTex != 0) {
     //    drawSprite(foregroundTex, -100, 0, foregroundWidth, foregroundHeight);
