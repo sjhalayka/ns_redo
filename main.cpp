@@ -41,7 +41,7 @@
 using namespace std;
 
 
- // Simulation parameters
+// Simulation parameters
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
@@ -1328,6 +1328,70 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 }
 
 
+/**
+ * Test if a screen pixel coordinate lies inside a sprite, and if so,
+ * whether the corresponding sprite texel is transparent.
+ *
+ * @param sprTex       OpenGL texture ID of the sprite (RGBA8 or similar)
+ * @param sprX         Sprite top-left corner X in window pixels
+ * @param sprY         Sprite top-left corner Y in window pixels
+ * @param sprW         Sprite width in pixels
+ * @param sprH         Sprite height in pixels
+ * @param pixelX       Test point X in window pixels
+ * @param pixelY       Test point Y in window pixels
+ * @param outInside    Output: true if inside sprite bounds
+ * @param outTransparent Output: true if the sprite pixel is transparent (alpha < threshold)
+ *
+ * NOTE: This reads the entire sprite texture into CPU memory ONCE per call.
+ * If needed often, cache the pixel buffer and width/height externally.
+ */
+bool isPixelInsideSpriteAndTransparent(
+    GLuint sprTex,
+    int sprX, int sprY,
+    int sprW, int sprH,
+    int pixelX, int pixelY,
+    bool& outInside,
+    bool& outTransparent,
+    unsigned char alphaThreshold = 127)
+{
+    outInside = false;
+    outTransparent = false;
+
+    // 1. Bounding box test (fast)
+    if (pixelX < sprX || pixelX >= sprX + sprW ||
+        pixelY < sprY || pixelY >= sprY + sprH)
+    {
+        return false; // definitely not inside
+    }
+
+    outInside = true;
+
+    // 2. Compute sprite-relative pixel coordinates
+    int localX = pixelX - sprX;
+    int localY = pixelY - sprY;
+
+    // Sprite textures use bottom-left origin by default.
+    // Screen pixels use top-left origin.
+    // Convert Y accordingly.
+    int texY = (sprH - 1) - localY;
+    int texX = localX;
+
+    // 3. Read texture pixel data from GPU
+    //    (4 bytes per pixel: RGBA8)
+    std::vector<unsigned char> texData(sprW * sprH * 4);
+
+    glBindTexture(GL_TEXTURE_2D, sprTex);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
+
+    // 4. Index into pixel buffer
+    int idx = (texY * sprW + texX) * 4;
+    unsigned char a = texData[idx + 3];  // ALPHA
+
+    // 5. Transparent?
+    outTransparent = (a < alphaThreshold);
+
+    return true;
+}
 
 
 void detectEdgeCollisions()
@@ -1368,7 +1432,7 @@ void detectEdgeCollisions()
             {
                 collisionPoints.push_back(glm::vec4(
                     static_cast<float>(x),
-                    static_cast<float>(y),
+                    static_cast<float>(SIM_HEIGHT - 1 - y),
                     dens.r,   // red density
                     dens.g    // green density
                 ));
@@ -1382,12 +1446,31 @@ void detectEdgeCollisions()
 
 
     if (collisionPoints.size() > 0)
-	std::cout << "[Collision] Detected " << collisionPoints.size()
-		<< " edge collision points (red+green)\n";
+    {
+        for (size_t i = 0; i < collisionPoints.size(); i++)
+        {
+            cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
 
-	//for (size_t i = 0; i < collisionPoints.size(); i++)
-	//    cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+            bool inside = false, transparent = false;
 
+            if (isPixelInsideSpriteAndTransparent(
+                protagonistTex,
+                100,
+                100,
+                protagonistWidth,
+                protagonistHeight,
+                (int)collisionPoints[i].x,
+                (int)collisionPoints[i].y,
+                inside,
+                transparent))
+            {
+                //if (inside && !transparent)
+                //    std::cout << "You clicked on a solid pixel of the protagonist!\n";
+  /*              else if (inside && transparent)
+                    std::cout << "Clicked inside bounding box but pixel is transparent.\n";*/
+            }
+        }
+    }
 }
 
 
