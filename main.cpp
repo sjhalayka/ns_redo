@@ -42,9 +42,9 @@
  // Simulation parameters
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
-const int JACOBI_ITERATIONS = 10;
+const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.975f;
-const float VELOCITY_DISSIPATION = 0.99f;
+const float VELOCITY_DISSIPATION = 0.99999f;
 const float VORTICITY_SCALE = 10.0f;
 
 bool red_mode = true;
@@ -930,7 +930,7 @@ void main()
     if (obstacle > 0.5) 
     {
     
-       fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
         
         return;
     }
@@ -1673,6 +1673,7 @@ void display()
     //simulate();
 
 
+    // Variable time step
     //static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
     //float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
