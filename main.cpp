@@ -1684,7 +1684,7 @@ void simulate()
 
     addObstacleStamp(protagonistTex, 100, 100,
         protagonistWidth, protagonistHeight, true,
-        0.5f, true);
+        1, true);
 
     // Advect velocity
     advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
