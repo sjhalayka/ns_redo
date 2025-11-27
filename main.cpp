@@ -37,17 +37,24 @@
 #include <vector>
 #include <cmath>
 #include <cstdlib>
+#include <unordered_map>
 
  // Simulation parameters
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
-const float TIME_STEP = 0.016f;
+//const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.975f;
 const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 10.0f;
 
 bool red_mode = true;
+
+float GLOBAL_TIME = 0;
+const float FPS = 60;
+float DT = 1.0f / FPS;
+
+
 
 
 // Window dimensions
@@ -107,6 +114,453 @@ GLuint spriteProgram;
 // Quad VAO
 GLuint quadVAO, quadVBO;
 
+
+
+
+
+
+
+// Utility functions
+void checkGLError(const char* operation) {
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error after " << operation << ": " << error << std::endl;
+    }
+}
+
+GLuint compileShader(GLenum type, const char* source) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        std::cerr << "Shader compilation failed:\n" << infoLog << std::endl;
+        std::cerr << "Source:\n" << source << std::endl;
+    }
+
+    return shader;
+}
+
+
+
+const char* textVertexShaderSource = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec4 aColor;
+
+uniform mat4 projection;
+uniform mat4 model;
+
+out vec2 TexCoord;
+out vec4 Color;
+
+void main() {
+    gl_Position = projection * model * vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
+    Color = aColor;
+}
+)";
+
+const char* textFragmentShaderSource = R"(
+#version 330 core
+in vec2 TexCoord;
+in vec4 Color;
+
+uniform sampler2D fontTexture;
+uniform bool useColor;
+
+out vec4 FragColor;
+
+void main() {
+    vec4 texColor = texture(fontTexture, TexCoord);
+    
+    // Handle different font texture formats
+    if (useColor) {
+        // For colored font atlas, just blend with the vertex color
+        FragColor = texColor * Color;
+    } else {
+        // For grayscale/alpha font atlas, use the alpha/red channel
+        // with the vertex color
+        float alpha = texColor.r; // or texColor.a depending on your font texture
+        FragColor = vec4(Color.rgb, Color.a * alpha);
+    }
+}
+)";
+
+
+
+
+
+struct FontAtlas {
+    GLuint textureID;
+    int charWidth;      // Width of each character (16)
+    int charHeight;     // Height of each character (16)
+    int atlasWidth;     // Atlas width (256)
+    int atlasHeight;    // Atlas height (256)
+    int charsPerRow;    // Characters per row in the atlas (16)
+};
+
+
+GLuint loadFontTexture(const char* filename) {
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Load image using stb_image (you're already using this)
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(false);
+
+
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+
+    if (!data) {
+        std::cerr << "Failed to load font texture: " << filename << std::endl;
+        std::cerr << "STB Image error: " << stbi_failure_reason() << std::endl;
+        return 0;
+    }
+
+    // Determine format based on channels
+    GLenum format;
+    switch (channels) {
+    case 1: format = GL_RED; break;
+    case 3: format = GL_RGB; break;
+    case 4: format = GL_RGBA; break;
+    default:
+        format = GL_RGB;
+        std::cerr << "Unsupported number of channels: " << channels << std::endl;
+    }
+
+    // Load texture data to GPU
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    // Free image data
+    stbi_image_free(data);
+
+    return textureID;
+}
+
+FontAtlas initFontAtlas(const char* filename) {
+    FontAtlas atlas;
+    atlas.textureID = loadFontTexture(filename);
+    atlas.charWidth = 64;
+    atlas.charHeight = 64;
+    atlas.atlasWidth = 1024;
+    atlas.atlasHeight = 1024;
+    atlas.charsPerRow = atlas.atlasWidth / atlas.charWidth; // 16
+
+    return atlas;
+}
+
+
+class TextRenderer {
+private:
+    FontAtlas atlas;
+    GLuint VAO, VBO, EBO;
+    GLuint shaderProgram;
+    glm::mat4 projection;
+
+    struct Vertex {
+        glm::vec3 position;
+        glm::vec2 texCoord;
+        glm::vec4 color;
+    };
+
+public:
+
+    std::unordered_map<char, int> charWidths; // Map to store actual widths
+
+    // Add this method to calculate character widths
+    void calculateCharacterWidths() {
+        // Read back the font texture data from GPU
+        int dataSize = atlas.atlasWidth * atlas.atlasHeight * 4; // RGBA format
+        std::vector<unsigned char> textureData(dataSize);
+
+        glBindTexture(GL_TEXTURE_2D, atlas.textureID);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, textureData.data());
+
+
+
+
+
+        // Analyze each character
+        for (unsigned short c_ = 0; c_ < 256; c_++)
+        {
+            unsigned char c = static_cast<unsigned char>(c_);
+
+            // ASCII range
+            int atlasX = (c % atlas.charsPerRow) * atlas.charWidth;
+            int atlasY = (c / atlas.charsPerRow) * atlas.charHeight;
+
+            // Find leftmost non-empty column
+            int leftEdge = atlas.charWidth - 1; // Start from rightmost position
+
+            // Find rightmost non-empty column
+            int rightEdge = 0; // Start from leftmost position
+
+            // Scan all columns for this character
+            for (int x = 0; x < atlas.charWidth; x++) {
+                bool columnHasPixels = false;
+
+                // Check if any pixel in this column is non-transparent
+                for (int y = 0; y < atlas.charHeight; y++) {
+                    int pixelIndex = ((atlasY + y) * atlas.atlasWidth + (atlasX + x)) * 4;
+                    if (pixelIndex >= 0 && pixelIndex < dataSize - 3) {
+                        // Check alpha value (using red channel for grayscale font)
+                        if (textureData[pixelIndex] > 20) { // Non-transparent threshold
+                            columnHasPixels = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (columnHasPixels) {
+                    // Update left edge (minimum value)
+                    leftEdge = std::min(leftEdge, x);
+                    // Update right edge (maximum value)
+                    rightEdge = std::max(rightEdge, x);
+                }
+            }
+
+            // If no pixels were found (space or empty character)
+            if (rightEdge < leftEdge) {
+                // Default width for space character
+                if (c == ' ') {
+                    charWidths[c] = atlas.charWidth / 3; // Make space 1/3 of cell width
+                }
+                else {
+                    charWidths[c] = atlas.charWidth / 4; // Default minimum width
+                }
+            }
+            else {
+                // Calculate width based on the actual character bounds
+                int actualWidth = (rightEdge - leftEdge) + 1;
+
+                // Add some padding
+                int paddedWidth = actualWidth + 4; // 2 pixels on each side
+
+                // Store this character's width (minimum width of 1/4 of the cell)
+                charWidths[c] = std::max(paddedWidth, atlas.charWidth / 4);
+            }
+        }
+    }
+
+
+    TextRenderer(const char* fontAtlasFile, int windowWidth, int windowHeight) {
+        // Initialize font atlas
+        atlas = initFontAtlas(fontAtlasFile);
+
+        // Create shader program
+        GLuint vertexShader = compileShader(GL_VERTEX_SHADER, textVertexShaderSource);
+        GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, textFragmentShaderSource);
+
+        shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        // Check for linking errors
+        GLint success;
+        glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+        if (!success) {
+            GLchar infoLog[512];
+            glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+            std::cerr << "Shader program linking error: " << infoLog << std::endl;
+        }
+
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+
+        // Create VAO, VBO, EBO for text rendering
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
+
+        glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
+        // Set up vertex attributes
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
+        glEnableVertexAttribArray(1);
+
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3) + sizeof(glm::vec2)));
+        glEnableVertexAttribArray(2);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+
+        // Set up projection matrix
+        setProjection(windowWidth, windowHeight);
+
+        calculateCharacterWidths();
+    }
+
+    ~TextRenderer() {
+        glDeleteBuffers(1, &VBO);
+        glDeleteBuffers(1, &EBO);
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteProgram(shaderProgram);
+        glDeleteTextures(1, &atlas.textureID);
+    }
+
+    void setProjection(int windowWidth, int windowHeight) {
+        projection = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, -1.0f, 1.0f);
+    }
+
+
+    void renderText(const std::string& text, float x, float y, float scale, glm::vec4 color, bool centered = false) {
+        glUseProgram(shaderProgram);
+
+        // Set uniforms
+        GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        GLuint fontTexLoc = glGetUniformLocation(shaderProgram, "fontTexture");
+        glUniform1i(fontTexLoc, 0);
+
+        GLuint useColorLoc = glGetUniformLocation(shaderProgram, "useColor");
+        glUniform1i(useColorLoc, 0); // Set to 1 if your font atlas is colored
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, atlas.textureID);
+
+        glBindVertexArray(VAO);
+
+        // If text should be centered, calculate the starting position
+        if (centered) {
+            float textWidth = 0;
+            for (char c : text) {
+                // Use the calculated width for each character
+                float charWidth = static_cast<float>(charWidths[c]);// charWidths.count(c) ? charWidths[c] : atlas.charWidth / 2;
+                textWidth += (8 + charWidth) * scale;
+            }
+            x = windowWidth / 2.0f - textWidth / 2.0f;
+        }
+
+        // For each character, create a quad with appropriate texture coordinates
+        std::vector<Vertex> vertices;
+        std::vector<GLuint> indices;
+
+        float xpos = x;
+        float ypos = y;
+        GLuint indexOffset = 0;
+
+        for (char c : text) {
+            // Get ASCII value of the character
+            unsigned char charValue = static_cast<unsigned char>(c);
+
+            // Calculate position in the atlas using ASCII value
+            int atlasX = (charValue % atlas.charsPerRow) * atlas.charWidth;
+            int atlasY = (charValue / atlas.charsPerRow) * atlas.charHeight;
+
+            // Calculate texture coordinates
+            float texLeft = atlasX / (float)atlas.atlasWidth;
+            float texRight = (atlasX + atlas.charWidth) / (float)atlas.atlasWidth;
+            float texTop = atlasY / (float)atlas.atlasHeight;
+            float texBottom = (atlasY + atlas.charHeight) / (float)atlas.atlasHeight;
+
+            // Get the character's calculated width
+            float charWidth = static_cast<float>(charWidths[charValue]);// charWidths.count(charValue) ? charWidths[charValue] : atlas.charWidth / 2;
+
+            // Calculate quad vertices
+            float quadLeft = xpos;
+            float quadRight = xpos + atlas.charWidth * scale; // Use full cell width for texture
+            float quadTop = ypos;
+            float quadBottom = ypos + atlas.charHeight * scale;
+
+            // Add vertices
+            vertices.push_back({ {quadLeft, quadTop, 0.0f}, {texLeft, texTop}, color });
+            vertices.push_back({ {quadRight, quadTop, 0.0f}, {texRight, texTop}, color });
+            vertices.push_back({ {quadRight, quadBottom, 0.0f}, {texRight, texBottom}, color });
+            vertices.push_back({ {quadLeft, quadBottom, 0.0f}, {texLeft, texBottom}, color });
+
+            // Add indices
+            indices.push_back(indexOffset + 0);
+            indices.push_back(indexOffset + 1);
+            indices.push_back(indexOffset + 2);
+            indices.push_back(indexOffset + 0);
+            indices.push_back(indexOffset + 2);
+            indices.push_back(indexOffset + 3);
+
+            indexOffset += 4;
+
+            // Advance cursor using the calculated width
+            // add 8 pixels of padding between characters
+            xpos += (8 + charWidth) * scale;
+        }
+
+        // Upload vertex and index data
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_DYNAMIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
+
+        // Draw text
+        glm::mat4 model = glm::mat4(1.0f);
+        GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+        // Enable blending for transparent font
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glDrawElements(GL_TRIANGLES, (GLsizei)indices.size(), GL_UNSIGNED_INT, 0);
+
+        // Reset state
+        glDisable(GL_BLEND);
+        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+};
+
+
+
+TextRenderer* textRenderer = nullptr;
+
+
+void displayFPS() 
+{
+    static int frame_count = 0;
+    static float lastTime = 0.0f;
+    static float fps = 0.0f;
+
+    frame_count++;
+    float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    float deltaTime = currentTime - lastTime;
+
+    if (deltaTime >= 1.0f) {
+        fps = frame_count / deltaTime;
+        frame_count = 0;
+        lastTime = currentTime;
+    }
+
+    std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
+    textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
+}
+
+
+
+
+
+
+
+
+
 // Shader source code embedded as strings
 const char* vertexShaderSource = R"(
 #version 400 core
@@ -117,6 +571,15 @@ void main() {
     gl_Position = vec4(position, 0.0, 1.0);
 }
 )";
+
+
+
+
+
+
+
+
+
 
 const char* advectFragmentSource = R"(
 #version 400 core
@@ -599,30 +1062,6 @@ void main() {
 }
 )";
 
-// Utility functions
-void checkGLError(const char* operation) {
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
-        std::cerr << "OpenGL error after " << operation << ": " << error << std::endl;
-    }
-}
-
-GLuint compileShader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "Shader compilation failed:\n" << infoLog << std::endl;
-        std::cerr << "Source:\n" << source << std::endl;
-    }
-
-    return shader;
-}
 
 GLuint createProgram(const char* vertexSource, const char* fragmentSource) {
     GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
@@ -779,7 +1218,7 @@ void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float diss
     setTextureUniform(advectProgram, "quantity", 1, quantityTex);
     setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
     glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform1f(glGetUniformLocation(advectProgram, "dt"), TIME_STEP * 100.0f);
+    glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT * 100.0f);
     glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
 
     drawQuad();
@@ -860,7 +1299,7 @@ void applyVorticityForce() {
     setTextureUniform(vorticityForceProgram, "vorticity", 1, vorticityTex);
     setTextureUniform(vorticityForceProgram, "obstacles", 2, obstacleTex);
     glUniform2f(glGetUniformLocation(vorticityForceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform1f(glGetUniformLocation(vorticityForceProgram, "dt"), TIME_STEP);
+    glUniform1f(glGetUniformLocation(vorticityForceProgram, "dt"), DT);
     glUniform1f(glGetUniformLocation(vorticityForceProgram, "scale"), vorticityStrength);
 
     drawQuad();
@@ -1228,9 +1667,27 @@ void simulate()
     subtractGradient();
 }
 
-void display() {
+void display()
+{
+    static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
+    float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+    const double d = 1.0 / FPS;
+
+    DT = currentTime - lastTime;
+
+    if (DT > d)
+    {
+        simulate();
+        GLOBAL_TIME += DT;
+        lastTime = currentTime;
+    }
+
+
+
+
     // Run simulation step
-    simulate();
+    //simulate();
 
     // Add continuous sources based on mouse input
     if (leftMouseDown && !shiftDown) {
@@ -1289,6 +1746,8 @@ void display() {
     //if (foregroundTex != 0) {
     //    drawSprite(foregroundTex, -100, 0, foregroundWidth, foregroundHeight);
     //}
+
+    displayFPS();
 
 
     glutSwapBuffers();
@@ -1409,6 +1868,13 @@ void printControls() {
 #pragma comment(lib, "freeglut")
 #pragma comment(lib, "glew32")
 
+
+
+
+
+
+
+
 int main(int argc, char** argv) {
     // Initialize GLUT
     glutInit(&argc, argv);
@@ -1431,6 +1897,9 @@ int main(int argc, char** argv) {
 
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+
+
+    textRenderer = new TextRenderer("media/font.png", windowWidth, windowHeight);
 
     // Initialize
     initShaders();
