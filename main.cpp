@@ -1427,8 +1427,8 @@ void detectEdgeCollisions()
             size_t idx = y * SIM_WIDTH + x;
             glm::vec2 dens = pixelData[idx];
 
-            // If either red or green density is present → collision
-            if (dens.r > 0.001f || dens.g > 0.001f)
+            // If either red or green density is present -> collision
+            if (dens.r > 0.5f || dens.g > 0.5f)
             {
                 collisionPoints.push_back(glm::vec4(
                     static_cast<float>(x),
@@ -1447,9 +1447,12 @@ void detectEdgeCollisions()
 
     if (collisionPoints.size() > 0)
     {
+        cout << collisionPoints.size() << endl;
+
         for (size_t i = 0; i < collisionPoints.size(); i++)
         {
-            cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
+            //cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
+            //cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
 
             bool inside = false, transparent = false;
 
