@@ -41,8 +41,8 @@
 
  // Simulation parameters
 const int SIM_WIDTH = 1920;
-const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
-const int JACOBI_ITERATIONS = 40;
+const int SIM_HEIGHT = 1080;
+const int JACOBI_ITERATIONS = 10;
 const float DENSITY_DISSIPATION = 0.975f;
 const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 10.0f;
@@ -67,7 +67,7 @@ bool middleMouseDown = false;
 bool shiftDown = false;
 
 // Simulation state
-bool vorticityEnabled = true;
+//bool vorticityEnabled = true;
 float vorticityStrength = VORTICITY_SCALE;
 
 // Protagonist sprite texture
@@ -1656,7 +1656,7 @@ void simulate()
     currentDensity = 1 - currentDensity;
 
     // Vorticity confinement
-    if (vorticityEnabled) {
+    if (1/*vorticityEnabled*/) {
         computeVorticity();
         applyVorticityForce();
     }
@@ -1673,26 +1673,26 @@ void display()
     //simulate();
 
 
-    static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
-    float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    //static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
+    //float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-    const double d = 1.0 / FPS;
+    //const double d = 1.0 / FPS;
 
-    DT = currentTime - lastTime;
+    //DT = currentTime - lastTime;
 
-    if (DT > d)
-    {
-        simulate();
-        GLOBAL_TIME += DT;
-        lastTime = currentTime;
-    }
-
-
+    //if (DT > d)
+    //{
+    //    simulate();
+    //    GLOBAL_TIME += DT;
+    //    lastTime = currentTime;
+    //}
 
 
 
-		// Fixed time step
-	/*static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+
+	// Fixed time step
+	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 	static double accumulator = 0.0;
 
 	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -1709,7 +1709,7 @@ void display()
 		simulate();
 		accumulator -= DT;
 		GLOBAL_TIME += DT;
-	}*/
+	}
 
 
 
@@ -1815,11 +1815,6 @@ void keyboard(unsigned char key, int x, int y)
         glClear(GL_COLOR_BUFFER_BIT);
         std::cout << "Obstacles cleared" << std::endl;
         break;
-    case 'v':
-    case 'V':
-        vorticityEnabled = !vorticityEnabled;
-        std::cout << "Vorticity confinement: " << (vorticityEnabled ? "ON" : "OFF") << std::endl;
-        break;
     case '+':
     case '=':
         vorticityStrength += 0.05f;
@@ -1881,7 +1876,6 @@ void printControls() {
     std::cout << "  Middle mouse / Shift+Left: Add obstacles (brush)" << std::endl;
     std::cout << "  'r': Reset simulation" << std::endl;
     std::cout << "  'o': Clear obstacles" << std::endl;
-    std::cout << "  'v': Toggle vorticity confinement" << std::endl;
     std::cout << "  '+'/'-': Adjust vorticity strength" << std::endl;
 }
 
