@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 2D Navier-Stokes Fluid Simulation using OpenGL 4 Fragment Shaders
  * Features:
  *   - Semi-Lagrangian advection
@@ -38,6 +38,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
+using namespace std;
+
 
  // Simulation parameters
 const int SIM_WIDTH = 1920;
@@ -50,7 +52,7 @@ const float VORTICITY_SCALE = 10.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 120;
+const float FPS = 60;
 float DT = 1.0f / FPS;
 
 
@@ -118,6 +120,49 @@ GLuint spriteProgram;
 GLuint quadVAO, quadVBO;
 
 
+
+GLuint collisionTex = 0;      // Now RG32F -> red density in R, green in G
+GLuint collisionFBO = 0;
+GLuint collisionProgram = 0;
+std::vector<glm::vec4> collisionPoints;
+
+const char* collisionFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec2 fragColor;        // .r = red density, .g = green density
+
+uniform sampler2D density;      // RG = red / green density
+uniform sampler2D obstacles;
+uniform vec2 texelSize;
+
+void main()
+{
+    float obstC = texture(obstacles, texCoord).r;
+
+    // Inside solid obstacle -> no collision
+    if (obstC > 0.5) {
+        fragColor = vec2(0.0);
+        return;
+    }
+
+    // Sample 4 neighbors
+    float oL = texture(obstacles, texCoord - vec2(texelSize.x, 0.0)).r;
+    float oR = texture(obstacles, texCoord + vec2(texelSize.x, 0.0)).r;
+    float oB = texture(obstacles, texCoord - vec2(0.0, texelSize.y)).r;
+    float oT = texture(obstacles, texCoord + vec2(0.0, texelSize.y)).r;
+
+    bool isEdge = (oL > 0.5) || (oR > 0.5) || (oB > 0.5) || (oT > 0.5);
+
+    if (!isEdge) {
+        fragColor = vec2(0.0);
+        return;
+    }
+
+    // This pixel is fluid touching an obstacle edge -> report density
+    vec2 dens = texture(density, texCoord).rg;  // <-- using texture() correctly in shader
+    fragColor = dens;  // red in .r, green in .g
+}
+)";
 
 
 
@@ -194,6 +239,7 @@ void main() {
     }
 }
 )";
+
 
 
 
@@ -536,7 +582,7 @@ public:
 TextRenderer* textRenderer = nullptr;
 
 
-void displayFPS() 
+void displayFPS()
 {
     static int frame_count = 0;
     static float lastTime = 0.0f;
@@ -547,7 +593,7 @@ void displayFPS()
     float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     float deltaTime = currentTime - lastTime;
 
-    if (deltaTime >= 1.0f) 
+    if (deltaTime >= 1.0f)
     {
         fps = frame_count / deltaTime;
         frame_count = 0;
@@ -556,8 +602,8 @@ void displayFPS()
 
     std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
 
-    if(textRenderer)
-    textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
+    if (textRenderer)
+        textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
 }
 
 
@@ -1237,6 +1283,38 @@ void initQuad() {
     glBindVertexArray(0);
 }
 
+
+
+void initCollisionResources()
+{
+    // 2-channel floating point texture: R = red density, G = green density
+    glGenTextures(1, &collisionTex);
+    glBindTexture(GL_TEXTURE_2D, collisionTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, SIM_WIDTH, SIM_HEIGHT, 0, GL_RG, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glGenFramebuffers(1, &collisionFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, collisionTex, 0);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Collision FBO not complete!" << std::endl;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Compile shader
+    collisionProgram = createProgram(vertexShaderSource, collisionFragmentSource);
+}
+
+
+
+
+
+
+
 void drawQuad() {
     glBindVertexArray(quadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -1248,6 +1326,72 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(glGetUniformLocation(program, name), unit);
 }
+
+
+
+
+void detectEdgeCollisions()
+{
+    collisionPoints.clear();
+
+    // Step 1: Render collision map (edge + density values)
+    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(collisionProgram);
+    setTextureUniform(collisionProgram, "density", 0, densityTex[currentDensity]);
+    setTextureUniform(collisionProgram, "obstacles", 1, obstacleTex);
+    glUniform2f(glGetUniformLocation(collisionProgram, "texelSize"),
+        1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+
+    drawQuad();
+
+    // Step 2: Read back the RG32F texture
+    std::vector<glm::vec2> pixelData(SIM_WIDTH * SIM_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+    glReadPixels(0, 0, SIM_WIDTH, SIM_HEIGHT, GL_RG, GL_FLOAT, pixelData.data());
+
+    // Step 3: Collect all non-zero collision points
+   // collisionPoints.reserve(10000);  // rough estimate
+
+    for (int y = 0; y < SIM_HEIGHT; ++y)
+    {
+        for (int x = 0; x < SIM_WIDTH; ++x)
+        {
+            size_t idx = y * SIM_WIDTH + x;
+            glm::vec2 dens = pixelData[idx];
+
+            // If either red or green density is present → collision
+            if (dens.r > 0.001f || dens.g > 0.001f)
+            {
+                collisionPoints.push_back(glm::vec4(
+                    static_cast<float>(x),
+                    static_cast<float>(y),
+                    dens.r,   // red density
+                    dens.g    // green density
+                ));
+            }
+        }
+    }
+
+    // Optional: print stats
+    static float lastReport = 0.0f;
+    if (GLOBAL_TIME - lastReport > 1.0f)
+    {
+        lastReport = GLOBAL_TIME;
+        //std::cout << "[Collision] Detected " << collisionPoints.size()
+        //    << " edge collision points (red+green)\n";
+
+        //for (size_t i = 0; i < collisionPoints.size(); i++)
+        //    cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+
+
+    }
+}
+
+
 
 void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float dissipation) {
     glBindFramebuffer(GL_FRAMEBUFFER, outputFBO);
@@ -1677,7 +1821,7 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 
 }
 
-void simulate() 
+void simulate()
 {
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
@@ -1731,25 +1875,25 @@ void display()
 
 
 
-	// Fixed time step
-	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	static double accumulator = 0.0;
+    // Fixed time step
+    static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    static double accumulator = 0.0;
 
-	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	double frameTime = newTime - currentTime;
-	currentTime = newTime;
+    double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    double frameTime = newTime - currentTime;
+    currentTime = newTime;
 
-	if (frameTime > DT)
-		frameTime = DT;
+    if (frameTime > DT)
+        frameTime = DT;
 
-	accumulator += frameTime;
+    accumulator += frameTime;
 
-	while (accumulator >= DT)
-	{
-		simulate();
-		accumulator -= DT;
-		GLOBAL_TIME += DT;
-	}
+    while (accumulator >= DT)
+    {
+        simulate();
+        accumulator -= DT;
+        GLOBAL_TIME += DT;
+    }
 
 
 
@@ -1761,7 +1905,7 @@ void display()
         float x = (float)mouseX / windowWidth;
         float y = 1.0f - (float)mouseY / windowHeight;
 
-        if(red_mode)
+        if (red_mode)
             addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
         else
             addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
@@ -1784,6 +1928,10 @@ void display()
 
     lastMouseX = mouseX;
     lastMouseY = mouseY;
+
+
+    detectEdgeCollisions();
+
 
     // Render to screen
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1823,9 +1971,9 @@ void reshape(int w, int h) {
     windowHeight = h;
 }
 
-void keyboard(unsigned char key, int x, int y) 
+void keyboard(unsigned char key, int x, int y)
 {
-    switch (key) 
+    switch (key)
     {
 
     case 'x':
@@ -1964,18 +2112,22 @@ int main(int argc, char** argv) {
     initTextures();
     initQuad();
 
+
+    initCollisionResources();
+
+
     // Load protagonist texture
     protagonistTex = loadTextureFromFile("media/protagonist.png", &protagonistWidth, &protagonistHeight);
     if (protagonistTex == 0) {
         std::cout << "Warning: Could not load protagonist.png - sprite drawing will be disabled" << std::endl;
-   
+
         return 1;
     }
 
     foregroundTex = loadTextureFromFile("media/foreground.png", &foregroundWidth, &foregroundHeight);
     if (foregroundTex == 0) {
         std::cout << "Warning: Could not load foreground.png - sprite drawing will be disabled" << std::endl;
-  
+
         return 2;
     }
 
