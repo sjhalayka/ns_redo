@@ -79,6 +79,12 @@ GLuint foregroundTex = 0;
 int foregroundWidth = 0;
 int foregroundHeight = 0;
 
+GLuint backgroundTex = 0;
+int backgroundWidth = 0;
+int backgroundHeight = 0;
+
+
+
 
 
 // OpenGL objects
@@ -916,6 +922,17 @@ out vec4 fragColor;
 uniform sampler2D density;
 uniform sampler2D velocity;
 uniform sampler2D obstacles;
+uniform sampler2D background;
+
+uniform vec2 texelSize;
+uniform float time;
+
+
+float WIDTH = texelSize.x;
+float HEIGHT = texelSize.y;
+float aspect_ratio = WIDTH/HEIGHT;
+
+
 
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -929,11 +946,33 @@ void main()
     
     if (obstacle > 0.5) 
     {
-    
-       fragColor = vec4(0.0, 0.0, 0.0, 0.0);
-        
+        fragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
+
+
+    vec2 adjustedCoord = texCoord;
+    
+    // For non-square textures, adjust sampling to prevent stretching
+    if (1.0/aspect_ratio > 1.0) {
+        adjustedCoord.x = (adjustedCoord.x - 0.5) * aspect_ratio + 0.5;
+    } else if (1.0/aspect_ratio < 1.0) {
+        adjustedCoord.y = (adjustedCoord.y - 0.5) / aspect_ratio + 0.5;
+    }
+
+    vec2 scrolledCoord = adjustedCoord;
+    scrolledCoord.x += time * 0.01;
+
+    vec4 bgColor = texture(background, scrolledCoord);
+
+
+
+
+
+
+
+
+
   
     // Get density and colors at adjusted position
     float redIntensity = texture(density, texCoord).x;
@@ -948,7 +987,7 @@ void main()
     // Combine both colors
     vec4 combinedColor = redFluidColor + blueFluidColor;
 
-    vec4 blendedBackground = vec4(0.0, 0.0, 0.0, 0.0);
+    vec4 blendedBackground = bgColor;//vec4(0.0, 0.0, 0.0, 0.0);
 
     vec4 color1 = blendedBackground;
     vec4 color2 = vec4(0.0, 0.125, 0.25, 1.0);
@@ -1755,6 +1794,10 @@ void display()
     setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
     setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
     setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
+    setTextureUniform(displayProgram, "background", 3, backgroundTex);
+    glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
+    glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
+
 
     drawQuad();
 
@@ -1936,7 +1979,12 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    backgroundTex = loadTextureFromFile("media/background.png", &backgroundWidth, &backgroundHeight);
+    if (backgroundTex == 0) {
+        std::cout << "Warning: Could not load background.png - sprite drawing will be disabled" << std::endl;
 
+        return 3;
+    }
 
 
     printControls();
