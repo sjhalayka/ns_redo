@@ -43,7 +43,6 @@
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
-//const float TIME_STEP = 0.016f;
 const float DENSITY_DISSIPATION = 0.975f;
 const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 10.0f;
@@ -51,10 +50,8 @@ const float VORTICITY_SCALE = 10.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 120;
 float DT = 1.0f / FPS;
-
-
 
 
 // Window dimensions
@@ -540,16 +537,20 @@ void displayFPS()
     static float fps = 0.0f;
 
     frame_count++;
+
     float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     float deltaTime = currentTime - lastTime;
 
-    if (deltaTime >= 1.0f) {
+    if (deltaTime >= 1.0f) 
+    {
         fps = frame_count / deltaTime;
         frame_count = 0;
         lastTime = currentTime;
     }
 
     std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
+
+    if(textRenderer)
     textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
 }
 
@@ -929,7 +930,7 @@ void main()
     if (obstacle > 0.5) 
     {
     
-    //   fragColor = vec4(0.3, 0.3, 0.35, 1.0);
+       fragColor = vec4(0.0, 0.0, 0.0, 1.0);
         
         return;
     }
@@ -1669,6 +1670,9 @@ void simulate()
 
 void display()
 {
+    //simulate();
+
+
     static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
     float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
@@ -1688,24 +1692,24 @@ void display()
 
 
 		// Fixed time step
-	//static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	//static double accumulator = 0.0;
+	/*static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	static double accumulator = 0.0;
 
-	//double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	//double frameTime = newTime - currentTime;
-	//currentTime = newTime;
+	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	double frameTime = newTime - currentTime;
+	currentTime = newTime;
 
-	//if (frameTime > DT)
-	//	frameTime = DT;
+	if (frameTime > DT)
+		frameTime = DT;
 
-	//accumulator += frameTime;
+	accumulator += frameTime;
 
-	//while (accumulator >= DT)
-	//{
-	//	simulate();
-	//	accumulator -= DT;
-	//	GLOBAL_TIME += DT;
-	//}
+	while (accumulator >= DT)
+	{
+		simulate();
+		accumulator -= DT;
+		GLOBAL_TIME += DT;
+	}*/
 
 
 
