@@ -1376,19 +1376,18 @@ void detectEdgeCollisions()
         }
     }
 
-    // Optional: print stats
-    static float lastReport = 0.0f;
-    if (GLOBAL_TIME - lastReport > 1.0f)
-    {
-        lastReport = GLOBAL_TIME;
-        //std::cout << "[Collision] Detected " << collisionPoints.size()
-        //    << " edge collision points (red+green)\n";
 
-        //for (size_t i = 0; i < collisionPoints.size(); i++)
-        //    cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+    // to do: check all ally and enemy ships here
 
 
-    }
+
+    if (collisionPoints.size() > 0)
+	std::cout << "[Collision] Detected " << collisionPoints.size()
+		<< " edge collision points (red+green)\n";
+
+	//for (size_t i = 0; i < collisionPoints.size(); i++)
+	//    cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+
 }
 
 
@@ -1849,6 +1848,10 @@ void simulate()
     clearPressure();
     jacobi();
     subtractGradient();
+
+
+
+
 }
 
 void display()
@@ -1930,8 +1933,14 @@ void display()
     lastMouseY = mouseY;
 
 
-    detectEdgeCollisions();
+    // Process collisions at regular intervals   
+    static int frameCount = 0;
 
+    // (10 times per second)
+    if (frameCount % size_t(FPS / 10.0) == 0)
+        detectEdgeCollisions();
+
+    frameCount++;
 
     // Render to screen
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
