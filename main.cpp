@@ -43,7 +43,7 @@ const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;  // Non-square to demonstrate rectangular handling
 const int JACOBI_ITERATIONS = 40;
 const float TIME_STEP = 0.016f;
-const float DENSITY_DISSIPATION = 0.995f;
+const float DENSITY_DISSIPATION = 0.975f;
 const float VELOCITY_DISSIPATION = 0.99f;
 const float VORTICITY_SCALE = 10.0f;
 
