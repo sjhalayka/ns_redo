@@ -66,12 +66,6 @@ bool shiftDown = false;
 bool vorticityEnabled = true;
 float vorticityStrength = VORTICITY_SCALE;
 
-// Demo stamp textures
-GLuint circleStampTex = 0;
-GLuint starStampTex = 0;
-GLuint rectangleStampTex = 0;
-int currentStampType = 0;  // 0=circle, 1=star, 2=rectangle
-
 // Protagonist sprite texture
 GLuint protagonistTex = 0;
 int protagonistWidth = 0;
@@ -512,22 +506,6 @@ void main()
     } else {
         fragColor = color4;
     }
-
-    //vec3 d = texture(density, texCoord).rgb;
-    //vec2 v = texture(velocity, texCoord).xy;
-    //
-    //// Color based on density with slight velocity influence
-    //float speed = length(v);
-    //float hue = 0.6 - speed * 0.002;  // Blue to red based on speed
-    //float sat = 0.7;
-    //float val = clamp(d.r * 2.0, 0.0, 1.0);
-    //
-    //vec3 color = hsv2rgb(vec3(hue, sat, val));
-    //
-    //// Add some base color for visibility
-    //color = mix(vec3(0.02, 0.02, 0.05), color, val);
-    //
-    //fragColor = vec4(color, 1.0);
 }
 )";
 
@@ -1373,71 +1351,6 @@ void keyboard(unsigned char key, int x, int y)
         vorticityStrength = std::max(0.0f, vorticityStrength - 0.05f);
         std::cout << "Vorticity strength: " << vorticityStrength << std::endl;
         break;
-    case 's':
-    case 'S':
-        // Cycle through stamp types
-        currentStampType = (currentStampType + 1) % 3;
-        {
-            const char* stampNames[] = { "Circle", "Star", "Rectangle" };
-            std::cout << "Stamp type: " << stampNames[currentStampType] << std::endl;
-        }
-        break;
-    case '1':
-        // Place stamp at mouse position (add obstacle)
-    {
-        // Convert window mouse coords to simulation pixel coords
-        // Mouse coords: top-left origin, matches our new coordinate system
-        int simX = (int)((float)mouseX / windowWidth * SIM_WIDTH);
-        int simY = (int)((float)mouseY / windowHeight * SIM_HEIGHT);
-
-        GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
-        // Use 80x80 pixels for circle/star, 100x60 for rectangle
-        int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
-        int w = stampSizes[currentStampType][0];
-        int h = stampSizes[currentStampType][1];
-
-        // DO NOT Center the stamp on the mouse position
-        int stampX = simX;// -w / 2;
-        int stampY = simY;// -h / 2;
-
-        addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, true, 0.5f, true);
-        std::cout << "Stamped " << w << "x" << h << " pixel obstacle at ("
-            << stampX << ", " << stampY << ")" << std::endl;
-    }
-    break;
-    case '2':
-        // Place stamp at mouse position (remove obstacle)
-    {
-        int simX = (int)((float)mouseX / windowWidth * SIM_WIDTH);
-        int simY = (int)((float)mouseY / windowHeight * SIM_HEIGHT);
-
-        GLuint stamps[] = { circleStampTex, starStampTex, rectangleStampTex };
-        int stampSizes[][2] = { {80, 80}, {80, 80}, {100, 60} };
-        int w = stampSizes[currentStampType][0];
-        int h = stampSizes[currentStampType][1];
-
-        // DO NOT Center the stamp on the mouse position
-        int stampX = simX;// -w / 2;
-        int stampY = simY;// -h / 2;
-
-        addObstacleStamp(stamps[currentStampType], stampX, stampY, w, h, false, 0.5f, true);
-        std::cout << "Erased " << w << "x" << h << " pixel area at ("
-            << stampX << ", " << stampY << ")" << std::endl;
-    }
-    break;
-    case '3':
-        // Demo: place multiple stamps in a pattern
-    {
-        int startX = 50;  // Start 50 pixels from left
-        int y = SIM_HEIGHT / 2 - 25;  // Vertically centered
-        for (int i = 0; i < 5; i++) {
-            int x = startX + i * 80;  // 80 pixel spacing
-            // 50x50 pixel stars in a row
-            addObstacleStamp(starStampTex, x, y, 50, 50, true, 0.5f, true);
-        }
-        std::cout << "Demo: placed row of 50x50 pixel star obstacles" << std::endl;
-    }
-    break;
     }
 }
 
@@ -1533,12 +1446,6 @@ int main(int argc, char** argv) {
     initShaders();
     initTextures();
     initQuad();
-
-    // Create demo stamp textures
-    circleStampTex = createCircleStamp(64);
-    starStampTex = createStarStamp(64, 25, 5);
-    rectangleStampTex = createRectangleStamp(100, 60);
-    std::cout << "Demo stamp textures created (Circle, Star, Rectangle)" << std::endl;
 
     // Load protagonist texture
     protagonistTex = loadTextureFromFile("media/protagonist.png", &protagonistWidth, &protagonistHeight);
