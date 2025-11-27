@@ -1404,16 +1404,6 @@ void printControls() {
     std::cout << "  'o': Clear obstacles" << std::endl;
     std::cout << "  'v': Toggle vorticity confinement" << std::endl;
     std::cout << "  '+'/'-': Adjust vorticity strength" << std::endl;
-    std::cout << "\nStamp Controls:" << std::endl;
-    std::cout << "  's': Cycle stamp type (Circle/Star/Rectangle)" << std::endl;
-    std::cout << "  '1': Place current stamp at mouse (add obstacle)" << std::endl;
-    std::cout << "  '2': Place current stamp at mouse (remove obstacle)" << std::endl;
-    std::cout << "  '3': Demo: place row of star obstacles" << std::endl;
-    std::cout << "\nSprite:" << std::endl;
-    std::cout << "  protagonist.png is loaded and drawn at (100, 100)" << std::endl;
-    std::cout << "\n  'q'/ESC: Quit" << std::endl;
-    std::cout << "\nVorticity confinement: ON" << std::endl;
-    std::cout << "========================================\n" << std::endl;
 }
 
 #pragma comment(lib, "freeglut")
