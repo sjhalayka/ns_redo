@@ -43,40 +43,6 @@ using namespace std;
 
 
 
-class sprite
-{
-public:
-    GLuint tex = 0;
-    int width = 0;
-    int height = 0;
-    int x = 0;
-    int y = 0;
-};
-
-class ship : public sprite
-{
-public:
-    float health;
-};
-
-class foreground_tile : public sprite
-{
-public:
-    float health;
-};
-
-class background_tile : public sprite
-{
-public:
-
-};
-
-
-
-ship protagonist;
-background_tile background;
-const int foreground_chunk_size = 360;
-vector<foreground_tile> foreground_chunked;
 
 
 
@@ -85,7 +51,7 @@ const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.975f;
-const float VELOCITY_DISSIPATION = 0.99999f;
+const float VELOCITY_DISSIPATION = 1.0;// 0.99999f;
 const float VORTICITY_SCALE = 10.0f;
 
 bool red_mode = true;
@@ -112,6 +78,52 @@ bool middleMouseDown = false;
 bool shiftDown = false;
 
 
+
+
+
+class sprite
+{
+public:
+    GLuint tex = 0;
+    int width = 0;
+    int height = 0;
+    int x = 0;
+    int y = 0;
+
+    bool isOnscreen(void)
+    {
+        return
+            (x + width > 0) &&
+            (x < windowWidth) &&
+            (y + height > 0) &&
+            (y < windowHeight);
+    }
+};
+
+class ship : public sprite
+{
+public:
+    float health;
+};
+
+class foreground_tile : public sprite
+{
+public:
+    float health;
+};
+
+class background_tile : public sprite
+{
+public:
+
+};
+
+
+
+ship protagonist;
+background_tile background;
+const int foreground_chunk_size = 360;
+vector<foreground_tile> foreground_chunked;
 
 
 
@@ -2045,7 +2057,7 @@ void simulate()
 
     for (size_t i = 0; i < foreground_chunked.size(); i++)
     {
-        if (foreground_chunked[i].tex != 0)
+        if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
             addObstacleStamp(foreground_chunked[i].tex, 
                 foreground_chunked[i].x, foreground_chunked[i].y,
@@ -2180,15 +2192,20 @@ void display()
 
 
 
-    if (protagonist.tex != 0) {
-        drawSprite(protagonist.tex, protagonist.x, protagonist.y, protagonist.width, protagonist.height);
+    if (protagonist.tex != 0) 
+    {
+        drawSprite(protagonist.tex, 
+            protagonist.x, protagonist.y, 
+            protagonist.width, protagonist.height);
     }
 
     for (size_t i = 0; i < foreground_chunked.size(); i++)
     {
-        if (foreground_chunked[i].tex != 0)
+        if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
-            drawSprite(foreground_chunked[i].tex, foreground_chunked[i].x, foreground_chunked[i].y, foreground_chunked[i].width, foreground_chunked[i].height);
+            drawSprite(foreground_chunked[i].tex, 
+                foreground_chunked[i].x, foreground_chunked[i].y, 
+                foreground_chunked[i].width, foreground_chunked[i].height);
         }
     }
 
