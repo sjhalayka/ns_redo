@@ -1420,8 +1420,6 @@ void detectEdgeCollisions()
     glReadPixels(0, 0, SIM_WIDTH, SIM_HEIGHT, GL_RG, GL_FLOAT, pixelData.data());
 
     // Step 3: Collect all non-zero collision points
-   // collisionPoints.reserve(10000);  // rough estimate
-
     for (int y = 0; y < SIM_HEIGHT; ++y)
     {
         for (int x = 0; x < SIM_WIDTH; ++x)
@@ -1432,6 +1430,12 @@ void detectEdgeCollisions()
             // If either red or green density is present -> collision
             if (dens.r > 1 || dens.g > 1)
             {
+                if (dens.r > 1)
+                    dens.r = 1;
+
+                if (dens.g > 1)
+                    dens.g = 1;
+
                 collisionPoints.push_back(glm::vec4(
                     static_cast<float>(x),
                     static_cast<float>(SIM_HEIGHT - 1 - y),
@@ -1469,8 +1473,10 @@ void detectEdgeCollisions()
                 inside,
                 transparent))
             {
+
+
                 //if (inside && !transparent)
-                //    std::cout << "You clicked on a solid pixel of the protagonist!\n";
+                 //   std::cout << "You clicked on a solid pixel of the protagonist!\n";
   /*              else if (inside && transparent)
                     std::cout << "Clicked inside bounding box but pixel is transparent.\n";*/
             }
