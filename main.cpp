@@ -52,8 +52,13 @@ const float VORTICITY_SCALE = 10.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 120;
 float DT = 1.0f / FPS;
+const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
+int collision_lastCallTime = 0;
+
+
+
 
 
 // Window dimensions
@@ -68,9 +73,7 @@ bool rightMouseDown = false;
 bool middleMouseDown = false;
 bool shiftDown = false;
 
-// Simulation state
-//bool vorticityEnabled = true;
-float vorticityStrength = VORTICITY_SCALE;
+
 
 // Protagonist sprite texture
 GLuint protagonistTex = 0;
@@ -1428,7 +1431,7 @@ void detectEdgeCollisions()
             glm::vec2 dens = pixelData[idx];
 
             // If either red or green density is present -> collision
-            if (dens.r > 0.5f || dens.g > 0.5f)
+            if (dens.r > 1 || dens.g > 1)
             {
                 collisionPoints.push_back(glm::vec4(
                     static_cast<float>(x),
@@ -1569,7 +1572,7 @@ void applyVorticityForce() {
     setTextureUniform(vorticityForceProgram, "obstacles", 2, obstacleTex);
     glUniform2f(glGetUniformLocation(vorticityForceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
     glUniform1f(glGetUniformLocation(vorticityForceProgram, "dt"), DT);
-    glUniform1f(glGetUniformLocation(vorticityForceProgram, "scale"), vorticityStrength);
+    glUniform1f(glGetUniformLocation(vorticityForceProgram, "scale"), VORTICITY_SCALE);
 
     drawQuad();
     currentVelocity = dst;
@@ -2019,14 +2022,23 @@ void display()
     lastMouseY = mouseY;
 
 
-    // Process collisions at regular intervals   
-    static int frameCount = 0;
+    
+    int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
 
-    // (10 times per second)
-    if (frameCount % size_t(FPS / 10.0) == 0)
+    if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
+    {
         detectEdgeCollisions();
+        collision_lastCallTime = curr_time_int;
+    }
+ 
 
-    frameCount++;
+
+  
+
+
+
+
+
 
     // Render to screen
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -2101,16 +2113,6 @@ void keyboard(unsigned char key, int x, int y)
         glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
         glClear(GL_COLOR_BUFFER_BIT);
         std::cout << "Obstacles cleared" << std::endl;
-        break;
-    case '+':
-    case '=':
-        vorticityStrength += 0.05f;
-        std::cout << "Vorticity strength: " << vorticityStrength << std::endl;
-        break;
-    case '-':
-    case '_':
-        vorticityStrength = std::max(0.0f, vorticityStrength - 0.05f);
-        std::cout << "Vorticity strength: " << vorticityStrength << std::endl;
         break;
     }
 }
