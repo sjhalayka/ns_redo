@@ -2018,12 +2018,12 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
     // Convert top-left corner position from pixel coords to NDC
     // pixelX=0 -> ndcX=-1, pixelX=windowWidth -> ndcX=1
     // pixelY=0 -> ndcY=1 (top), pixelY=windowHeight -> ndcY=-1 (bottom)
-    float ndcX = (2.0f * pixelX / windowWidth) - 1.0f;
-    float ndcY = 1.0f - (2.0f * pixelY / windowHeight);  // Flip Y
+    float ndcX = (2.0f * pixelX / SIM_WIDTH) - 1.0f;
+    float ndcY = 1.0f - (2.0f * pixelY / SIM_HEIGHT);  // Flip Y
 
     // Convert size from pixels to NDC units
-    float ndcWidth = 2.0f * pixelWidth / windowWidth;
-    float ndcHeight = 2.0f * pixelHeight / windowHeight;
+    float ndcWidth = 2.0f * pixelWidth / SIM_WIDTH;
+    float ndcHeight = 2.0f * pixelHeight / SIM_HEIGHT;
 
     // The sprite shader expects position as top-left corner in NDC
     // and size as the full width/height in NDC
@@ -2041,8 +2041,6 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
     drawQuad();
 
     glDisable(GL_BLEND);
-
-
 }
 
 void simulate()
@@ -2050,7 +2048,7 @@ void simulate()
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
-    addObstacleStamp(protagonist.tex, 
+    addObstacleStamp(protagonist.tex,
         protagonist.x, protagonist.y,
         protagonist.width, protagonist.height, true,
         1, true);
@@ -2059,10 +2057,10 @@ void simulate()
     {
         if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
-            addObstacleStamp(foreground_chunked[i].tex, 
+            addObstacleStamp(foreground_chunked[i].tex,
                 foreground_chunked[i].x, foreground_chunked[i].y,
                 foreground_chunked[i].width, foreground_chunked[i].height, true,
-                1, true);
+                0.5, true);
         }
     }
 
@@ -2192,10 +2190,10 @@ void display()
 
 
 
-    if (protagonist.tex != 0) 
+    if (protagonist.tex != 0)
     {
-        drawSprite(protagonist.tex, 
-            protagonist.x, protagonist.y, 
+        drawSprite(protagonist.tex,
+            protagonist.x, protagonist.y,
             protagonist.width, protagonist.height);
     }
 
@@ -2203,8 +2201,8 @@ void display()
     {
         if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
-            drawSprite(foreground_chunked[i].tex, 
-                foreground_chunked[i].x, foreground_chunked[i].y, 
+            drawSprite(foreground_chunked[i].tex,
+                foreground_chunked[i].x, foreground_chunked[i].y,
                 foreground_chunked[i].width, foreground_chunked[i].height);
         }
     }
