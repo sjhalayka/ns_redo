@@ -41,6 +41,47 @@
 using namespace std;
 
 
+
+class sprite
+{
+public:
+    GLuint tex = 0;
+    int width = 0;
+    int height = 0;
+    int x = 0;
+    int y = 0;
+};
+
+class ship : public sprite
+{
+public:
+    float health;
+};
+
+class foreground_tile : public sprite
+{
+public:
+    float health;
+};
+
+class background_tile : public sprite
+{
+public:
+    float health;
+};
+
+
+
+ship protagonist;
+foreground_tile foreground;
+background_tile background;
+const int foreground_chunk_size = 360;
+
+
+vector<foreground_tile> foreground_chunked;
+
+
+
 // Simulation parameters
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
@@ -75,17 +116,17 @@ bool shiftDown = false;
 
 
 // Protagonist sprite texture
-GLuint protagonistTex = 0;
-int protagonistWidth = 0;
-int protagonistHeight = 0;
+//GLuint protagonistTex = 0;
+//int protagonistWidth = 0;
+//int protagonistHeight = 0;
 
-GLuint foregroundTex = 0;
-int foregroundWidth = 0;
-int foregroundHeight = 0;
-
-GLuint backgroundTex = 0;
-int backgroundWidth = 0;
-int backgroundHeight = 0;
+//GLuint foregroundTex = 0;
+//int foregroundWidth = 0;
+//int foregroundHeight = 0;
+//
+//GLuint backgroundTex = 0;
+//int backgroundWidth = 0;
+//int backgroundHeight = 0;
 
 
 
@@ -1463,11 +1504,11 @@ void detectEdgeCollisions()
             bool inside = false, transparent = false;
 
             if (isPixelInsideSpriteAndTransparent(
-                protagonistTex,
-                100,
-                100,
-                protagonistWidth,
-                protagonistHeight,
+                protagonist.tex,
+                protagonist.x,
+                protagonist.y,
+                protagonist.width,
+                protagonist.height,
                 (int)collisionPoints[i].x,
                 (int)collisionPoints[i].y,
                 inside,
@@ -1919,8 +1960,12 @@ void simulate()
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
-    addObstacleStamp(protagonistTex, 100, 100,
-        protagonistWidth, protagonistHeight, true,
+    addObstacleStamp(protagonist.tex, protagonist.x, protagonist.y,
+        protagonist.width, protagonist.height, true,
+        1, true);
+
+    addObstacleStamp(foreground.tex, foreground.x, foreground.y,
+        foreground.width, foreground.height, true,
         1, true);
 
     // Advect velocity
@@ -2022,9 +2067,6 @@ void display()
     
 
 
-  
-
-
 
 
 
@@ -2038,24 +2080,28 @@ void display()
     setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
     setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
     setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
-    setTextureUniform(displayProgram, "background", 3, backgroundTex);
+    setTextureUniform(displayProgram, "background", 3, background.tex);
     glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
     glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
 
-
     drawQuad();
 
-    // Draw protagonist sprite on top of the fluid simulation
-    // Draw at position (100, 100) with its original size
-    if (protagonistTex != 0) {
-        drawSprite(protagonistTex, 100, 100, protagonistWidth, protagonistHeight);
+
+
+
+
+    if (protagonist.tex != 0) {
+        drawSprite(protagonist.tex, protagonist.x, protagonist.y, protagonist.width, protagonist.height);
     }
 
-    //if (foregroundTex != 0) {
-    //    drawSprite(foregroundTex, -100, 0, foregroundWidth, foregroundHeight);
-    //}
+    if (foreground.tex != 0) {
+        drawSprite(foreground.tex, 0, 0, foreground.width, foreground.height);
+    }
+
+
 
     displayFPS();
+
 
 
     glutSwapBuffers();
@@ -2203,22 +2249,29 @@ int main(int argc, char** argv) {
 
 
     // Load protagonist texture
-    protagonistTex = loadTextureFromFile("media/protagonist.png", &protagonistWidth, &protagonistHeight);
-    if (protagonistTex == 0) {
+    protagonist.tex = loadTextureFromFile("media/protagonist.png", &protagonist.width, &protagonist.height);
+    if (protagonist.tex == 0) {
         std::cout << "Warning: Could not load protagonist.png - sprite drawing will be disabled" << std::endl;
 
         return 1;
     }
 
-    foregroundTex = loadTextureFromFile("media/foreground.png", &foregroundWidth, &foregroundHeight);
-    if (foregroundTex == 0) {
+    protagonist.x = 200;
+    protagonist.y = 300;
+
+
+
+
+
+    foreground.tex = loadTextureFromFile("media/foreground.png", &foreground.width, &foreground.height);
+    if (foreground.tex == 0) {
         std::cout << "Warning: Could not load foreground.png - sprite drawing will be disabled" << std::endl;
 
         return 2;
     }
 
-    backgroundTex = loadTextureFromFile("media/background.png", &backgroundWidth, &backgroundHeight);
-    if (backgroundTex == 0) {
+    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height);
+    if (background.tex == 0) {
         std::cout << "Warning: Could not load background.png - sprite drawing will be disabled" << std::endl;
 
         return 3;
