@@ -38,6 +38,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
+#include <algorithm>
 using namespace std;
 
 
@@ -67,17 +68,14 @@ public:
 class background_tile : public sprite
 {
 public:
-    float health;
+
 };
 
 
 
 ship protagonist;
-foreground_tile foreground;
 background_tile background;
 const int foreground_chunk_size = 360;
-
-
 vector<foreground_tile> foreground_chunked;
 
 
@@ -112,21 +110,6 @@ bool leftMouseDown = false;
 bool rightMouseDown = false;
 bool middleMouseDown = false;
 bool shiftDown = false;
-
-
-
-// Protagonist sprite texture
-//GLuint protagonistTex = 0;
-//int protagonistWidth = 0;
-//int protagonistHeight = 0;
-
-//GLuint foregroundTex = 0;
-//int foregroundWidth = 0;
-//int foregroundHeight = 0;
-//
-//GLuint backgroundTex = 0;
-//int backgroundWidth = 0;
-//int backgroundHeight = 0;
 
 
 
@@ -1890,6 +1873,101 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) 
 }
 
 /**
+ * Chunk the foreground texture into tiles of foreground_chunk_size x foreground_chunk_size pixels.
+ * Each tile is stored as a separate OpenGL texture in the foreground_chunked vector.
+ *
+ * The tiles are arranged in row-major order:
+ *   - First row: tiles[0], tiles[1], tiles[2], ...
+ *   - Second row: tiles[cols], tiles[cols+1], ...
+ *
+ * Each tile's x,y position is set to its position in the original image layout.
+ *
+ * @param sourceFilename  Path to the foreground image file
+ * @return                True if chunking succeeded, false otherwise
+ */
+bool chunkForegroundTexture(const char* sourceFilename) {
+    foreground_chunked.clear();
+
+    int srcWidth, srcHeight, channels;
+
+    // Load the source image
+    stbi_set_flip_vertically_on_load(0);
+    unsigned char* srcData = stbi_load(sourceFilename, &srcWidth, &srcHeight, &channels, 4);  // Force RGBA
+
+    if (!srcData) {
+        std::cerr << "Failed to load foreground for chunking: " << sourceFilename << std::endl;
+        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+        return false;
+    }
+
+    // Calculate number of tiles in each dimension
+    int tilesX = (srcWidth + foreground_chunk_size - 1) / foreground_chunk_size;   // Ceiling division
+    int tilesY = (srcHeight + foreground_chunk_size - 1) / foreground_chunk_size;
+
+    std::cout << "Chunking foreground (" << srcWidth << "x" << srcHeight << ") into "
+        << tilesX << "x" << tilesY << " tiles of " << foreground_chunk_size << "x" << foreground_chunk_size << std::endl;
+
+    // Allocate a buffer for each tile (RGBA, 4 bytes per pixel)
+    std::vector<unsigned char> tileData(foreground_chunk_size * foreground_chunk_size * 4, 0);
+
+    // Process each tile
+    for (int ty = 0; ty < tilesY; ty++) {
+        for (int tx = 0; tx < tilesX; tx++) {
+            // Clear the tile buffer (transparent black)
+            std::fill(tileData.begin(), tileData.end(), 0);
+
+            // Calculate source region bounds
+            int srcStartX = tx * foreground_chunk_size;
+            int srcStartY = ty * foreground_chunk_size;
+
+            // Calculate how many pixels to copy (handle edge tiles that may be smaller)
+            int copyWidth = std::min(foreground_chunk_size, srcWidth - srcStartX);
+            int copyHeight = std::min(foreground_chunk_size, srcHeight - srcStartY);
+
+            // Copy pixels from source to tile
+            for (int y = 0; y < copyHeight; y++) {
+                for (int x = 0; x < copyWidth; x++) {
+                    int srcIdx = ((srcStartY + y) * srcWidth + (srcStartX + x)) * 4;
+                    int dstIdx = (y * foreground_chunk_size + x) * 4;
+
+                    tileData[dstIdx + 0] = srcData[srcIdx + 0];  // R
+                    tileData[dstIdx + 1] = srcData[srcIdx + 1];  // G
+                    tileData[dstIdx + 2] = srcData[srcIdx + 2];  // B
+                    tileData[dstIdx + 3] = srcData[srcIdx + 3];  // A
+                }
+            }
+
+            // Create OpenGL texture for this tile
+            GLuint tileTex;
+            glGenTextures(1, &tileTex);
+            glBindTexture(GL_TEXTURE_2D, tileTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size, foreground_chunk_size,
+                0, GL_RGBA, GL_UNSIGNED_BYTE, tileData.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            // Create foreground_tile and add to vector
+            foreground_tile tile;
+            tile.tex = tileTex;
+            tile.width = foreground_chunk_size;
+            tile.height = foreground_chunk_size;
+            tile.x = srcStartX;  // Position in original image coordinates
+            tile.y = srcStartY;
+            tile.health = 1.0f;
+
+            foreground_chunked.push_back(tile);
+        }
+    }
+
+    stbi_image_free(srcData);
+
+    std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
+    return true;
+}
+
+/**
  * Draw a texture to the screen using pixel-based coordinates.
  *
  * @param texture     OpenGL texture ID of the sprite to draw
@@ -1960,13 +2038,25 @@ void simulate()
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
-    addObstacleStamp(protagonist.tex, protagonist.x, protagonist.y,
+    addObstacleStamp(protagonist.tex, 
+        protagonist.x, protagonist.y,
         protagonist.width, protagonist.height, true,
         1, true);
 
-    addObstacleStamp(foreground.tex, foreground.x, foreground.y,
-        foreground.width, foreground.height, true,
-        1, true);
+    for (size_t i = 0; i < foreground_chunked.size(); i++)
+    {
+        if (foreground_chunked[i].tex != 0)
+        {
+            addObstacleStamp(foreground_chunked[i].tex, 
+                foreground_chunked[i].x, foreground_chunked[i].y,
+                foreground_chunked[i].width, foreground_chunked[i].height, true,
+                1, true);
+        }
+    }
+
+
+
+
 
     // Advect velocity
     advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
@@ -1995,7 +2085,7 @@ void simulate()
 
 void display()
 {
- 
+
     // Fixed time step
     static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     static double accumulator = 0.0;
@@ -2064,7 +2154,7 @@ void display()
         detectEdgeCollisions();
         collision_lastCallTime = curr_time_int;
     }
-    
+
 
 
 
@@ -2094,9 +2184,14 @@ void display()
         drawSprite(protagonist.tex, protagonist.x, protagonist.y, protagonist.width, protagonist.height);
     }
 
-    if (foreground.tex != 0) {
-        drawSprite(foreground.tex, 0, 0, foreground.width, foreground.height);
+    for (size_t i = 0; i < foreground_chunked.size(); i++)
+    {
+        if (foreground_chunked[i].tex != 0)
+        {
+            drawSprite(foreground_chunked[i].tex, foreground_chunked[i].x, foreground_chunked[i].y, foreground_chunked[i].width, foreground_chunked[i].height);
+        }
     }
+
 
 
 
@@ -2263,11 +2358,9 @@ int main(int argc, char** argv) {
 
 
 
-    foreground.tex = loadTextureFromFile("media/foreground.png", &foreground.width, &foreground.height);
-    if (foreground.tex == 0) {
-        std::cout << "Warning: Could not load foreground.png - sprite drawing will be disabled" << std::endl;
-
-        return 2;
+    // Chunk the foreground into tiles
+    if (!chunkForegroundTexture("media/foreground.png")) {
+        std::cout << "Warning: Could not chunk foreground.png" << std::endl;
     }
 
     background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height);
