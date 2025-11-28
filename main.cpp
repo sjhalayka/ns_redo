@@ -55,7 +55,6 @@ float GLOBAL_TIME = 0;
 const float FPS = 120;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
-int collision_lastCallTime = 0;
 
 
 
@@ -1945,28 +1944,7 @@ void simulate()
 
 void display()
 {
-    //simulate();
-
-
-    // Variable time step
-    //static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
-    //float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-
-    //const double d = 1.0 / FPS;
-
-    //DT = currentTime - lastTime;
-
-    //if (DT > d)
-    //{
-    //    simulate();
-    //    GLOBAL_TIME += DT;
-    //    lastTime = currentTime;
-    //}
-
-
-
-
-
+ 
     // Fixed time step
     static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     static double accumulator = 0.0;
@@ -2022,7 +2000,12 @@ void display()
     lastMouseY = mouseY;
 
 
-    
+
+
+
+
+    // Detect fluid-obstacle collisions
+    static int collision_lastCallTime = 0;
     int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
 
     if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
@@ -2030,7 +2013,7 @@ void display()
         detectEdgeCollisions();
         collision_lastCallTime = curr_time_int;
     }
- 
+    
 
 
   
