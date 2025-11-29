@@ -84,11 +84,14 @@ bool shiftDown = false;
 class sprite
 {
 public:
+
     GLuint tex = 0;
     int width = 0;
     int height = 0;
     int x = 0;
     int y = 0;
+    float vel_x = 0;
+    float vel_y = 0;
 
     bool isOnscreen(void)
     {
@@ -103,13 +106,15 @@ public:
 class ship : public sprite
 {
 public:
+
     float health;
 };
 
 class foreground_tile : public sprite
 {
 public:
-    float health;
+
+//    float health;
 };
 
 class background_tile : public sprite
@@ -1967,7 +1972,7 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             tile.height = foreground_chunk_size;
             tile.x = srcStartX;  // Position in original image coordinates
             tile.y = srcStartY;
-            tile.health = 1.0f;
+            //tile.health = 1.0f;
 
             foreground_chunked.push_back(tile);
         }
