@@ -88,8 +88,8 @@ public:
     GLuint tex = 0;
     int width = 0;
     int height = 0;
-    int x = 0;
-    int y = 0;
+    float x = 0;
+    float y = 0;
     float vel_x = 0;
     float vel_y = 0;
 
@@ -1508,12 +1508,12 @@ void detectEdgeCollisions()
 
             if (isPixelInsideSpriteAndTransparent(
                 protagonist.tex,
-                protagonist.x,
-                protagonist.y,
+                static_cast<int>(protagonist.x),
+                static_cast<int>(protagonist.y),
                 protagonist.width,
                 protagonist.height,
-                (int)collisionPoints[i].x,
-                (int)collisionPoints[i].y,
+                static_cast<int>(collisionPoints[i].x),
+                static_cast<int>(collisionPoints[i].y),
                 inside,
                 transparent))
             {
@@ -1973,8 +1973,8 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             tile.tex = tileTex;
             tile.width = foreground_chunk_size_width;
             tile.height = foreground_chunk_size_height;
-            tile.x = srcStartX;  // Position in original image coordinates
-            tile.y = srcStartY;
+            tile.x = static_cast<float>(srcStartX);  // Position in original image coordinates
+            tile.y = static_cast<float>(srcStartY);
             //tile.health = 1.0f;
 
             foreground_chunked.push_back(tile);
@@ -2057,7 +2057,7 @@ void simulate()
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
     addObstacleStamp(protagonist.tex,
-        protagonist.x, protagonist.y,
+        static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
         protagonist.width, protagonist.height, true,
         1, true);
 
@@ -2066,7 +2066,7 @@ void simulate()
         if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
             addObstacleStamp(foreground_chunked[i].tex,
-                foreground_chunked[i].x, foreground_chunked[i].y,
+                static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
                 foreground_chunked[i].width, foreground_chunked[i].height, true,
                 0.5, true);
         }
@@ -2201,7 +2201,7 @@ void display()
     if (protagonist.tex != 0)
     {
         drawSprite(protagonist.tex,
-            protagonist.x, protagonist.y,
+            static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
             protagonist.width, protagonist.height);
     }
 
@@ -2210,7 +2210,7 @@ void display()
         if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
             drawSprite(foreground_chunked[i].tex,
-                foreground_chunked[i].x, foreground_chunked[i].y,
+                static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
                 foreground_chunked[i].width, foreground_chunked[i].height);
         }
     }
