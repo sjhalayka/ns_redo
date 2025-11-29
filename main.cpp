@@ -1,30 +1,4 @@
-﻿/*
- * 2D Navier-Stokes Fluid Simulation using OpenGL 4 Fragment Shaders
- * Features:
- *   - Semi-Lagrangian advection
- *   - Jacobi pressure solver
- *   - Vorticity confinement
- *   - Obstacle texture support
- *   - Mouse-based velocity and density sources
- *   - Proper rectangular (non-square) texture handling
- *
- * Libraries: GLEW, GLM, GLUT (freeglut)
- *
- * Build:
- *   g++ -o fluid main.cpp -lGL -lGLEW -lglut -lGLU -std=c++11
- *
- * Controls:
- *   Left mouse button: Add density
- *   Right mouse button: Add velocity
- *   Middle mouse button / Shift+Left: Add obstacles
- *   'r': Reset simulation
- *   'o': Clear obstacles
- *   'v': Toggle vorticity confinement
- *   '+'/'-': Adjust vorticity strength
- *   'q'/ESC: Quit
- */
-
-#include <GL/glew.h>
+﻿#include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
