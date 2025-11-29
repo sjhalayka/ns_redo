@@ -127,7 +127,11 @@ public:
 
 ship protagonist;
 background_tile background;
-const int foreground_chunk_size = 360;
+
+const int foreground_chunk_size_width = 360;
+const int foreground_chunk_size_height = 108;
+
+
 vector<foreground_tile> foreground_chunked;
 
 
@@ -1488,8 +1492,6 @@ void detectEdgeCollisions()
     }
 
 
-    // to do: check all ally and enemy ships here
-
 
 
     if (collisionPoints.size() > 0)
@@ -1918,14 +1920,14 @@ bool chunkForegroundTexture(const char* sourceFilename) {
     }
 
     // Calculate number of tiles in each dimension
-    int tilesX = (srcWidth + foreground_chunk_size - 1) / foreground_chunk_size;   // Ceiling division
-    int tilesY = (srcHeight + foreground_chunk_size - 1) / foreground_chunk_size;
+    int tilesX = (srcWidth + foreground_chunk_size_width - 1) / foreground_chunk_size_width;   // Ceiling division
+    int tilesY = (srcHeight + foreground_chunk_size_height - 1) / foreground_chunk_size_height;
 
     std::cout << "Chunking foreground (" << srcWidth << "x" << srcHeight << ") into "
-        << tilesX << "x" << tilesY << " tiles of " << foreground_chunk_size << "x" << foreground_chunk_size << std::endl;
+        << tilesX << "x" << tilesY << " tiles of " << foreground_chunk_size_width << "x" << foreground_chunk_size_height << std::endl;
 
     // Allocate a buffer for each tile (RGBA, 4 bytes per pixel)
-    std::vector<unsigned char> tileData(foreground_chunk_size * foreground_chunk_size * 4, 0);
+    std::vector<unsigned char> tileData(foreground_chunk_size_width * foreground_chunk_size_height * 4, 0);
 
     // Process each tile
     for (int ty = 0; ty < tilesY; ty++) {
@@ -1934,18 +1936,18 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             std::fill(tileData.begin(), tileData.end(), 0);
 
             // Calculate source region bounds
-            int srcStartX = tx * foreground_chunk_size;
-            int srcStartY = ty * foreground_chunk_size;
+            int srcStartX = tx * foreground_chunk_size_width;
+            int srcStartY = ty * foreground_chunk_size_height;
 
             // Calculate how many pixels to copy (handle edge tiles that may be smaller)
-            int copyWidth = std::min(foreground_chunk_size, srcWidth - srcStartX);
-            int copyHeight = std::min(foreground_chunk_size, srcHeight - srcStartY);
+            int copyWidth = std::min(foreground_chunk_size_width, srcWidth - srcStartX);
+            int copyHeight = std::min(foreground_chunk_size_height, srcHeight - srcStartY);
 
             // Copy pixels from source to tile
             for (int y = 0; y < copyHeight; y++) {
                 for (int x = 0; x < copyWidth; x++) {
                     int srcIdx = ((srcStartY + y) * srcWidth + (srcStartX + x)) * 4;
-                    int dstIdx = (y * foreground_chunk_size + x) * 4;
+                    int dstIdx = (y * foreground_chunk_size_width + x) * 4;
 
                     tileData[dstIdx + 0] = srcData[srcIdx + 0];  // R
                     tileData[dstIdx + 1] = srcData[srcIdx + 1];  // G
@@ -1958,7 +1960,7 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             GLuint tileTex;
             glGenTextures(1, &tileTex);
             glBindTexture(GL_TEXTURE_2D, tileTex);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size, foreground_chunk_size,
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size_width, foreground_chunk_size_height,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, tileData.data());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1968,8 +1970,8 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             // Create foreground_tile and add to vector
             foreground_tile tile;
             tile.tex = tileTex;
-            tile.width = foreground_chunk_size;
-            tile.height = foreground_chunk_size;
+            tile.width = foreground_chunk_size_width;
+            tile.height = foreground_chunk_size_height;
             tile.x = srcStartX;  // Position in original image coordinates
             tile.y = srcStartY;
             //tile.health = 1.0f;
