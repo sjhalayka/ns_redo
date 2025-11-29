@@ -128,8 +128,9 @@ public:
 ship protagonist;
 background_tile background;
 
+// Make these 1920x1080 for no chunking
 const int foreground_chunk_size_width = 360;
-const int foreground_chunk_size_height = 108;
+const int foreground_chunk_size_height = 360;
 
 
 vector<foreground_tile> foreground_chunked;
