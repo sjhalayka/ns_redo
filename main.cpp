@@ -57,12 +57,11 @@ bool rightKeyPressed = false;
 bool leftKeyPressed = false;
 
 
-
-class sprite
+class pre_sprite
 {
 public:
 
-    GLuint tex = 0;
+
     int width = 0;
     int height = 0;
     float x = 0;
@@ -70,13 +69,7 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
-    vector<unsigned char> tex_data;
 
-    void update_tex(void)
-    {
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data.data());
-    }
 
     bool isOnscreen(void)
     {
@@ -92,6 +85,22 @@ public:
         x = x + vel_x * dt;
         y = y + vel_y * dt;
     }
+
+};
+
+class sprite : public pre_sprite
+{
+public:
+
+    GLuint tex = 0;
+
+    vector<unsigned char> tex_data;
+
+    void update_tex(void)
+    {
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data.data());
+    }
 };
 
 
@@ -100,17 +109,11 @@ const int UP_STATE = 0;
 const int DOWN_STATE = 1;
 const int REST_STATE = 2;
 
-class tri_sprite
+class tri_sprite : public pre_sprite
 {
 public:
 
     GLuint tex = 0;
-    int width = 0;
-    int height = 0;
-    float x = 0;
-    float y = 0;
-    float vel_x = 0;
-    float vel_y = 0;
 
     vector<unsigned char> tex_up_data;
     vector<unsigned char> tex_down_data;
@@ -130,20 +133,7 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
     }
 
-    bool isOnscreen(void)
-    {
-        return
-            (x + width > 0) &&
-            (x < windowWidth) &&
-            (y + height > 0) &&
-            (y < windowHeight);
-    }
 
-    void integrate(float dt)
-    {
-        x = x + vel_x * dt;
-        y = y + vel_y * dt;
-    }
 };
 
 
@@ -169,11 +159,11 @@ public:
         vel_x = src_x;
         vel_y = src_y;
 
-        if (vel_y > 0)
+        if (vel_y < 0)
         {
             state = UP_STATE;
         }
-        else if (vel_y < 0)
+        else if (vel_y > 0)
         {
             state = DOWN_STATE;
         }
