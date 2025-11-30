@@ -61,7 +61,6 @@ class pre_sprite
 {
 public:
 
-
     int width = 0;
     int height = 0;
     float x = 0;
@@ -69,7 +68,7 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
-
+    vector<glm::vec2> blackening_points;
 
     bool isOnscreen(void)
     {
@@ -140,8 +139,6 @@ public:
 class ship : public tri_sprite
 {
 public:
-
-
 
     float health;
 };
@@ -2223,8 +2220,6 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 
 void simulate()
 {
-    // to do: integrate velocity and position here
-
     protagonist.integrate(DT);
 
     GLuint clearColor[4] = { 0, 0, 0, 0 };
