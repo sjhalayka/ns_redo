@@ -51,7 +51,10 @@ bool rightMouseDown = false;
 bool middleMouseDown = false;
 bool shiftDown = false;
 
-
+bool upKeyPressed = false;
+bool downKeyPressed = false;
+bool rightKeyPressed = false;
+bool leftKeyPressed = false;
 
 
 
@@ -83,6 +86,12 @@ public:
             (y + height > 0) &&
             (y < windowHeight);
     }
+
+    void integrate(float dt)
+    {
+        x = x + vel_x * dt;
+        y = y + vel_y * dt;
+    }
 };
 
 
@@ -90,7 +99,6 @@ public:
 const int UP_STATE = 0;
 const int DOWN_STATE = 1;
 const int REST_STATE = 2;
-
 
 class tri_sprite
 {
@@ -130,6 +138,12 @@ public:
             (y + height > 0) &&
             (y < windowHeight);
     }
+
+    void integrate(float dt)
+    {
+        x = x + vel_x * dt;
+        y = y + vel_y * dt;
+    }
 };
 
 
@@ -138,16 +152,56 @@ class ship : public tri_sprite
 public:
 
 
+
+    float health;
+};
+
+
+
+
+
+class friendly_ship : public ship
+{
+public:
+
     void set_velocity(const float src_x, const float src_y)
     {
+        vel_x = src_x;
+        vel_y = src_y;
 
+        if (vel_y > 0)
+        {
+            state = UP_STATE;
+        }
+        else if (vel_y < 0)
+        {
+            state = DOWN_STATE;
+        }
+        else
+        {
+            state = REST_STATE;
+        }
 
-
-
+        update_tex();
     }
 
     float health;
 };
+
+
+class enemy_ship : public ship
+{
+public:
+
+    void set_velocity(const float src_x, const float src_y)
+    {
+    }
+
+    float health;
+};
+
+
+
 
 class foreground_tile : public sprite
 {
@@ -164,7 +218,7 @@ public:
 
 
 
-ship protagonist;
+friendly_ship protagonist;
 background_tile background;
 
 // Make these 1920x1080 for no chunking
@@ -2179,6 +2233,10 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 
 void simulate()
 {
+    // to do: integrate velocity and position here
+
+    protagonist.integrate(DT);
+
     GLuint clearColor[4] = { 0, 0, 0, 0 };
     glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
@@ -2437,17 +2495,103 @@ void passiveMotion(int x, int y) {
     mouseY = y;
 }
 
-void printControls() {
-    std::cout << "\n=== 2D Navier-Stokes Fluid Simulation ===" << std::endl;
-    std::cout << "Simulation size: " << SIM_WIDTH << "x" << SIM_HEIGHT << " (non-square)" << std::endl;
-    std::cout << "\nControls:" << std::endl;
-    std::cout << "  Left mouse button:    Add density (colored smoke)" << std::endl;
-    std::cout << "  Right mouse button:   Add velocity" << std::endl;
-    std::cout << "  Middle mouse / Shift+Left: Add obstacles (brush)" << std::endl;
-    std::cout << "  'r': Reset simulation" << std::endl;
-    std::cout << "  'o': Clear obstacles" << std::endl;
-    std::cout << "  '+'/'-': Adjust vorticity strength" << std::endl;
+
+
+void specialKeyboard(int key, int x, int y)
+{
+    switch (key) {
+    case GLUT_KEY_UP:
+        upKeyPressed = true;
+        break;
+    case GLUT_KEY_DOWN:
+        downKeyPressed = true;
+        break;
+    case GLUT_KEY_LEFT:
+        leftKeyPressed = true;
+        break;
+    case GLUT_KEY_RIGHT:
+        rightKeyPressed = true;
+        break;
+    }
+
+
+    float local_vel_x = 0;
+    float local_vel_y = 0;
+
+    // Combine key states to allow diagonal movement
+    if (upKeyPressed) {
+        local_vel_y = -1;
+    }
+    if (downKeyPressed) {
+        local_vel_y = 1;
+    }
+    if (leftKeyPressed) {
+        local_vel_x = -1;
+    }
+    if (rightKeyPressed) {
+        local_vel_x = 1;
+    }
+
+    float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+
+    if (vel_length > 0)
+    {
+        local_vel_x /= vel_length * 2;
+        local_vel_y /= vel_length * 2;
+    }
+
+    protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
+
+// Modified specialKeyboardUp function to reset key states
+void specialKeyboardUp(int key, int x, int y)
+{
+    switch (key) {
+    case GLUT_KEY_UP:
+        upKeyPressed = false;
+        break;
+    case GLUT_KEY_DOWN:
+        downKeyPressed = false;
+        break;
+    case GLUT_KEY_LEFT:
+        leftKeyPressed = false;
+        break;
+    case GLUT_KEY_RIGHT:
+        rightKeyPressed = false;
+        break;
+    }
+
+
+    float local_vel_x = 0;
+    float local_vel_y = 0;
+
+    // Combine key states to allow diagonal movement
+    if (upKeyPressed) {
+        local_vel_y = -1;
+    }
+    if (downKeyPressed) {
+        local_vel_y = 1;
+    }
+    if (leftKeyPressed) {
+        local_vel_x = -1;
+    }
+    if (rightKeyPressed) {
+        local_vel_x = 1;
+    }
+
+    float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+
+    if (vel_length > 0)
+    {
+        local_vel_x /= vel_length * 2;
+        local_vel_y /= vel_length * 2;
+    }
+
+    protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+}
+
+
+
 
 #pragma comment(lib, "freeglut")
 #pragma comment(lib, "glew32")
@@ -2534,9 +2678,11 @@ int main(int argc, char** argv) {
     glutMotionFunc(motion);
     glutPassiveMotionFunc(passiveMotion);
 
-    // Enable blending for nice visuals
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
+    glutSpecialFunc(specialKeyboard);
+    glutSpecialUpFunc(specialKeyboardUp);
+
+
+    glutFullScreen();
 
     // Main loop
     glutMainLoop();
