@@ -67,6 +67,14 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
+    vector<unsigned char> tex_data;
+
+    void update_tex(void)
+    {
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data.data());
+    }
+
     bool isOnscreen(void)
     {
         return
@@ -77,9 +85,66 @@ public:
     }
 };
 
-class ship : public sprite
+
+
+const int UP_STATE = 0;
+const int DOWN_STATE = 1;
+const int REST_STATE = 2;
+
+
+class tri_sprite
 {
 public:
+
+    GLuint tex = 0;
+    int width = 0;
+    int height = 0;
+    float x = 0;
+    float y = 0;
+    float vel_x = 0;
+    float vel_y = 0;
+
+    vector<unsigned char> tex_up_data;
+    vector<unsigned char> tex_down_data;
+    vector<unsigned char> tex_rest_data;
+
+    int state = REST_STATE;
+
+    void update_tex(void)
+    {
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        if(state == UP_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_up_data.data());
+        else if (state == DOWN_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_down_data.data());
+        else if (state == REST_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
+    }
+
+    bool isOnscreen(void)
+    {
+        return
+            (x + width > 0) &&
+            (x < windowWidth) &&
+            (y + height > 0) &&
+            (y < windowHeight);
+    }
+};
+
+
+class ship : public tri_sprite
+{
+public:
+
+
+    void set_velocity(const float src_x, const float src_y)
+    {
+
+
+
+
+    }
 
     float health;
 };
@@ -1833,8 +1898,10 @@ GLuint createRectangleStamp(int width, int height) {
  * @param outHeight   Output parameter for the image height in pixels
  * @return            OpenGL texture ID, or 0 if loading failed
  */
-GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) {
+GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char> &out_data) {
     int width, height, channels;
+
+    out_data.clear();
 
     // stb_image loads with (0,0) at top-left, which matches our coordinate system
     stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
@@ -1857,6 +1924,9 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
+    for (size_t i = 0; i < width * height * channels; i++)
+        out_data.push_back(data[i]);
+
     stbi_image_free(data);
 
     if (outWidth) *outWidth = width;
@@ -1865,6 +1935,86 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) 
     std::cout << "Loaded texture: " << filename << " (" << width << "x" << height << ")" << std::endl;
     return tex;
 }
+
+
+
+GLuint loadTextureFromFile_Triplet(
+    const char* up_filename,
+    const char* down_filename,
+    const char* rest_filename,
+
+    int* outWidth, int* outHeight, vector<unsigned char>& out_up_data, vector<unsigned char>& out_down_data, vector<unsigned char>& out_rest_data) {
+    int width, height, channels;
+
+    out_up_data.clear();
+    out_down_data.clear();
+    out_rest_data.clear();
+
+    // stb_image loads with (0,0) at top-left, which matches our coordinate system
+    stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
+
+
+	unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!up_data) {
+		std::cerr << "Failed to load texture: " << up_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
+
+	unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!down_data) {
+		std::cerr << "Failed to load texture: " << down_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
+
+	unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!rest_data) {
+		std::cerr << "Failed to load texture: " << rest_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
+
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rest_data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+
+
+    for (size_t i = 0; i < width * height * channels; i++)
+        out_up_data.push_back(up_data[i]);
+
+    stbi_image_free(up_data);
+
+    for (size_t i = 0; i < width * height * channels; i++)
+        out_down_data.push_back(down_data[i]);
+
+    stbi_image_free(down_data);
+
+    for (size_t i = 0; i < width * height * channels; i++)
+        out_rest_data.push_back(rest_data[i]);
+
+    stbi_image_free(rest_data);
+
+    if (outWidth) *outWidth = width;
+    if (outHeight) *outHeight = height;
+
+    return tex;
+}
+
+
+
 
 /**
  * Chunk the foreground texture into tiles of foreground_chunk_size x foreground_chunk_size pixels.
@@ -1879,7 +2029,8 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight) 
  * @param sourceFilename  Path to the foreground image file
  * @return                True if chunking succeeded, false otherwise
  */
-bool chunkForegroundTexture(const char* sourceFilename) {
+bool chunkForegroundTexture(const char* sourceFilename) 
+{
     foreground_chunked.clear();
 
     int srcWidth, srcHeight, channels;
@@ -1937,6 +2088,7 @@ bool chunkForegroundTexture(const char* sourceFilename) {
             glBindTexture(GL_TEXTURE_2D, tileTex);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size_width, foreground_chunk_size_height,
                 0, GL_RGBA, GL_UNSIGNED_BYTE, tileData.data());
+
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -2174,6 +2326,8 @@ void display()
 
     if (protagonist.tex != 0)
     {
+        protagonist.update_tex();
+
         drawSprite(protagonist.tex,
             static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
             protagonist.width, protagonist.height);
@@ -2341,10 +2495,10 @@ int main(int argc, char** argv) {
 
 
     // Load protagonist texture
-    protagonist.tex = loadTextureFromFile("media/protagonist.png", &protagonist.width, &protagonist.height);
-    if (protagonist.tex == 0) {
-        std::cout << "Warning: Could not load protagonist.png - sprite drawing will be disabled" << std::endl;
-
+    protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.tex_up_data, protagonist.tex_down_data, protagonist.tex_rest_data);
+    if (protagonist.tex == 0) 
+    {
+        std::cout << "Warning: Could not load protagonist sprite" << std::endl;
         return 1;
     }
 
@@ -2353,22 +2507,22 @@ int main(int argc, char** argv) {
 
 
 
-
-
-    // Chunk the foreground into tiles
-    if (!chunkForegroundTexture("media/foreground.png")) {
-        std::cout << "Warning: Could not chunk foreground.png" << std::endl;
+    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.tex_data);
+    if (background.tex == 0) 
+    {
+        std::cout << "Warning: Could not load background sprite" << std::endl;
+        return 2;
     }
 
-    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height);
-    if (background.tex == 0) {
-        std::cout << "Warning: Could not load background.png - sprite drawing will be disabled" << std::endl;
-
+    if (!chunkForegroundTexture("media/foreground.png"))
+    {
+        std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
         return 3;
     }
 
 
-    printControls();
+
+//    printControls();
 
     // Register callbacks
     glutDisplayFunc(display);
