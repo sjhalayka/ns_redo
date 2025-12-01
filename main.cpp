@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
@@ -57,6 +58,18 @@ bool rightKeyPressed = false;
 bool leftKeyPressed = false;
 
 
+
+
+
+struct CompareVec2 {
+    bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const {
+        if (lhs.x != rhs.x) {
+            return lhs.x < rhs.x;
+        }
+        return lhs.y < rhs.y;
+    }
+};
+
 class pre_sprite
 {
 public:
@@ -68,7 +81,11 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
+//  set<glm::vec2, CompareVec2> blackening_points;
+
     vector<glm::vec2> blackening_points;
+
+
 
     bool isOnscreen(void)
     {
@@ -1523,6 +1540,10 @@ bool isPixelInsideSpriteAndTransparent(
 }
 
 
+
+
+
+
 void detectEdgeCollisions()
 {
     collisionPoints.clear();
@@ -1578,8 +1599,6 @@ void detectEdgeCollisions()
 
     if (collisionPoints.size() > 0)
     {
-        cout << collisionPoints.size() << endl;
-
         for (size_t i = 0; i < collisionPoints.size(); i++)
         {
             //cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
@@ -1598,12 +1617,13 @@ void detectEdgeCollisions()
                 inside,
                 transparent))
             {
+                if (inside)// && !transparent)
+                {
+                    //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
+                    protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y));
 
-
-                //if (inside && !transparent)
-                 //   std::cout << "You clicked on a solid pixel of the protagonist!\n";
-  /*              else if (inside && transparent)
-                    std::cout << "Clicked inside bounding box but pixel is transparent.\n";*/
+                    //cout << protagonist.blackening_points.size() << endl;
+                }
             }
         }
     }
