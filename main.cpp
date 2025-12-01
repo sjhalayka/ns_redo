@@ -100,6 +100,8 @@ public:
         glBindTexture(GL_TEXTURE_2D, tex);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data.data());
     }
+
+
 };
 
 
@@ -208,7 +210,6 @@ public:
 friendly_ship protagonist;
 background_tile background;
 
-// Make these 1920x1080 for no chunking
 const int foreground_chunk_size_width = 360;
 const int foreground_chunk_size_height = 360;
 
