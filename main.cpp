@@ -129,7 +129,7 @@ public:
             {
                 made_change = true;
 
-                const float BRUSH_RADIUS = 25.0f;        // Radius of the soft brush in sprite pixels
+                const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
                 const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
                 const glm::vec3 ORANGE(255, 127, 0);
                 const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
@@ -222,45 +222,6 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
     }
 
-    //void add_blackening_points(const vector<glm::vec2> &locations)
-    //{
-    //    bool made_change = false;
-
-    //    for (size_t i = 0; i < locations.size(); i++)
-    //    {
-    //        size_t old_set_size = blackening_points.size();
-
-    //        blackening_points.insert(locations[i]);
-
-    //        if (old_set_size != blackening_points.size())
-    //        {
-    //            made_change = true;
-
-    //            size_t index = (static_cast<int>(locations[i].y) * width + static_cast<int>(locations[i].x)) * 4;
-
-    //            tex_up_data[index + 0] = 255;
-    //            tex_up_data[index + 1] = 127;
-    //            tex_up_data[index + 2] = 0;
-
-    //            tex_down_data[index + 0] = 255;
-    //            tex_down_data[index + 1] = 127;
-    //            tex_down_data[index + 2] = 0;
-
-    //            tex_rest_data[index + 0] = 255;
-    //            tex_rest_data[index + 1] = 127;
-    //            tex_rest_data[index + 2] = 0;
-
-    //            cout << "new location found" << endl;
-    //            cout << blackening_points.size() << endl;
-    //        }
-    //    }
-
-    //    if (made_change)
-    //        update_tex();
-    //}
-
-
-
     void add_blackening_points(const vector<glm::vec2>& locations)
     {
         bool made_change = false;
@@ -274,7 +235,7 @@ public:
             {
                 made_change = true;
 
-                const float BRUSH_RADIUS = 25.0f;        // Radius of the soft brush in sprite pixels
+                const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
                 const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
                 const glm::vec3 ORANGE(255, 127, 0);
                 const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
