@@ -61,8 +61,10 @@ bool leftKeyPressed = false;
 
 
 
-struct CompareVec2 {
-    bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const {
+struct CompareVec2 
+{
+    bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const 
+    {
         if (lhs.x != rhs.x) {
             return lhs.x < rhs.x;
         }
@@ -81,12 +83,7 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
-    //  set<glm::vec2, CompareVec2> blackening_points;
-
-    //vector<glm::vec2> blackening_points;
-
-
-
+    set<glm::vec2, CompareVec2> blackening_points;
 
     bool isOnscreen(void)
     {
@@ -154,8 +151,40 @@ public:
 
     void add_blackening_points(const vector<glm::vec2> &locations)
     {
-        cout << locations.size() << endl;
+        bool made_change = false;
 
+        for (size_t i = 0; i < locations.size(); i++)
+        {
+            size_t old_set_size = blackening_points.size();
+
+            blackening_points.insert(locations[i]);
+
+            if (old_set_size != blackening_points.size())
+            {
+                made_change = true;
+
+                size_t index = (locations[i].y * width + locations[i].x) * 4;
+
+                tex_up_data[index + 0] = 255;
+                tex_up_data[index + 1] = 127;
+                tex_up_data[index + 2] = 0;
+
+                tex_down_data[index + 0] = 255;
+                tex_down_data[index + 1] = 127;
+                tex_down_data[index + 2] = 0;
+
+                tex_rest_data[index + 0] = 255;
+                tex_rest_data[index + 1] = 127;
+                tex_rest_data[index + 2] = 0;
+
+
+                cout << "new location found" << endl;
+                cout << blackening_points.size() << endl;
+            }
+        }
+
+        if (made_change)
+            update_tex();
     }
 };
 
@@ -1503,10 +1532,12 @@ bool isPixelInsideSpriteAndTransparent(
     int pixelX, int pixelY,
     bool& outInside,
     bool& outTransparent,
-    unsigned char alphaThreshold = 127)
+    unsigned char alphaThreshold,
+    glm::vec2 &hit)
 {
     outInside = false;
     outTransparent = false;
+    hit = glm::vec2(0, 0);
 
     // 1. Bounding box test (fast)
     if (pixelX < sprX || pixelX >= sprX + sprW ||
@@ -1540,6 +1571,8 @@ bool isPixelInsideSpriteAndTransparent(
 
     // 5. Transparent?
     outTransparent = (a < alphaThreshold);
+
+    hit = glm::vec2(localX, localY);
 
     return true;
 }
@@ -1615,6 +1648,10 @@ void detectEdgeCollisions()
 
             bool inside = false, transparent = false;
 
+
+
+            glm::vec2 hit;
+
             if (isPixelInsideSpriteAndTransparent(
                 protagonist.tex,
                 static_cast<int>(protagonist.x),
@@ -1624,11 +1661,13 @@ void detectEdgeCollisions()
                 static_cast<int>(collisionPoints[i].x),
                 static_cast<int>(collisionPoints[i].y),
                 inside,
-                transparent))
+                transparent,
+                127,
+                hit))
             {
-                if (inside /*&& !transparent*/)
+                if (inside/* && !transparent*/)
                 {
-                    protagonist_blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y));
+                    protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
 
                         //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
                         //protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y);
