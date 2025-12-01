@@ -149,43 +149,128 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
     }
 
-    void add_blackening_points(const vector<glm::vec2> &locations)
+    //void add_blackening_points(const vector<glm::vec2> &locations)
+    //{
+    //    bool made_change = false;
+
+    //    for (size_t i = 0; i < locations.size(); i++)
+    //    {
+    //        size_t old_set_size = blackening_points.size();
+
+    //        blackening_points.insert(locations[i]);
+
+    //        if (old_set_size != blackening_points.size())
+    //        {
+    //            made_change = true;
+
+    //            size_t index = (static_cast<int>(locations[i].y) * width + static_cast<int>(locations[i].x)) * 4;
+
+    //            tex_up_data[index + 0] = 255;
+    //            tex_up_data[index + 1] = 127;
+    //            tex_up_data[index + 2] = 0;
+
+    //            tex_down_data[index + 0] = 255;
+    //            tex_down_data[index + 1] = 127;
+    //            tex_down_data[index + 2] = 0;
+
+    //            tex_rest_data[index + 0] = 255;
+    //            tex_rest_data[index + 1] = 127;
+    //            tex_rest_data[index + 2] = 0;
+
+    //            cout << "new location found" << endl;
+    //            cout << blackening_points.size() << endl;
+    //        }
+    //    }
+
+    //    if (made_change)
+    //        update_tex();
+    //}
+
+
+
+    void add_blackening_points(const vector<glm::vec2>& locations)
     {
         bool made_change = false;
 
-        for (size_t i = 0; i < locations.size(); i++)
+        for (const auto& loc : locations)
         {
-            size_t old_set_size = blackening_points.size();
+            glm::vec2 point(loc.x, loc.y);
 
-            blackening_points.insert(locations[i]);
-
-            if (old_set_size != blackening_points.size())
+            // Only process if this point is new
+            if (blackening_points.insert(point).second)
             {
                 made_change = true;
 
-                size_t index = (locations[i].y * width + locations[i].x) * 4;
+                const float BRUSH_RADIUS = 25.0f;        // Radius of the soft brush in sprite pixels
+                const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
+                const glm::vec3 ORANGE(255, 127, 0);
+                const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
-                tex_up_data[index + 0] = 255;
-                tex_up_data[index + 1] = 127;
-                tex_up_data[index + 2] = 0;
+                int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
+                int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
+                int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
+                int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
 
-                tex_down_data[index + 0] = 255;
-                tex_down_data[index + 1] = 127;
-                tex_down_data[index + 2] = 0;
+                for (int y = minY; y <= maxY; ++y)
+                {
+                    for (int x = minX; x <= maxX; ++x)
+                    {
+                        glm::vec2 diff(x - point.x, y - point.y);
+                        float distSq = diff.x * diff.x + diff.y * diff.y;
 
-                tex_rest_data[index + 0] = 255;
-                tex_rest_data[index + 1] = 127;
-                tex_rest_data[index + 2] = 0;
+                        if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
+                        {
+                            float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
+                            falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
 
+                            // Optional: use smoothstep for even smoother falloff
+                            // float t = distSq * INV_RADIUS_SQ;
+                            // falloff = 1.0f - t * t * (3.0f - 2.0f * t);
 
-                cout << "new location found" << endl;
-                cout << blackening_points.size() << endl;
+                            float alpha = falloff * MAX_ALPHA;
+
+                            size_t idx = (y * width + x) * 4;
+
+                            // Blend orange with existing color (additive or screen-like blending)
+                            // We'll do a soft additive blend toward orange
+                            glm::vec3 current(
+                                tex_up_data[idx + 0],
+                                tex_up_data[idx + 1],
+                                tex_up_data[idx + 2]
+                            );
+
+                            glm::vec3 blended = current + (ORANGE - current) * alpha;
+
+                            unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+                            unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+                            unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+                            tex_up_data[idx + 0] = r;
+                            tex_up_data[idx + 1] = g;
+                            tex_up_data[idx + 2] = b;
+
+                            tex_down_data[idx + 0] = r;
+                            tex_down_data[idx + 1] = g;
+                            tex_down_data[idx + 2] = b;
+
+                            tex_rest_data[idx + 0] = r;
+                            tex_rest_data[idx + 1] = g;
+                            tex_rest_data[idx + 2] = b;
+                        }
+                    }
+                }
+
+                std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+                std::cout << "total blackened points: " << blackening_points.size() << std::endl;
             }
         }
 
         if (made_change)
             update_tex();
     }
+
+
+
 };
 
 
@@ -1665,20 +1750,14 @@ void detectEdgeCollisions()
                 127,
                 hit))
             {
-                if (inside/* && !transparent*/)
+                if (inside && !transparent)
                 {
                     protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
-
-                        //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
-                        //protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y);
-                    //cout << protagonist.blackening_points.size() << endl;
                 }
             }
         }
 
-        //if (collisionPoints[i].z >= 1)
         protagonist.add_blackening_points(protagonist_blackening_points);
-
     }
 }
 
