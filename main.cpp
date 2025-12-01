@@ -81,9 +81,10 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
-//  set<glm::vec2, CompareVec2> blackening_points;
+    //  set<glm::vec2, CompareVec2> blackening_points;
 
-    vector<glm::vec2> blackening_points;
+    //vector<glm::vec2> blackening_points;
+
 
 
 
@@ -143,7 +144,7 @@ public:
     {
         glBindTexture(GL_TEXTURE_2D, tex);
 
-        if(state == UP_STATE)
+        if (state == UP_STATE)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_up_data.data());
         else if (state == DOWN_STATE)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_down_data.data());
@@ -151,7 +152,11 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
     }
 
+    void add_blackening_points(const vector<glm::vec2> &locations)
+    {
+        cout << locations.size() << endl;
 
+    }
 };
 
 
@@ -213,7 +218,7 @@ class foreground_tile : public sprite
 {
 public:
 
-//    float health;
+    //    float health;
 };
 
 class background_tile : public sprite
@@ -1599,10 +1604,14 @@ void detectEdgeCollisions()
 
     if (collisionPoints.size() > 0)
     {
+        vector<glm::vec2> protagonist_blackening_points;
+
         for (size_t i = 0; i < collisionPoints.size(); i++)
         {
             //cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
             //cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+
+
 
             bool inside = false, transparent = false;
 
@@ -1617,16 +1626,20 @@ void detectEdgeCollisions()
                 inside,
                 transparent))
             {
-                if (inside)// && !transparent)
+                if (inside /*&& !transparent*/)
                 {
-                    if(collisionPoints[i].z >= 1)
-                    //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
-                    protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y))
-;
-                    cout << protagonist.blackening_points.size() << endl;
+                    protagonist_blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y));
+
+                        //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
+                        //protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y);
+                    //cout << protagonist.blackening_points.size() << endl;
                 }
             }
         }
+
+        //if (collisionPoints[i].z >= 1)
+        protagonist.add_blackening_points(protagonist_blackening_points);
+
     }
 }
 
@@ -1961,7 +1974,7 @@ GLuint createRectangleStamp(int width, int height) {
  * @param outHeight   Output parameter for the image height in pixels
  * @return            OpenGL texture ID, or 0 if loading failed
  */
-GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char> &out_data) {
+GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
     int width, height, channels;
 
     out_data.clear();
@@ -2017,32 +2030,32 @@ GLuint loadTextureFromFile_Triplet(
     stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
 
 
-	unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!up_data) {
-		std::cerr << "Failed to load texture: " << up_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
-	}
+    unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
+    if (!up_data) {
+        std::cerr << "Failed to load texture: " << up_filename << std::endl;
+        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+        if (outWidth) *outWidth = 0;
+        if (outHeight) *outHeight = 0;
+        return 0;
+    }
 
-	unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!down_data) {
-		std::cerr << "Failed to load texture: " << down_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
-	}
+    unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
+    if (!down_data) {
+        std::cerr << "Failed to load texture: " << down_filename << std::endl;
+        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+        if (outWidth) *outWidth = 0;
+        if (outHeight) *outHeight = 0;
+        return 0;
+    }
 
-	unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!rest_data) {
-		std::cerr << "Failed to load texture: " << rest_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
-	}
+    unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
+    if (!rest_data) {
+        std::cerr << "Failed to load texture: " << rest_filename << std::endl;
+        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+        if (outWidth) *outWidth = 0;
+        if (outHeight) *outHeight = 0;
+        return 0;
+    }
 
     GLuint tex;
     glGenTextures(1, &tex);
@@ -2092,7 +2105,7 @@ GLuint loadTextureFromFile_Triplet(
  * @param sourceFilename  Path to the foreground image file
  * @return                True if chunking succeeded, false otherwise
  */
-bool chunkForegroundTexture(const char* sourceFilename) 
+bool chunkForegroundTexture(const char* sourceFilename)
 {
     foreground_chunked.clear();
 
@@ -2647,7 +2660,7 @@ int main(int argc, char** argv) {
 
     // Load protagonist texture
     protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.tex_up_data, protagonist.tex_down_data, protagonist.tex_rest_data);
-    if (protagonist.tex == 0) 
+    if (protagonist.tex == 0)
     {
         std::cout << "Warning: Could not load protagonist sprite" << std::endl;
         return 1;
@@ -2659,7 +2672,7 @@ int main(int argc, char** argv) {
 
 
     background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.tex_data);
-    if (background.tex == 0) 
+    if (background.tex == 0)
     {
         std::cout << "Warning: Could not load background sprite" << std::endl;
         return 2;
@@ -2673,9 +2686,9 @@ int main(int argc, char** argv) {
 
 
 
-//    printControls();
+    //    printControls();
 
-    // Register callbacks
+        // Register callbacks
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keyboard);
