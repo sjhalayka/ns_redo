@@ -65,9 +65,11 @@ struct CompareVec2
 {
     bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
     {
-        if (lhs.x != rhs.x) {
+        if (lhs.x != rhs.x) 
+        {
             return lhs.x < rhs.x;
         }
+
         return lhs.y < rhs.y;
     }
 };
@@ -131,7 +133,7 @@ public:
 
                 const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
                 const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-                const glm::vec3 ORANGE(255, 127, 0);
+                const glm::vec3 COLOUR(0, 0, 0);
                 const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
                 int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
@@ -167,7 +169,7 @@ public:
                                 tex_data[idx + 2]
                             );
 
-                            glm::vec3 blended = current + (ORANGE - current) * alpha;
+                            glm::vec3 blended = current + (COLOUR - current) * alpha;
 
                             unsigned char r = (unsigned char)std::min(255.0f, blended.x);
                             unsigned char g = (unsigned char)std::min(255.0f, blended.y);
@@ -237,7 +239,7 @@ public:
 
                 const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
                 const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-                const glm::vec3 ORANGE(255, 127, 0);
+                const glm::vec3 COLOUR(0, 0, 0);
                 const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
                 int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
@@ -273,7 +275,7 @@ public:
                                 tex_up_data[idx + 2]
                             );
 
-                            glm::vec3 blended = current + (ORANGE - current) * alpha;
+                            glm::vec3 blended = current + (COLOUR - current) * alpha;
 
                             unsigned char r = (unsigned char)std::min(255.0f, blended.x);
                             unsigned char g = (unsigned char)std::min(255.0f, blended.y);
