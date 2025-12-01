@@ -1619,10 +1619,11 @@ void detectEdgeCollisions()
             {
                 if (inside)// && !transparent)
                 {
+                    if(collisionPoints[i].z >= 1)
                     //protagonist.blackening_points.insert(glm::vec2(protagonist.x, protagonist.y));
-                    protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y));
-
-                    //cout << protagonist.blackening_points.size() << endl;
+                    protagonist.blackening_points.push_back(glm::vec2(protagonist.x, protagonist.y))
+;
+                    cout << protagonist.blackening_points.size() << endl;
                 }
             }
         }
