@@ -181,8 +181,8 @@ public:
                     }
                 }
 
-                std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-                std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+                //std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+                //std::cout << "total blackened points: " << blackening_points.size() << std::endl;
             }
         }
 
@@ -294,8 +294,8 @@ public:
                     }
                 }
 
-                std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-                std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+                //std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+                //std::cout << "total blackened points: " << blackening_points.size() << std::endl;
             }
         }
 
