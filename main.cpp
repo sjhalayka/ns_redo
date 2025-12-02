@@ -1,5 +1,6 @@
 ﻿#include <GL/glew.h>
 #include <GL/freeglut.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -15,6 +16,7 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <algorithm>
+#include <tuple>
 using namespace std;
 
 
@@ -75,6 +77,50 @@ struct CompareVec2
     }
 };
 
+
+
+float naive_lerp(float a, float b, float t)
+{
+    return a + t * (b - a);
+}
+
+glm::vec3 hsbToRgb(float hue, float saturation, float brightness) {
+    // hue: 0-360, saturation: 0-1, brightness: 0-1
+
+    float c = brightness * saturation;
+    float x = c * (1 - std::fabsf(std::fmodf(hue / 60.0f, 2) - 1));
+    float m = brightness - c;
+
+    float r, g, b;
+
+    if (hue < 60) {
+        r = c; g = x; b = 0;
+    }
+    else if (hue < 120) {
+        r = x; g = c; b = 0;
+    }
+    else if (hue < 180) {
+        r = 0; g = c; b = x;
+    }
+    else if (hue < 240) {
+        r = 0; g = x; b = c;
+    }
+    else if (hue < 300) {
+        r = x; g = 0; b = c;
+    }
+    else {
+        r = c; g = 0; b = x;
+    }
+
+    int red = static_cast<int>((r + m) * 255);
+    int green = static_cast<int>((g + m) * 255);
+    int blue = static_cast<int>((b + m) * 255);
+
+    return { red, green, blue };
+}
+
+
+
 class pre_sprite
 {
 public:
@@ -87,6 +133,9 @@ public:
     float vel_y = 0;
 
     map<glm::vec2, float, CompareVec2> blackening_age_map;
+
+
+
 
     bool isOnscreen(void)
     {
@@ -105,10 +154,8 @@ public:
 
 };
 
-float naive_lerp(float a, float b, float t)
-{
-    return a + t * (b - a);
-}
+
+
 
 class sprite : public pre_sprite
 {
@@ -182,19 +229,9 @@ public:
 							to_present_data[idx + 2]
 						);
 
-
-
-
-
-
-
-
-
-                        const float t = ci->second;
-
-                        const float duration = glut_curr_time - t;
-
-                        const float animation_length = 2;
+                        const float duration = glut_curr_time - ci->second;
+                            
+                        const float animation_length = 1;
                         
                         if (duration >= animation_length)
                         {
@@ -210,14 +247,11 @@ public:
                         }
                         else
                         {
+                            glm::vec3 red_colour = hsbToRgb(45*duration/animation_length, 0.8f, 0.9f);
 
-                            unsigned char r_ = 255;
-                            unsigned char g_ = 31;
-                            unsigned char b_ = 0;
-
-                            to_present_data[idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, r_, duration / animation_length));
-                            to_present_data[idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, g_, duration / animation_length));
-                            to_present_data[idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, b_, duration / animation_length));
+                            to_present_data[idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+                            to_present_data[idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+                            to_present_data[idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
                         }
 					}
 				}
