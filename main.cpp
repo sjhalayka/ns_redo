@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <map>
 #include <cmath>
 #include <cstdlib>
 #include <unordered_map>
@@ -85,7 +86,7 @@ public:
     float vel_x = 0;
     float vel_y = 0;
 
-    set<glm::vec2, CompareVec2> blackening_points;
+    map<glm::vec2, float, CompareVec2> blackening_age_map;
 
     bool isOnscreen(void)
     {
@@ -110,87 +111,87 @@ public:
 
     GLuint tex = 0;
 
-    vector<unsigned char> tex_data;
+    vector<unsigned char> to_present_data;
+    vector<unsigned char> raw_data;
 
     void update_tex(void)
     {
         glBindTexture(GL_TEXTURE_2D, tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_data.data());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
     }
 
-    void add_blackening_points(const vector<glm::vec2>& locations)
-    {
-        bool made_change = false;
+	void add_blackening_points(const vector<glm::vec2>& locations)
+	{
+		for (size_t i = 0; i < locations.size(); i++)
+			blackening_age_map[locations[i]] = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-        for (const auto& loc : locations)
-        {
-            glm::vec2 point(loc.x, loc.y);
+		to_present_data = raw_data;
 
-            // Only process if this point is new
-            if (blackening_points.insert(point).second)
-            {
-                made_change = true;
+		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
+			//for (const auto& loc : blackening_age_map)
+		{
+			glm::vec2 point(ci->first.x, ci->first.y);
 
-                const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
-                const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-                const glm::vec3 COLOUR(0, 0, 0);
-                const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
+			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+			const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
+			const glm::vec3 COLOUR(0, 0, 0);
+			const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
-                int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
-                int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
-                int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
-                int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
+			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
+			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
+			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
+			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
 
-                for (int y = minY; y <= maxY; ++y)
-                {
-                    for (int x = minX; x <= maxX; ++x)
-                    {
-                        glm::vec2 diff(x - point.x, y - point.y);
-                        float distSq = diff.x * diff.x + diff.y * diff.y;
+			for (int y = minY; y <= maxY; ++y)
+			{
+				for (int x = minX; x <= maxX; ++x)
+				{
+					glm::vec2 diff(x - point.x, y - point.y);
+					float distSq = diff.x * diff.x + diff.y * diff.y;
 
-                        if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
-                        {
-                            float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
-                            falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
+					if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
+					{
+						float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
+						falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
 
-                            // Optional: use smoothstep for even smoother falloff
-                            // float t = distSq * INV_RADIUS_SQ;
-                            // falloff = 1.0f - t * t * (3.0f - 2.0f * t);
+						// Optional: use smoothstep for even smoother falloff
+						// float t = distSq * INV_RADIUS_SQ;
+						// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
 
-                            float alpha = falloff * MAX_ALPHA;
+						float alpha = falloff * MAX_ALPHA;
 
-                            size_t idx = (y * width + x) * 4;
+						size_t idx = (y * width + x) * 4;
 
-                            // Blend orange with existing color (additive or screen-like blending)
-                            // We'll do a soft additive blend toward orange
-                            glm::vec3 current(
-                                tex_data[idx + 0],
-                                tex_data[idx + 1],
-                                tex_data[idx + 2]
-                            );
+						// Blend orange with existing color (additive or screen-like blending)
+						// We'll do a soft additive blend toward orange
+						glm::vec3 current(
+							to_present_data[idx + 0],
+							to_present_data[idx + 1],
+							to_present_data[idx + 2]
+						);
 
-                            glm::vec3 blended = current + (COLOUR - current) * alpha;
+						glm::vec3 blended = current + (COLOUR - current) * alpha;
 
-                            unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                            unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                            unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+						unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+						unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+						unsigned char b = (unsigned char)std::min(255.0f, blended.z);
 
-                            tex_data[idx + 0] = r;
-                            tex_data[idx + 1] = g;
-                            tex_data[idx + 2] = b;
+						to_present_data[idx + 0] = r;
+						to_present_data[idx + 1] = g;
+						to_present_data[idx + 2] = b;
 
-                        }
-                    }
-                }
+					}
+				}
+			}
 
-                //std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-                //std::cout << "total blackened points: " << blackening_points.size() << std::endl;
-            }
-        }
+			//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+			//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
 
-        if (made_change)
-            update_tex();
-    }
+		}
+
+		//  if (made_change)
+		update_tex();
+	}
 
 };
 
@@ -233,7 +234,7 @@ public:
             glm::vec2 point(loc.x, loc.y);
 
             // Only process if this point is new
-            if (blackening_points.insert(point).second)
+            if (true)//blackening_points.insert(point).second)
             {
                 made_change = true;
 
@@ -267,31 +268,65 @@ public:
 
                             size_t idx = (y * width + x) * 4;
 
-                            // Blend orange with existing color (additive or screen-like blending)
-                            // We'll do a soft additive blend toward orange
-                            glm::vec3 current(
-                                tex_up_data[idx + 0],
-                                tex_up_data[idx + 1],
-                                tex_up_data[idx + 2]
-                            );
+                            {
+                                // Blend orange with existing color (additive or screen-like blending)
+                                // We'll do a soft additive blend toward orange
+                                glm::vec3 current(
+                                    tex_up_data[idx + 0],
+                                    tex_up_data[idx + 1],
+                                    tex_up_data[idx + 2]
+                                );
 
-                            glm::vec3 blended = current + (COLOUR - current) * alpha;
+                                glm::vec3 blended = current + (COLOUR - current) * alpha;
 
-                            unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                            unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                            unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
 
-                            tex_up_data[idx + 0] = r;
-                            tex_up_data[idx + 1] = g;
-                            tex_up_data[idx + 2] = b;
+                                tex_up_data[idx + 0] = r;
+                                tex_up_data[idx + 1] = g;
+                                tex_up_data[idx + 2] = b;
+                            }
 
-                            tex_down_data[idx + 0] = r;
-                            tex_down_data[idx + 1] = g;
-                            tex_down_data[idx + 2] = b;
+                            {
+                                // Blend orange with existing color (additive or screen-like blending)
+                                // We'll do a soft additive blend toward orange
+                                glm::vec3 current(
+                                    tex_down_data[idx + 0],
+                                    tex_down_data[idx + 1],
+                                    tex_down_data[idx + 2]
+                                );
 
-                            tex_rest_data[idx + 0] = r;
-                            tex_rest_data[idx + 1] = g;
-                            tex_rest_data[idx + 2] = b;
+                                glm::vec3 blended = current + (COLOUR - current) * alpha;
+
+                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+                                tex_down_data[idx + 0] = r;
+                                tex_down_data[idx + 1] = g;
+                                tex_down_data[idx + 2] = b;
+                            }
+
+                            {
+                                // Blend orange with existing color (additive or screen-like blending)
+                                // We'll do a soft additive blend toward orange
+                                glm::vec3 current(
+                                    tex_rest_data[idx + 0],
+                                    tex_rest_data[idx + 1],
+                                    tex_rest_data[idx + 2]
+                                );
+
+                                glm::vec3 blended = current + (COLOUR - current) * alpha;
+
+                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+                                tex_rest_data[idx + 0] = r;
+                                tex_rest_data[idx + 1] = g;
+                                tex_rest_data[idx + 2] = b;
+                            }
                         }
                     }
                 }
@@ -2376,7 +2411,9 @@ bool chunkForegroundTexture(const char* sourceFilename)
             tile.height = foreground_chunk_size_height;
             tile.x = static_cast<float>(srcStartX);  // Position in original image coordinates
             tile.y = static_cast<float>(srcStartY);
-            tile.tex_data = tileData;
+            //tile.tex_data = tileData;
+            tile.raw_data = tileData;
+            tile.to_present_data = tileData;
             //tile.health = 1.0f;
 
             foreground_chunked.push_back(tile);
@@ -2871,7 +2908,7 @@ int main(int argc, char** argv) {
 
 
 
-    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.tex_data);
+    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.raw_data);
     if (background.tex == 0)
     {
         std::cout << "Warning: Could not load background sprite" << std::endl;
