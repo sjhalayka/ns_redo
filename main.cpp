@@ -105,6 +105,11 @@ public:
 
 };
 
+float naive_lerp(float a, float b, float t)
+{
+    return a + t * (b - a);
+}
+
 class sprite : public pre_sprite
 {
 public:
@@ -122,11 +127,11 @@ public:
 
 	void add_blackening_points(const vector<glm::vec2>& locations)
 	{
+        float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
         for (size_t i = 0; i < locations.size(); i++)
         {
-            float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-
-            map<glm::vec2, float>::iterator j = blackening_age_map.find(locations[i]);
+            //map<glm::vec2, float>::iterator j = blackening_age_map.find(locations[i]);
 
             //if (j == blackening_age_map.end())
                 blackening_age_map[locations[i]] = glut_curr_time;
@@ -177,16 +182,43 @@ public:
 							to_present_data[idx + 2]
 						);
 
-						glm::vec3 blended = current + (COLOUR - current) * alpha;
 
-						unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-						unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-						unsigned char b = (unsigned char)std::min(255.0f, blended.z);
 
-						to_present_data[idx + 0] = r;
-						to_present_data[idx + 1] = g;
-						to_present_data[idx + 2] = b;
 
+
+
+
+
+
+                        const float t = ci->second;
+
+                        const float duration = glut_curr_time - t;
+
+                        const float animation_length = 2;
+                        
+                        if (duration >= animation_length)
+                        {
+                            glm::vec3 blended = current + (COLOUR - current) * alpha;
+
+                            unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+                            unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+                            unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+                            to_present_data[idx + 0] = r;
+                            to_present_data[idx + 1] = g;
+                            to_present_data[idx + 2] = b;
+                        }
+                        else
+                        {
+
+                            unsigned char r_ = 255;
+                            unsigned char g_ = 31;
+                            unsigned char b_ = 0;
+
+                            to_present_data[idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, r_, duration / animation_length));
+                            to_present_data[idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, g_, duration / animation_length));
+                            to_present_data[idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, b_, duration / animation_length));
+                        }
 					}
 				}
 			}
