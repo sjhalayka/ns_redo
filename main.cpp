@@ -125,6 +125,8 @@ class pre_sprite
 {
 public:
 
+    GLuint tex = 0;
+   
     int width = 0;
     int height = 0;
     float x = 0;
@@ -134,8 +136,8 @@ public:
 
     map<glm::vec2, float, CompareVec2> blackening_age_map;
 
-
-
+    vector<unsigned char*> to_present_data_pointers;
+    vector<unsigned char*> raw_data_pointers;
 
     bool isOnscreen(void)
     {
@@ -152,164 +154,23 @@ public:
         y = y + vel_y * dt;
     }
 
-};
-
-
-
-
-class sprite : public pre_sprite
-{
-public:
-
-    GLuint tex = 0;
-
-    vector<unsigned char> to_present_data;
-    vector<unsigned char> raw_data;
-
-    void update_tex(void)
+    void add_blackening_points(const vector<glm::vec2>& locations)
     {
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
-    }
-
-	void add_blackening_points(const vector<glm::vec2>& locations)
-	{
         float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
         for (size_t i = 0; i < locations.size(); i++)
+            blackening_age_map[locations[i]] = glut_curr_time;
+
+        for (size_t j = 0; j < to_present_data_pointers.size() && j < raw_data_pointers.size(); j++)
         {
-            //map<glm::vec2, float>::iterator j = blackening_age_map.find(locations[i]);
+            if (to_present_data_pointers[j] == 0 || raw_data_pointers[j] == 0)
+                continue;
 
-            //if (j == blackening_age_map.end())
-                blackening_age_map[locations[i]] = glut_curr_time;
-        }
+            *to_present_data_pointers[j] = *raw_data_pointers[j];
 
-		to_present_data = raw_data;
-
-		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
-			//for (const auto& loc : blackening_age_map)
-		{
-			glm::vec2 point(ci->first.x, ci->first.y);
-
-			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
-			const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-			const glm::vec3 COLOUR(0, 0, 0);
-			const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
-
-			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
-			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
-			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
-			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
-
-			for (int y = minY; y <= maxY; ++y)
-			{
-				for (int x = minX; x <= maxX; ++x)
-				{
-					glm::vec2 diff(x - point.x, y - point.y);
-					float distSq = diff.x * diff.x + diff.y * diff.y;
-
-					if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
-					{
-						float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
-						falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
-
-						// Optional: use smoothstep for even smoother falloff
-						// float t = distSq * INV_RADIUS_SQ;
-						// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
-
-						float alpha = falloff * MAX_ALPHA;
-
-						size_t idx = (y * width + x) * 4;
-
-						// Blend orange with existing color (additive or screen-like blending)
-						// We'll do a soft additive blend toward orange
-						glm::vec3 current(
-							to_present_data[idx + 0],
-							to_present_data[idx + 1],
-							to_present_data[idx + 2]
-						);
-
-                        const float duration = glut_curr_time - ci->second;
-                            
-                        const float animation_length = 1;
-                        
-                        if (duration >= animation_length)
-                        {
-                            glm::vec3 blended = current + (COLOUR - current) * alpha;
-
-                            unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                            unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                            unsigned char b = (unsigned char)std::min(255.0f, blended.z);
-
-                            to_present_data[idx + 0] = r;
-                            to_present_data[idx + 1] = g;
-                            to_present_data[idx + 2] = b;
-                        }
-                        else
-                        {
-                            glm::vec3 red_colour = hsbToRgb(45*duration/animation_length, 0.8f, 0.9f);
-
-                            to_present_data[idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-                            to_present_data[idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-                            to_present_data[idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
-                        }
-					}
-				}
-			}
-
-			//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-			//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
-
-		}
-
-		//  if (made_change)
-		update_tex();
-	}
-
-};
-
-
-
-const int UP_STATE = 0;
-const int DOWN_STATE = 1;
-const int REST_STATE = 2;
-
-class tri_sprite : public pre_sprite
-{
-public:
-
-    GLuint tex = 0;
-
-    vector<unsigned char> tex_up_data;
-    vector<unsigned char> tex_down_data;
-    vector<unsigned char> tex_rest_data;
-
-    int state = REST_STATE;
-
-    void update_tex(void)
-    {
-        glBindTexture(GL_TEXTURE_2D, tex);
-
-        if (state == UP_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_up_data.data());
-        else if (state == DOWN_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_down_data.data());
-        else if (state == REST_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex_rest_data.data());
-    }
-
-    void add_blackening_points(const vector<glm::vec2>& locations)
-    {
-        bool made_change = false;
-
-        for (const auto& loc : locations)
-        {
-            glm::vec2 point(loc.x, loc.y);
-
-            // Only process if this point is new
-            if (true)//blackening_points.insert(point).second)
+            for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
             {
-                made_change = true;
+                glm::vec2 point(ci->first.x, ci->first.y);
 
                 const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
                 const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
@@ -341,64 +202,38 @@ public:
 
                             size_t idx = (y * width + x) * 4;
 
-                            {
-                                // Blend orange with existing color (additive or screen-like blending)
-                                // We'll do a soft additive blend toward orange
-                                glm::vec3 current(
-                                    tex_up_data[idx + 0],
-                                    tex_up_data[idx + 1],
-                                    tex_up_data[idx + 2]
-                                );
 
+                            // Blend orange with existing color (additive or screen-like blending)
+                            // We'll do a soft additive blend toward orange
+                            glm::vec3 current(
+                                to_present_data_pointers[j][idx + 0],
+                                to_present_data_pointers[j][idx + 1],
+                                to_present_data_pointers[j][idx + 2]
+                            );
+
+                            const float duration = glut_curr_time - ci->second;
+
+                            const float animation_length = 1;
+
+                            if (duration >= animation_length)
+                            {
                                 glm::vec3 blended = current + (COLOUR - current) * alpha;
 
                                 unsigned char r = (unsigned char)std::min(255.0f, blended.x);
                                 unsigned char g = (unsigned char)std::min(255.0f, blended.y);
                                 unsigned char b = (unsigned char)std::min(255.0f, blended.z);
 
-                                tex_up_data[idx + 0] = r;
-                                tex_up_data[idx + 1] = g;
-                                tex_up_data[idx + 2] = b;
+                                to_present_data_pointers[j][idx + 0] = r;
+                                to_present_data_pointers[j][idx + 1] = g;
+                                to_present_data_pointers[j][idx + 2] = b;
                             }
-
+                            else
                             {
-                                // Blend orange with existing color (additive or screen-like blending)
-                                // We'll do a soft additive blend toward orange
-                                glm::vec3 current(
-                                    tex_down_data[idx + 0],
-                                    tex_down_data[idx + 1],
-                                    tex_down_data[idx + 2]
-                                );
+                                glm::vec3 red_colour = hsbToRgb(60 * duration / animation_length, 1.0f, 1.0f);
 
-                                glm::vec3 blended = current + (COLOUR - current) * alpha;
-
-                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
-
-                                tex_down_data[idx + 0] = r;
-                                tex_down_data[idx + 1] = g;
-                                tex_down_data[idx + 2] = b;
-                            }
-
-                            {
-                                // Blend orange with existing color (additive or screen-like blending)
-                                // We'll do a soft additive blend toward orange
-                                glm::vec3 current(
-                                    tex_rest_data[idx + 0],
-                                    tex_rest_data[idx + 1],
-                                    tex_rest_data[idx + 2]
-                                );
-
-                                glm::vec3 blended = current + (COLOUR - current) * alpha;
-
-                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
-
-                                tex_rest_data[idx + 0] = r;
-                                tex_rest_data[idx + 1] = g;
-                                tex_rest_data[idx + 2] = b;
+                                to_present_data_pointers[j][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+                                to_present_data_pointers[j][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+                                to_present_data_pointers[j][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
                             }
                         }
                     }
@@ -406,15 +241,129 @@ public:
 
                 //std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
                 //std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+
             }
         }
 
-        if (made_change)
-            update_tex();
+        //  if (made_change)
+       
+    }
+};
+
+
+
+
+class sprite : public pre_sprite
+{
+public:
+
+    vector<unsigned char> to_present_data;
+    vector<unsigned char> raw_data;
+
+    sprite(const sprite& other)
+        : pre_sprite(other),
+        to_present_data(other.to_present_data),
+        raw_data(other.raw_data)
+    {
+        // Re-point to THIS object's vectors, not the copied-from object's
+        to_present_data_pointers.clear();
+        raw_data_pointers.clear();
+        to_present_data_pointers.push_back(&to_present_data[0]);
+        raw_data_pointers.push_back(&raw_data[0]);
+    }
+
+    sprite(void)
+	{
+		to_present_data_pointers.push_back(&to_present_data[0]);
+        raw_data_pointers.push_back(&raw_data[0]);
+	}
+
+    void update_tex(void)
+    {
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
     }
 
 
 
+};
+
+
+
+const int UP_STATE = 0;
+const int DOWN_STATE = 1;
+const int REST_STATE = 2;
+
+class tri_sprite : public pre_sprite
+{
+public:
+
+    vector<unsigned char> to_present_up_data;
+    vector<unsigned char> to_present_down_data;
+    vector<unsigned char> to_present_rest_data;
+
+    vector<unsigned char> raw_up_data;
+    vector<unsigned char> raw_down_data;
+    vector<unsigned char> raw_rest_data;
+
+    int state = REST_STATE;
+
+    void update_tex(void)
+    {
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        if (state == UP_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_up_data.data());
+        else if (state == DOWN_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_down_data.data());
+        else if (state == REST_STATE)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_rest_data.data());
+    }
+
+    //tri_sprite(const sprite& other)
+    //    : pre_sprite(other))
+    //{
+    //    // Re-point to THIS object's vectors, not the copied-from object's
+    //    to_present_data_pointers.clear();
+    //    raw_data_pointers.clear();
+
+    //    //to_present_data_pointers.push_back(&to_present_data[0]);
+    //    //raw_data_pointers.push_back(&raw_data[0]);
+
+    //}
+
+
+    tri_sprite(const tri_sprite& other)
+        : pre_sprite(other),
+        to_present_up_data(other.to_present_up_data),
+		raw_up_data(other.raw_up_data),
+		to_present_down_data(other.to_present_down_data),
+		raw_down_data(other.raw_down_data),
+		to_present_rest_data(other.to_present_rest_data),
+		raw_rest_data(other.raw_rest_data)
+    {
+        // Re-point to THIS object's vectors, not the copied-from object's
+        to_present_data_pointers.clear();
+        raw_data_pointers.clear();
+
+        to_present_data_pointers.push_back(&to_present_up_data[0]);
+        to_present_data_pointers.push_back(&to_present_down_data[0]);
+        to_present_data_pointers.push_back(&to_present_rest_data[0]);
+        raw_data_pointers.push_back(&raw_up_data[0]);
+        raw_data_pointers.push_back(&raw_down_data[0]);
+        raw_data_pointers.push_back(&raw_rest_data[0]);
+    }
+
+
+    tri_sprite(void)
+    {
+        to_present_data_pointers.push_back(&to_present_up_data[0]);
+        to_present_data_pointers.push_back(&to_present_down_data[0]);
+        to_present_data_pointers.push_back(&to_present_rest_data[0]);
+        raw_data_pointers.push_back(&raw_up_data[0]);
+        raw_data_pointers.push_back(&raw_down_data[0]);
+        raw_data_pointers.push_back(&raw_rest_data[0]);
+    }
 };
 
 
@@ -475,8 +424,26 @@ public:
 class foreground_tile : public sprite
 {
 public:
+	foreground_tile(
+		GLuint tileTex,
+		int w,
+		int h,
+		float srcStartX,  // Position in original image coordinates
+		float srcStartY,
+		const vector<unsigned char>& src_raw_data)
+	{
+		tex = tileTex;
+		width = w;
+		height = h;
+		x = srcStartX;  // Position in original image coordinates
+		y = srcStartY;
 
-    //    float health;
+        raw_data = src_raw_data;
+        to_present_data = raw_data;
+
+
+	}
+	//    float health;
 };
 
 class background_tile : public sprite
@@ -2478,16 +2445,13 @@ bool chunkForegroundTexture(const char* sourceFilename)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
             // Create foreground_tile and add to vector
-            foreground_tile tile;
-            tile.tex = tileTex;
-            tile.width = foreground_chunk_size_width;
-            tile.height = foreground_chunk_size_height;
-            tile.x = static_cast<float>(srcStartX);  // Position in original image coordinates
-            tile.y = static_cast<float>(srcStartY);
-            //tile.tex_data = tileData;
-            tile.raw_data = tileData;
-            tile.to_present_data = tileData;
-            //tile.health = 1.0f;
+           foreground_tile tile(
+           tileTex,
+           foreground_chunk_size_width,
+           foreground_chunk_size_height,
+           static_cast<float>(srcStartX),  // Position in original image coordinates
+           static_cast<float>(srcStartY),
+           tileData);
 
             foreground_chunked.push_back(tile);
         }
@@ -2725,6 +2689,8 @@ void display()
     {
         if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
         {
+            foreground_chunked[i].update_tex();
+
             drawSprite(foreground_chunked[i].tex,
                 static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
                 foreground_chunked[i].width, foreground_chunked[i].height);
@@ -2969,7 +2935,7 @@ int main(int argc, char** argv) {
 
 
     // Load protagonist texture
-    protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.tex_up_data, protagonist.tex_down_data, protagonist.tex_rest_data);
+    protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data);
     if (protagonist.tex == 0)
     {
         std::cout << "Warning: Could not load protagonist sprite" << std::endl;
