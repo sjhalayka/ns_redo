@@ -66,57 +66,57 @@ bool leftKeyPressed = false;
 
 struct CompareVec2
 {
-    bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
-    {
-        if (lhs.x != rhs.x) 
-        {
-            return lhs.x < rhs.x;
-        }
+	bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
+	{
+		if (lhs.x != rhs.x)
+		{
+			return lhs.x < rhs.x;
+		}
 
-        return lhs.y < rhs.y;
-    }
+		return lhs.y < rhs.y;
+	}
 };
 
 
 
 float naive_lerp(float a, float b, float t)
 {
-    return a + t * (b - a);
+	return a + t * (b - a);
 }
 
 glm::vec3 hsbToRgb(float hue, float saturation, float brightness) {
-    // hue: 0-360, saturation: 0-1, brightness: 0-1
+	// hue: 0-360, saturation: 0-1, brightness: 0-1
 
-    float c = brightness * saturation;
-    float x = c * (1 - std::fabsf(std::fmodf(hue / 60.0f, 2) - 1));
-    float m = brightness - c;
+	float c = brightness * saturation;
+	float x = c * (1 - std::fabsf(std::fmodf(hue / 60.0f, 2) - 1));
+	float m = brightness - c;
 
-    float r, g, b;
+	float r, g, b;
 
-    if (hue < 60) {
-        r = c; g = x; b = 0;
-    }
-    else if (hue < 120) {
-        r = x; g = c; b = 0;
-    }
-    else if (hue < 180) {
-        r = 0; g = c; b = x;
-    }
-    else if (hue < 240) {
-        r = 0; g = x; b = c;
-    }
-    else if (hue < 300) {
-        r = x; g = 0; b = c;
-    }
-    else {
-        r = c; g = 0; b = x;
-    }
+	if (hue < 60) {
+		r = c; g = x; b = 0;
+	}
+	else if (hue < 120) {
+		r = x; g = c; b = 0;
+	}
+	else if (hue < 180) {
+		r = 0; g = c; b = x;
+	}
+	else if (hue < 240) {
+		r = 0; g = x; b = c;
+	}
+	else if (hue < 300) {
+		r = x; g = 0; b = c;
+	}
+	else {
+		r = c; g = 0; b = x;
+	}
 
-    int red = static_cast<int>((r + m) * 255);
-    int green = static_cast<int>((g + m) * 255);
-    int blue = static_cast<int>((b + m) * 255);
+	int red = static_cast<int>((r + m) * 255);
+	int green = static_cast<int>((g + m) * 255);
+	int blue = static_cast<int>((b + m) * 255);
 
-    return { red, green, blue };
+	return { red, green, blue };
 }
 
 
@@ -125,129 +125,136 @@ class pre_sprite
 {
 public:
 
-    GLuint tex = 0;
-   
-    int width = 0;
-    int height = 0;
-    float x = 0;
-    float y = 0;
-    float vel_x = 0;
-    float vel_y = 0;
+	GLuint tex = 0;
 
-    map<glm::vec2, float, CompareVec2> blackening_age_map;
+	int width = 0;
+	int height = 0;
+	float x = 0;
+	float y = 0;
+	float vel_x = 0;
+	float vel_y = 0;
 
-    vector<unsigned char*> to_present_data_pointers;
-    vector<unsigned char*> raw_data_pointers;
+	map<glm::vec2, float, CompareVec2> blackening_age_map;
 
-    bool isOnscreen(void)
-    {
-        return
-            (x + width > 0) &&
-            (x < windowWidth) &&
-            (y + height > 0) &&
-            (y < windowHeight);
-    }
+	vector<unsigned char*> to_present_data_pointers;
+	vector<unsigned char*> raw_data_pointers;
 
-    void integrate(float dt)
-    {
-        x = x + vel_x * dt;
-        y = y + vel_y * dt;
-    }
+	bool isOnscreen(void)
+	{
+		return
+			(x + width > 0) &&
+			(x < windowWidth) &&
+			(y + height > 0) &&
+			(y < windowHeight);
+	}
 
-    void add_blackening_points(const vector<glm::vec2>& locations)
-    {
-        float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	void integrate(float dt)
+	{
+		x = x + vel_x * dt;
+		y = y + vel_y * dt;
+	}
 
-        for (size_t i = 0; i < locations.size(); i++)
-            blackening_age_map[locations[i]] = glut_curr_time;
+	void add_blackening_points(const vector<glm::vec2>& locations)
+	{
+		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-        for (size_t j = 0; j < to_present_data_pointers.size() && j < raw_data_pointers.size(); j++)
-        {
-            if (to_present_data_pointers[j] == 0 || raw_data_pointers[j] == 0)
-                continue;
+		for (size_t i = 0; i < locations.size(); i++)
+			blackening_age_map[locations[i]] = glut_curr_time;
 
-            *to_present_data_pointers[j] = *raw_data_pointers[j];
+		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
+		{
+			glm::vec2 point(ci->first.x, ci->first.y);
 
-            for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
-            {
-                glm::vec2 point(ci->first.x, ci->first.y);
+			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+			const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
+			const glm::vec3 COLOUR(0, 0, 0);
+			const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
-                const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
-                const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-                const glm::vec3 COLOUR(0, 0, 0);
-                const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
+			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
+			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
+			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
+			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
 
-                int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
-                int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
-                int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
-                int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
+			for (int y = minY; y <= maxY; ++y)
+			{
+				for (int x = minX; x <= maxX; ++x)
+				{
+					glm::vec2 diff(x - point.x, y - point.y);
+					float distSq = diff.x * diff.x + diff.y * diff.y;
 
-                for (int y = minY; y <= maxY; ++y)
-                {
-                    for (int x = minX; x <= maxX; ++x)
-                    {
-                        glm::vec2 diff(x - point.x, y - point.y);
-                        float distSq = diff.x * diff.x + diff.y * diff.y;
+					if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
+					{
+						float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
+						falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
 
-                        if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
-                        {
-                            float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
-                            falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
+						// Optional: use smoothstep for even smoother falloff
+						// float t = distSq * INV_RADIUS_SQ;
+						// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
 
-                            // Optional: use smoothstep for even smoother falloff
-                            // float t = distSq * INV_RADIUS_SQ;
-                            // falloff = 1.0f - t * t * (3.0f - 2.0f * t);
+						float alpha = falloff * MAX_ALPHA;
 
-                            float alpha = falloff * MAX_ALPHA;
-
-                            size_t idx = (y * width + x) * 4;
+						size_t idx = (y * width + x) * 4;
 
 
-                            // Blend orange with existing color (additive or screen-like blending)
-                            // We'll do a soft additive blend toward orange
-                            glm::vec3 current(
-                                to_present_data_pointers[j][idx + 0],
-                                to_present_data_pointers[j][idx + 1],
-                                to_present_data_pointers[j][idx + 2]
-                            );
+						for (size_t j = 0; j < to_present_data_pointers.size() && j < raw_data_pointers.size(); j++)
+						{
 
-                            const float duration = glut_curr_time - ci->second;
+							if (to_present_data_pointers[j] == 0 || raw_data_pointers[j] == 0)
+								continue;
 
-                            const float animation_length = 1;
+							//cout << to_present_data_pointers.size() << " " << raw_data_pointers.size() << endl;
 
-                            if (duration >= animation_length)
-                            {
-                                glm::vec3 blended = current + (COLOUR - current) * alpha;
+							*to_present_data_pointers[j] = *raw_data_pointers[j];
 
-                                unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-                                unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-                                unsigned char b = (unsigned char)std::min(255.0f, blended.z);
 
-                                to_present_data_pointers[j][idx + 0] = r;
-                                to_present_data_pointers[j][idx + 1] = g;
-                                to_present_data_pointers[j][idx + 2] = b;
-                            }
-                            else
-                            {
-                                glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, 1.0f, sqrt(1.0f - duration / animation_length));
 
-                                to_present_data_pointers[j][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-                                to_present_data_pointers[j][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-                                to_present_data_pointers[j][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
-                            }
-                        }
-                    }
-                }
 
-                //std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-                //std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+							// Blend orange with existing color (additive or screen-like blending)
+							// We'll do a soft additive blend toward orange
+							glm::vec3 current(
+								to_present_data_pointers[j][idx + 0],
+								to_present_data_pointers[j][idx + 1],
+								to_present_data_pointers[j][idx + 2]
+							);
 
-            }
-        }
+							const float duration = glut_curr_time - ci->second;
 
-        //  if (made_change)
-       
-    }
+							const float animation_length = 1;
+
+							if (duration >= animation_length)
+							{
+								//glm::vec3 blended = current + (COLOUR - current) * alpha;
+
+								//unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+								//unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+								//unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+								to_present_data_pointers[j][idx + 0] = 0;
+								to_present_data_pointers[j][idx + 1] = 0;
+								to_present_data_pointers[j][idx + 2] = 0;
+							}
+							else
+							{
+								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, sqrt(1.0f - duration / animation_length));
+
+								to_present_data_pointers[j][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+								to_present_data_pointers[j][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+								to_present_data_pointers[j][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+							}
+						}
+					}
+				}
+			}
+
+			//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+			//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+
+		}
+
+
+		//  if (made_change)
+
+	}
 };
 
 
@@ -257,32 +264,32 @@ class sprite : public pre_sprite
 {
 public:
 
-    vector<unsigned char> to_present_data;
-    vector<unsigned char> raw_data;
+	vector<unsigned char> to_present_data;
+	vector<unsigned char> raw_data;
 
-    sprite(const sprite& other)
-        : pre_sprite(other),
-        to_present_data(other.to_present_data),
-        raw_data(other.raw_data)
-    {
-        // Re-point to THIS object's vectors, not the copied-from object's
-        to_present_data_pointers.clear();
-        raw_data_pointers.clear();
-        to_present_data_pointers.push_back(&to_present_data[0]);
-        raw_data_pointers.push_back(&raw_data[0]);
-    }
-
-    sprite(void)
+	sprite(const sprite& other)
+		: pre_sprite(other),
+		to_present_data(other.to_present_data),
+		raw_data(other.raw_data)
 	{
+		// Re-point to THIS object's vectors, not the copied-from object's
+		to_present_data_pointers.clear();
+		raw_data_pointers.clear();
 		to_present_data_pointers.push_back(&to_present_data[0]);
-        raw_data_pointers.push_back(&raw_data[0]);
+		raw_data_pointers.push_back(&raw_data[0]);
 	}
 
-    void update_tex(void)
-    {
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
-    }
+	sprite(void)
+	{
+		to_present_data_pointers.push_back(&to_present_data[0]);
+		raw_data_pointers.push_back(&raw_data[0]);
+	}
+
+	void update_tex(void)
+	{
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
+	}
 
 
 
@@ -293,85 +300,103 @@ public:
 const int UP_STATE = 0;
 const int DOWN_STATE = 1;
 const int REST_STATE = 2;
-
 class tri_sprite : public pre_sprite
 {
 public:
 
-    vector<unsigned char> to_present_up_data;
-    vector<unsigned char> to_present_down_data;
-    vector<unsigned char> to_present_rest_data;
+	// Three frames of data
+	std::vector<unsigned char> to_present_up_data;
+	std::vector<unsigned char> to_present_down_data;
+	std::vector<unsigned char> to_present_rest_data;
 
-    vector<unsigned char> raw_up_data;
-    vector<unsigned char> raw_down_data;
-    vector<unsigned char> raw_rest_data;
+	std::vector<unsigned char> raw_up_data;
+	std::vector<unsigned char> raw_down_data;
+	std::vector<unsigned char> raw_rest_data;
 
-    int state = REST_STATE;
+	int state = REST_STATE;
 
-    void update_tex(void)
-    {
-        glBindTexture(GL_TEXTURE_2D, tex);
+	//----------------------------------------------------------------------
+	//  Rebuild pointers to current vector storage
+	//----------------------------------------------------------------------
+	void rebuildPointers()
+	{
+		to_present_data_pointers.clear();
+		raw_data_pointers.clear();
 
-        if (state == UP_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_up_data.data());
-        else if (state == DOWN_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_down_data.data());
-        else if (state == REST_STATE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_rest_data.data());
-    }
+		// Only push valid pointers (vectors may be empty)
+		auto addIfNotEmpty = [&](std::vector<unsigned char>& v,
+			std::vector<unsigned char*>& list)
+			{
+				if (!v.empty())
+					list.push_back(v.data());
+			};
 
-    //tri_sprite(const sprite& other)
-    //    : pre_sprite(other))
-    //{
-    //    // Re-point to THIS object's vectors, not the copied-from object's
-    //    to_present_data_pointers.clear();
-    //    raw_data_pointers.clear();
+		addIfNotEmpty(to_present_up_data, to_present_data_pointers);
+		addIfNotEmpty(to_present_down_data, to_present_data_pointers);
+		addIfNotEmpty(to_present_rest_data, to_present_data_pointers);
 
-    //    //to_present_data_pointers.push_back(&to_present_data[0]);
-    //    //raw_data_pointers.push_back(&raw_data[0]);
+		addIfNotEmpty(raw_up_data, raw_data_pointers);
+		addIfNotEmpty(raw_down_data, raw_data_pointers);
+		addIfNotEmpty(raw_rest_data, raw_data_pointers);
+	}
 
-    //}
+	//----------------------------------------------------------------------
+	//  Default constructor
+	//----------------------------------------------------------------------
+	tri_sprite()
+	{
+		// Do NOT build pointers now — vectors are empty
+		// Wait until textures are actually loaded
+	}
 
-
-    tri_sprite(const tri_sprite& other)
-        : pre_sprite(other),
-        to_present_up_data(other.to_present_up_data),
-		raw_up_data(other.raw_up_data),
+	//----------------------------------------------------------------------
+	//  Copy constructor
+	//----------------------------------------------------------------------
+	tri_sprite(const tri_sprite& other)
+		: pre_sprite(other),
+		to_present_up_data(other.to_present_up_data),
 		to_present_down_data(other.to_present_down_data),
-		raw_down_data(other.raw_down_data),
 		to_present_rest_data(other.to_present_rest_data),
-		raw_rest_data(other.raw_rest_data)
-    {
-        // Re-point to THIS object's vectors, not the copied-from object's
-        to_present_data_pointers.clear();
-        raw_data_pointers.clear();
+		raw_up_data(other.raw_up_data),
+		raw_down_data(other.raw_down_data),
+		raw_rest_data(other.raw_rest_data),
+		state(other.state)
+	{
+		// Copy is complete — now rebuild pointers safely
+		rebuildPointers();
+	}
 
-        to_present_data_pointers.push_back(&to_present_up_data[0]);
-        to_present_data_pointers.push_back(&to_present_down_data[0]);
-        to_present_data_pointers.push_back(&to_present_rest_data[0]);
-        raw_data_pointers.push_back(&raw_up_data[0]);
-        raw_data_pointers.push_back(&raw_down_data[0]);
-        raw_data_pointers.push_back(&raw_rest_data[0]);
-    }
+	//----------------------------------------------------------------------
+	//  Update OpenGL texture based on state
+	//----------------------------------------------------------------------
+	void update_tex()
+	{
+		glBindTexture(GL_TEXTURE_2D, tex);
 
+		if (state == UP_STATE)
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				to_present_up_data.data());
 
-    tri_sprite(void)
-    {
-        to_present_data_pointers.push_back(&to_present_up_data[0]);
-        to_present_data_pointers.push_back(&to_present_down_data[0]);
-        to_present_data_pointers.push_back(&to_present_rest_data[0]);
-        raw_data_pointers.push_back(&raw_up_data[0]);
-        raw_data_pointers.push_back(&raw_down_data[0]);
-        raw_data_pointers.push_back(&raw_rest_data[0]);
-    }
+		else if (state == DOWN_STATE)
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				to_present_down_data.data());
+
+		else // REST_STATE
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				to_present_rest_data.data());
+	}
 };
+
 
 
 class ship : public tri_sprite
 {
 public:
 
-    float health;
+	float health;
 };
 
 
@@ -382,28 +407,28 @@ class friendly_ship : public ship
 {
 public:
 
-    void set_velocity(const float src_x, const float src_y)
-    {
-        vel_x = src_x;
-        vel_y = src_y;
+	void set_velocity(const float src_x, const float src_y)
+	{
+		vel_x = src_x;
+		vel_y = src_y;
 
-        if (vel_y < 0)
-        {
-            state = UP_STATE;
-        }
-        else if (vel_y > 0)
-        {
-            state = DOWN_STATE;
-        }
-        else
-        {
-            state = REST_STATE;
-        }
+		if (vel_y < 0)
+		{
+			state = UP_STATE;
+		}
+		else if (vel_y > 0)
+		{
+			state = DOWN_STATE;
+		}
+		else
+		{
+			state = REST_STATE;
+		}
 
-        update_tex();
-    }
+		update_tex();
+	}
 
-    float health;
+	float health;
 };
 
 
@@ -411,11 +436,11 @@ class enemy_ship : public ship
 {
 public:
 
-    void set_velocity(const float src_x, const float src_y)
-    {
-    }
+	void set_velocity(const float src_x, const float src_y)
+	{
+	}
 
-    float health;
+	float health;
 };
 
 
@@ -438,8 +463,8 @@ public:
 		x = srcStartX;  // Position in original image coordinates
 		y = srcStartY;
 
-        raw_data = src_raw_data;
-        to_present_data = raw_data;
+		raw_data = src_raw_data;
+		to_present_data = raw_data;
 
 
 	}
@@ -546,27 +571,27 @@ void main()
 
 // Utility functions
 void checkGLError(const char* operation) {
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
-        std::cerr << "OpenGL error after " << operation << ": " << error << std::endl;
-    }
+	GLenum error = glGetError();
+	if (error != GL_NO_ERROR) {
+		std::cerr << "OpenGL error after " << operation << ": " << error << std::endl;
+	}
 }
 
 GLuint compileShader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
+	GLuint shader = glCreateShader(type);
+	glShaderSource(shader, 1, &source, nullptr);
+	glCompileShader(shader);
 
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "Shader compilation failed:\n" << infoLog << std::endl;
-        std::cerr << "Source:\n" << source << std::endl;
-    }
+	GLint success;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+		std::cerr << "Shader compilation failed:\n" << infoLog << std::endl;
+		std::cerr << "Source:\n" << source << std::endl;
+	}
 
-    return shader;
+	return shader;
 }
 
 
@@ -622,335 +647,335 @@ void main() {
 
 
 struct FontAtlas {
-    GLuint textureID;
-    int charWidth;      // Width of each character (16)
-    int charHeight;     // Height of each character (16)
-    int atlasWidth;     // Atlas width (256)
-    int atlasHeight;    // Atlas height (256)
-    int charsPerRow;    // Characters per row in the atlas (16)
+	GLuint textureID;
+	int charWidth;      // Width of each character (16)
+	int charHeight;     // Height of each character (16)
+	int atlasWidth;     // Atlas width (256)
+	int atlasHeight;    // Atlas height (256)
+	int charsPerRow;    // Characters per row in the atlas (16)
 };
 
 
 GLuint loadFontTexture(const char* filename) {
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
 
-    // Set texture parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	// Set texture parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    // Load image using stb_image (you're already using this)
-    int width, height, channels;
-    stbi_set_flip_vertically_on_load(false);
+	// Load image using stb_image (you're already using this)
+	int width, height, channels;
+	stbi_set_flip_vertically_on_load(false);
 
 
-    unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+	unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
 
-    if (!data) {
-        std::cerr << "Failed to load font texture: " << filename << std::endl;
-        std::cerr << "STB Image error: " << stbi_failure_reason() << std::endl;
-        return 0;
-    }
+	if (!data) {
+		std::cerr << "Failed to load font texture: " << filename << std::endl;
+		std::cerr << "STB Image error: " << stbi_failure_reason() << std::endl;
+		return 0;
+	}
 
-    // Determine format based on channels
-    GLenum format;
-    switch (channels) {
-    case 1: format = GL_RED; break;
-    case 3: format = GL_RGB; break;
-    case 4: format = GL_RGBA; break;
-    default:
-        format = GL_RGB;
-        std::cerr << "Unsupported number of channels: " << channels << std::endl;
-    }
+	// Determine format based on channels
+	GLenum format;
+	switch (channels) {
+	case 1: format = GL_RED; break;
+	case 3: format = GL_RGB; break;
+	case 4: format = GL_RGBA; break;
+	default:
+		format = GL_RGB;
+		std::cerr << "Unsupported number of channels: " << channels << std::endl;
+	}
 
-    // Load texture data to GPU
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+	// Load texture data to GPU
+	glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 
-    // Free image data
-    stbi_image_free(data);
+	// Free image data
+	stbi_image_free(data);
 
-    return textureID;
+	return textureID;
 }
 
 FontAtlas initFontAtlas(const char* filename) {
-    FontAtlas atlas;
-    atlas.textureID = loadFontTexture(filename);
-    atlas.charWidth = 64;
-    atlas.charHeight = 64;
-    atlas.atlasWidth = 1024;
-    atlas.atlasHeight = 1024;
-    atlas.charsPerRow = atlas.atlasWidth / atlas.charWidth; // 16
+	FontAtlas atlas;
+	atlas.textureID = loadFontTexture(filename);
+	atlas.charWidth = 64;
+	atlas.charHeight = 64;
+	atlas.atlasWidth = 1024;
+	atlas.atlasHeight = 1024;
+	atlas.charsPerRow = atlas.atlasWidth / atlas.charWidth; // 16
 
-    return atlas;
+	return atlas;
 }
 
 
 class TextRenderer {
 private:
-    FontAtlas atlas;
-    GLuint VAO, VBO, EBO;
-    GLuint shaderProgram;
-    glm::mat4 projection;
+	FontAtlas atlas;
+	GLuint VAO, VBO, EBO;
+	GLuint shaderProgram;
+	glm::mat4 projection;
 
-    struct Vertex {
-        glm::vec3 position;
-        glm::vec2 texCoord;
-        glm::vec4 color;
-    };
+	struct Vertex {
+		glm::vec3 position;
+		glm::vec2 texCoord;
+		glm::vec4 color;
+	};
 
 public:
 
-    std::unordered_map<char, int> charWidths; // Map to store actual widths
+	std::unordered_map<char, int> charWidths; // Map to store actual widths
 
-    // Add this method to calculate character widths
-    void calculateCharacterWidths() {
-        // Read back the font texture data from GPU
-        int dataSize = atlas.atlasWidth * atlas.atlasHeight * 4; // RGBA format
-        std::vector<unsigned char> textureData(dataSize);
+	// Add this method to calculate character widths
+	void calculateCharacterWidths() {
+		// Read back the font texture data from GPU
+		int dataSize = atlas.atlasWidth * atlas.atlasHeight * 4; // RGBA format
+		std::vector<unsigned char> textureData(dataSize);
 
-        glBindTexture(GL_TEXTURE_2D, atlas.textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, textureData.data());
-
-
+		glBindTexture(GL_TEXTURE_2D, atlas.textureID);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, textureData.data());
 
 
 
-        // Analyze each character
-        for (unsigned short c_ = 0; c_ < 256; c_++)
-        {
-            unsigned char c = static_cast<unsigned char>(c_);
-
-            // ASCII range
-            int atlasX = (c % atlas.charsPerRow) * atlas.charWidth;
-            int atlasY = (c / atlas.charsPerRow) * atlas.charHeight;
-
-            // Find leftmost non-empty column
-            int leftEdge = atlas.charWidth - 1; // Start from rightmost position
-
-            // Find rightmost non-empty column
-            int rightEdge = 0; // Start from leftmost position
-
-            // Scan all columns for this character
-            for (int x = 0; x < atlas.charWidth; x++) {
-                bool columnHasPixels = false;
-
-                // Check if any pixel in this column is non-transparent
-                for (int y = 0; y < atlas.charHeight; y++) {
-                    int pixelIndex = ((atlasY + y) * atlas.atlasWidth + (atlasX + x)) * 4;
-                    if (pixelIndex >= 0 && pixelIndex < dataSize - 3) {
-                        // Check alpha value (using red channel for grayscale font)
-                        if (textureData[pixelIndex] > 20) { // Non-transparent threshold
-                            columnHasPixels = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (columnHasPixels) {
-                    // Update left edge (minimum value)
-                    leftEdge = std::min(leftEdge, x);
-                    // Update right edge (maximum value)
-                    rightEdge = std::max(rightEdge, x);
-                }
-            }
-
-            // If no pixels were found (space or empty character)
-            if (rightEdge < leftEdge) {
-                // Default width for space character
-                if (c == ' ') {
-                    charWidths[c] = atlas.charWidth / 3; // Make space 1/3 of cell width
-                }
-                else {
-                    charWidths[c] = atlas.charWidth / 4; // Default minimum width
-                }
-            }
-            else {
-                // Calculate width based on the actual character bounds
-                int actualWidth = (rightEdge - leftEdge) + 1;
-
-                // Add some padding
-                int paddedWidth = actualWidth + 4; // 2 pixels on each side
-
-                // Store this character's width (minimum width of 1/4 of the cell)
-                charWidths[c] = std::max(paddedWidth, atlas.charWidth / 4);
-            }
-        }
-    }
 
 
-    TextRenderer(const char* fontAtlasFile, int windowWidth, int windowHeight) {
-        // Initialize font atlas
-        atlas = initFontAtlas(fontAtlasFile);
+		// Analyze each character
+		for (unsigned short c_ = 0; c_ < 256; c_++)
+		{
+			unsigned char c = static_cast<unsigned char>(c_);
 
-        // Create shader program
-        GLuint vertexShader = compileShader(GL_VERTEX_SHADER, textVertexShaderSource);
-        GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, textFragmentShaderSource);
+			// ASCII range
+			int atlasX = (c % atlas.charsPerRow) * atlas.charWidth;
+			int atlasY = (c / atlas.charsPerRow) * atlas.charHeight;
 
-        shaderProgram = glCreateProgram();
-        glAttachShader(shaderProgram, vertexShader);
-        glAttachShader(shaderProgram, fragmentShader);
-        glLinkProgram(shaderProgram);
+			// Find leftmost non-empty column
+			int leftEdge = atlas.charWidth - 1; // Start from rightmost position
 
-        // Check for linking errors
-        GLint success;
-        glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-        if (!success) {
-            GLchar infoLog[512];
-            glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
-            std::cerr << "Shader program linking error: " << infoLog << std::endl;
-        }
+			// Find rightmost non-empty column
+			int rightEdge = 0; // Start from leftmost position
 
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
+			// Scan all columns for this character
+			for (int x = 0; x < atlas.charWidth; x++) {
+				bool columnHasPixels = false;
 
-        // Create VAO, VBO, EBO for text rendering
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        glGenBuffers(1, &EBO);
+				// Check if any pixel in this column is non-transparent
+				for (int y = 0; y < atlas.charHeight; y++) {
+					int pixelIndex = ((atlasY + y) * atlas.atlasWidth + (atlasX + x)) * 4;
+					if (pixelIndex >= 0 && pixelIndex < dataSize - 3) {
+						// Check alpha value (using red channel for grayscale font)
+						if (textureData[pixelIndex] > 20) { // Non-transparent threshold
+							columnHasPixels = true;
+							break;
+						}
+					}
+				}
 
-        glBindVertexArray(VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+				if (columnHasPixels) {
+					// Update left edge (minimum value)
+					leftEdge = std::min(leftEdge, x);
+					// Update right edge (maximum value)
+					rightEdge = std::max(rightEdge, x);
+				}
+			}
 
-        // Set up vertex attributes
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-        glEnableVertexAttribArray(0);
+			// If no pixels were found (space or empty character)
+			if (rightEdge < leftEdge) {
+				// Default width for space character
+				if (c == ' ') {
+					charWidths[c] = atlas.charWidth / 3; // Make space 1/3 of cell width
+				}
+				else {
+					charWidths[c] = atlas.charWidth / 4; // Default minimum width
+				}
+			}
+			else {
+				// Calculate width based on the actual character bounds
+				int actualWidth = (rightEdge - leftEdge) + 1;
 
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
-        glEnableVertexAttribArray(1);
+				// Add some padding
+				int paddedWidth = actualWidth + 4; // 2 pixels on each side
 
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3) + sizeof(glm::vec2)));
-        glEnableVertexAttribArray(2);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-
-        // Set up projection matrix
-        setProjection(windowWidth, windowHeight);
-
-        calculateCharacterWidths();
-    }
-
-    ~TextRenderer() {
-        glDeleteBuffers(1, &VBO);
-        glDeleteBuffers(1, &EBO);
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteProgram(shaderProgram);
-        glDeleteTextures(1, &atlas.textureID);
-    }
-
-    void setProjection(int windowWidth, int windowHeight) {
-        projection = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, -1.0f, 1.0f);
-    }
+				// Store this character's width (minimum width of 1/4 of the cell)
+				charWidths[c] = std::max(paddedWidth, atlas.charWidth / 4);
+			}
+		}
+	}
 
 
-    void renderText(const std::string& text, float x, float y, float scale, glm::vec4 color, bool centered = false) {
-        glUseProgram(shaderProgram);
+	TextRenderer(const char* fontAtlasFile, int windowWidth, int windowHeight) {
+		// Initialize font atlas
+		atlas = initFontAtlas(fontAtlasFile);
 
-        // Set uniforms
-        GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+		// Create shader program
+		GLuint vertexShader = compileShader(GL_VERTEX_SHADER, textVertexShaderSource);
+		GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, textFragmentShaderSource);
 
-        GLuint fontTexLoc = glGetUniformLocation(shaderProgram, "fontTexture");
-        glUniform1i(fontTexLoc, 0);
+		shaderProgram = glCreateProgram();
+		glAttachShader(shaderProgram, vertexShader);
+		glAttachShader(shaderProgram, fragmentShader);
+		glLinkProgram(shaderProgram);
 
-        GLuint useColorLoc = glGetUniformLocation(shaderProgram, "useColor");
-        glUniform1i(useColorLoc, 0); // Set to 1 if your font atlas is colored
+		// Check for linking errors
+		GLint success;
+		glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+		if (!success) {
+			GLchar infoLog[512];
+			glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+			std::cerr << "Shader program linking error: " << infoLog << std::endl;
+		}
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, atlas.textureID);
+		glDeleteShader(vertexShader);
+		glDeleteShader(fragmentShader);
 
-        glBindVertexArray(VAO);
+		// Create VAO, VBO, EBO for text rendering
+		glGenVertexArrays(1, &VAO);
+		glGenBuffers(1, &VBO);
+		glGenBuffers(1, &EBO);
 
-        // If text should be centered, calculate the starting position
-        if (centered) {
-            float textWidth = 0;
-            for (char c : text) {
-                // Use the calculated width for each character
-                float charWidth = static_cast<float>(charWidths[c]);// charWidths.count(c) ? charWidths[c] : atlas.charWidth / 2;
-                textWidth += (8 + charWidth) * scale;
-            }
-            x = windowWidth / 2.0f - textWidth / 2.0f;
-        }
+		glBindVertexArray(VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
-        // For each character, create a quad with appropriate texture coordinates
-        std::vector<Vertex> vertices;
-        std::vector<GLuint> indices;
+		// Set up vertex attributes
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+		glEnableVertexAttribArray(0);
 
-        float xpos = x;
-        float ypos = y;
-        GLuint indexOffset = 0;
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
+		glEnableVertexAttribArray(1);
 
-        for (char c : text) {
-            // Get ASCII value of the character
-            unsigned char charValue = static_cast<unsigned char>(c);
+		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3) + sizeof(glm::vec2)));
+		glEnableVertexAttribArray(2);
 
-            // Calculate position in the atlas using ASCII value
-            int atlasX = (charValue % atlas.charsPerRow) * atlas.charWidth;
-            int atlasY = (charValue / atlas.charsPerRow) * atlas.charHeight;
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 
-            // Calculate texture coordinates
-            float texLeft = atlasX / (float)atlas.atlasWidth;
-            float texRight = (atlasX + atlas.charWidth) / (float)atlas.atlasWidth;
-            float texTop = atlasY / (float)atlas.atlasHeight;
-            float texBottom = (atlasY + atlas.charHeight) / (float)atlas.atlasHeight;
+		// Set up projection matrix
+		setProjection(windowWidth, windowHeight);
 
-            // Get the character's calculated width
-            float charWidth = static_cast<float>(charWidths[charValue]);// charWidths.count(charValue) ? charWidths[charValue] : atlas.charWidth / 2;
+		calculateCharacterWidths();
+	}
 
-            // Calculate quad vertices
-            float quadLeft = xpos;
-            float quadRight = xpos + atlas.charWidth * scale; // Use full cell width for texture
-            float quadTop = ypos;
-            float quadBottom = ypos + atlas.charHeight * scale;
+	~TextRenderer() {
+		glDeleteBuffers(1, &VBO);
+		glDeleteBuffers(1, &EBO);
+		glDeleteVertexArrays(1, &VAO);
+		glDeleteProgram(shaderProgram);
+		glDeleteTextures(1, &atlas.textureID);
+	}
 
-            // Add vertices
-            vertices.push_back({ {quadLeft, quadTop, 0.0f}, {texLeft, texTop}, color });
-            vertices.push_back({ {quadRight, quadTop, 0.0f}, {texRight, texTop}, color });
-            vertices.push_back({ {quadRight, quadBottom, 0.0f}, {texRight, texBottom}, color });
-            vertices.push_back({ {quadLeft, quadBottom, 0.0f}, {texLeft, texBottom}, color });
+	void setProjection(int windowWidth, int windowHeight) {
+		projection = glm::ortho(0.0f, (float)windowWidth, (float)windowHeight, 0.0f, -1.0f, 1.0f);
+	}
 
-            // Add indices
-            indices.push_back(indexOffset + 0);
-            indices.push_back(indexOffset + 1);
-            indices.push_back(indexOffset + 2);
-            indices.push_back(indexOffset + 0);
-            indices.push_back(indexOffset + 2);
-            indices.push_back(indexOffset + 3);
 
-            indexOffset += 4;
+	void renderText(const std::string& text, float x, float y, float scale, glm::vec4 color, bool centered = false) {
+		glUseProgram(shaderProgram);
 
-            // Advance cursor using the calculated width
-            // add 8 pixels of padding between characters
-            xpos += (8 + charWidth) * scale;
-        }
+		// Set uniforms
+		GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
+		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Upload vertex and index data
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_DYNAMIC_DRAW);
+		GLuint fontTexLoc = glGetUniformLocation(shaderProgram, "fontTexture");
+		glUniform1i(fontTexLoc, 0);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
+		GLuint useColorLoc = glGetUniformLocation(shaderProgram, "useColor");
+		glUniform1i(useColorLoc, 0); // Set to 1 if your font atlas is colored
 
-        // Draw text
-        glm::mat4 model = glm::mat4(1.0f);
-        GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, atlas.textureID);
 
-        // Enable blending for transparent font
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glBindVertexArray(VAO);
 
-        glDrawElements(GL_TRIANGLES, (GLsizei)indices.size(), GL_UNSIGNED_INT, 0);
+		// If text should be centered, calculate the starting position
+		if (centered) {
+			float textWidth = 0;
+			for (char c : text) {
+				// Use the calculated width for each character
+				float charWidth = static_cast<float>(charWidths[c]);// charWidths.count(c) ? charWidths[c] : atlas.charWidth / 2;
+				textWidth += (8 + charWidth) * scale;
+			}
+			x = windowWidth / 2.0f - textWidth / 2.0f;
+		}
 
-        // Reset state
-        glDisable(GL_BLEND);
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
+		// For each character, create a quad with appropriate texture coordinates
+		std::vector<Vertex> vertices;
+		std::vector<GLuint> indices;
+
+		float xpos = x;
+		float ypos = y;
+		GLuint indexOffset = 0;
+
+		for (char c : text) {
+			// Get ASCII value of the character
+			unsigned char charValue = static_cast<unsigned char>(c);
+
+			// Calculate position in the atlas using ASCII value
+			int atlasX = (charValue % atlas.charsPerRow) * atlas.charWidth;
+			int atlasY = (charValue / atlas.charsPerRow) * atlas.charHeight;
+
+			// Calculate texture coordinates
+			float texLeft = atlasX / (float)atlas.atlasWidth;
+			float texRight = (atlasX + atlas.charWidth) / (float)atlas.atlasWidth;
+			float texTop = atlasY / (float)atlas.atlasHeight;
+			float texBottom = (atlasY + atlas.charHeight) / (float)atlas.atlasHeight;
+
+			// Get the character's calculated width
+			float charWidth = static_cast<float>(charWidths[charValue]);// charWidths.count(charValue) ? charWidths[charValue] : atlas.charWidth / 2;
+
+			// Calculate quad vertices
+			float quadLeft = xpos;
+			float quadRight = xpos + atlas.charWidth * scale; // Use full cell width for texture
+			float quadTop = ypos;
+			float quadBottom = ypos + atlas.charHeight * scale;
+
+			// Add vertices
+			vertices.push_back({ {quadLeft, quadTop, 0.0f}, {texLeft, texTop}, color });
+			vertices.push_back({ {quadRight, quadTop, 0.0f}, {texRight, texTop}, color });
+			vertices.push_back({ {quadRight, quadBottom, 0.0f}, {texRight, texBottom}, color });
+			vertices.push_back({ {quadLeft, quadBottom, 0.0f}, {texLeft, texBottom}, color });
+
+			// Add indices
+			indices.push_back(indexOffset + 0);
+			indices.push_back(indexOffset + 1);
+			indices.push_back(indexOffset + 2);
+			indices.push_back(indexOffset + 0);
+			indices.push_back(indexOffset + 2);
+			indices.push_back(indexOffset + 3);
+
+			indexOffset += 4;
+
+			// Advance cursor using the calculated width
+			// add 8 pixels of padding between characters
+			xpos += (8 + charWidth) * scale;
+		}
+
+		// Upload vertex and index data
+		glBindBuffer(GL_ARRAY_BUFFER, VBO);
+		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_DYNAMIC_DRAW);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
+
+		// Draw text
+		glm::mat4 model = glm::mat4(1.0f);
+		GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+		// Enable blending for transparent font
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glDrawElements(GL_TRIANGLES, (GLsizei)indices.size(), GL_UNSIGNED_INT, 0);
+
+		// Reset state
+		glDisable(GL_BLEND);
+		glBindVertexArray(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
 };
 
 
@@ -960,26 +985,26 @@ TextRenderer* textRenderer = nullptr;
 
 void displayFPS()
 {
-    static int frame_count = 0;
-    static float lastTime = 0.0f;
-    static float fps = 0.0f;
+	static int frame_count = 0;
+	static float lastTime = 0.0f;
+	static float fps = 0.0f;
 
-    frame_count++;
+	frame_count++;
 
-    float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    float deltaTime = currentTime - lastTime;
+	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	float deltaTime = currentTime - lastTime;
 
-    if (deltaTime >= 1.0f)
-    {
-        fps = frame_count / deltaTime;
-        frame_count = 0;
-        lastTime = currentTime;
-    }
+	if (deltaTime >= 1.0f)
+	{
+		fps = frame_count / deltaTime;
+		frame_count = 0;
+		lastTime = currentTime;
+	}
 
-    std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
+	std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
 
-    if (textRenderer)
-        textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
+	if (textRenderer)
+		textRenderer->renderText(fpsText, 0.0, 10, 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true);
 }
 
 
@@ -1526,163 +1551,163 @@ void main() {
 
 
 GLuint createProgram(const char* vertexSource, const char* fragmentSource) {
-    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
-    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource);
+	GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
+	GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource);
 
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vertexShader);
-    glAttachShader(program, fragmentShader);
-    glLinkProgram(program);
+	GLuint program = glCreateProgram();
+	glAttachShader(program, vertexShader);
+	glAttachShader(program, fragmentShader);
+	glLinkProgram(program);
 
-    GLint success;
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        std::cerr << "Program linking failed:\n" << infoLog << std::endl;
-    }
+	GLint success;
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetProgramInfoLog(program, 512, nullptr, infoLog);
+		std::cerr << "Program linking failed:\n" << infoLog << std::endl;
+	}
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
 
-    return program;
+	return program;
 }
 
 void createTexture(GLuint& tex, int width, int height, GLenum internalFormat, GLenum format, GLenum type) {
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 void createFBO(GLuint& fbo, GLuint tex) {
-    glGenFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "Framebuffer not complete!" << std::endl;
-    }
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Framebuffer not complete!" << std::endl;
+	}
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void initShaders() {
-    advectProgram = createProgram(vertexShaderSource, advectFragmentSource);
-    divergenceProgram = createProgram(vertexShaderSource, divergenceFragmentSource);
-    jacobiProgram = createProgram(vertexShaderSource, jacobiFragmentSource);
-    gradientSubtractProgram = createProgram(vertexShaderSource, gradientSubtractFragmentSource);
-    addSourceProgram = createProgram(vertexShaderSource, addSourceFragmentSource);
-    boundaryProgram = createProgram(vertexShaderSource, boundaryFragmentSource);
-    displayProgram = createProgram(vertexShaderSource, displayFragmentSource);
-    vorticityProgram = createProgram(vertexShaderSource, vorticityFragmentSource);
-    vorticityForceProgram = createProgram(vertexShaderSource, vorticityForceFragmentSource);
-    obstacleProgram = createProgram(vertexShaderSource, obstacleFragmentSource);
-    obstacleStampProgram = createProgram(vertexShaderSource, obstacleStampFragmentSource);
-    copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
-    spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
+	advectProgram = createProgram(vertexShaderSource, advectFragmentSource);
+	divergenceProgram = createProgram(vertexShaderSource, divergenceFragmentSource);
+	jacobiProgram = createProgram(vertexShaderSource, jacobiFragmentSource);
+	gradientSubtractProgram = createProgram(vertexShaderSource, gradientSubtractFragmentSource);
+	addSourceProgram = createProgram(vertexShaderSource, addSourceFragmentSource);
+	boundaryProgram = createProgram(vertexShaderSource, boundaryFragmentSource);
+	displayProgram = createProgram(vertexShaderSource, displayFragmentSource);
+	vorticityProgram = createProgram(vertexShaderSource, vorticityFragmentSource);
+	vorticityForceProgram = createProgram(vertexShaderSource, vorticityForceFragmentSource);
+	obstacleProgram = createProgram(vertexShaderSource, obstacleFragmentSource);
+	obstacleStampProgram = createProgram(vertexShaderSource, obstacleStampFragmentSource);
+	copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
+	spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
 }
 
 void initTextures() {
-    // Velocity textures (RG for x,y components)
-    for (int i = 0; i < 2; i++) {
-        createTexture(velocityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RG32F, GL_RG, GL_FLOAT);
-        createFBO(velocityFBO[i], velocityTex[i]);
-    }
+	// Velocity textures (RG for x,y components)
+	for (int i = 0; i < 2; i++) {
+		createTexture(velocityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RG32F, GL_RG, GL_FLOAT);
+		createFBO(velocityFBO[i], velocityTex[i]);
+	}
 
-    // Pressure textures
-    for (int i = 0; i < 2; i++) {
-        createTexture(pressureTex[i], SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
-        createFBO(pressureFBO[i], pressureTex[i]);
-    }
+	// Pressure textures
+	for (int i = 0; i < 2; i++) {
+		createTexture(pressureTex[i], SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
+		createFBO(pressureFBO[i], pressureTex[i]);
+	}
 
-    // Density textures (RGB for colored smoke)
-    for (int i = 0; i < 2; i++) {
-        createTexture(densityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RG32F, GL_RG, GL_FLOAT);
-        createFBO(densityFBO[i], densityTex[i]);
-    }
+	// Density textures (RGB for colored smoke)
+	for (int i = 0; i < 2; i++) {
+		createTexture(densityTex[i], SIM_WIDTH, SIM_HEIGHT, GL_RG32F, GL_RG, GL_FLOAT);
+		createFBO(densityFBO[i], densityTex[i]);
+	}
 
-    // Divergence texture
-    createTexture(divergenceTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
-    createFBO(divergenceFBO, divergenceTex);
+	// Divergence texture
+	createTexture(divergenceTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
+	createFBO(divergenceFBO, divergenceTex);
 
-    // Vorticity texture
-    createTexture(vorticityTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
-    createFBO(vorticityFBO_obj, vorticityTex);
+	// Vorticity texture
+	createTexture(vorticityTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
+	createFBO(vorticityFBO_obj, vorticityTex);
 
-    // Obstacle texture
-    createTexture(obstacleTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
-    createFBO(obstacleFBO, obstacleTex);
+	// Obstacle texture
+	createTexture(obstacleTex, SIM_WIDTH, SIM_HEIGHT, GL_R32F, GL_RED, GL_FLOAT);
+	createFBO(obstacleFBO, obstacleTex);
 
-    // Temp texture for boundary operations
-    createTexture(tempTex, SIM_WIDTH, SIM_HEIGHT, GL_RGBA32F, GL_RGBA, GL_FLOAT);
-    createFBO(tempFBO, tempTex);
+	// Temp texture for boundary operations
+	createTexture(tempTex, SIM_WIDTH, SIM_HEIGHT, GL_RGBA32F, GL_RGBA, GL_FLOAT);
+	createFBO(tempFBO, tempTex);
 
-    // Clear all textures
-    glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+	// Clear all textures
+	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-    for (int i = 0; i < 2; i++) {
-        glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[i]);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[i]);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glBindFramebuffer(GL_FRAMEBUFFER, densityFBO[i]);
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
+	for (int i = 0; i < 2; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, densityFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void initQuad() {
-    float quadVertices[] = {
-        -1.0f, -1.0f,
-         1.0f, -1.0f,
-        -1.0f,  1.0f,
-         1.0f,  1.0f
-    };
+	float quadVertices[] = {
+		-1.0f, -1.0f,
+		 1.0f, -1.0f,
+		-1.0f,  1.0f,
+		 1.0f,  1.0f
+	};
 
-    glGenVertexArrays(1, &quadVAO);
-    glGenBuffers(1, &quadVBO);
+	glGenVertexArrays(1, &quadVAO);
+	glGenBuffers(1, &quadVBO);
 
-    glBindVertexArray(quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+	glBindVertexArray(quadVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
 
-    glBindVertexArray(0);
+	glBindVertexArray(0);
 }
 
 
 
 void initCollisionResources()
 {
-    // 2-channel floating point texture: R = red density, G = green density
-    glGenTextures(1, &collisionTex);
-    glBindTexture(GL_TEXTURE_2D, collisionTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, SIM_WIDTH, SIM_HEIGHT, 0, GL_RG, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// 2-channel floating point texture: R = red density, G = green density
+	glGenTextures(1, &collisionTex);
+	glBindTexture(GL_TEXTURE_2D, collisionTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, SIM_WIDTH, SIM_HEIGHT, 0, GL_RG, GL_FLOAT, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    glGenFramebuffers(1, &collisionFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, collisionTex, 0);
+	glGenFramebuffers(1, &collisionFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, collisionTex, 0);
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cerr << "Collision FBO not complete!" << std::endl;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Collision FBO not complete!" << std::endl;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // Compile shader
-    collisionProgram = createProgram(vertexShaderSource, collisionFragmentSource);
+	// Compile shader
+	collisionProgram = createProgram(vertexShaderSource, collisionFragmentSource);
 }
 
 
@@ -1692,15 +1717,15 @@ void initCollisionResources()
 
 
 void drawQuad() {
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
 }
 
 void setTextureUniform(GLuint program, const char* name, int unit, GLuint texture) {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(program, name), unit);
+	glActiveTexture(GL_TEXTURE0 + unit);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(glGetUniformLocation(program, name), unit);
 }
 
 
@@ -1722,55 +1747,55 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
  * If needed often, cache the pixel buffer and width/height externally.
  */
 bool isPixelInsideSpriteAndTransparent(
-    GLuint sprTex,
-    int sprX, int sprY,
-    int sprW, int sprH,
-    int pixelX, int pixelY,
-    bool& outInside,
-    bool& outTransparent,
-    unsigned char alphaThreshold,
-    glm::vec2& hit)
+	GLuint sprTex,
+	int sprX, int sprY,
+	int sprW, int sprH,
+	int pixelX, int pixelY,
+	bool& outInside,
+	bool& outTransparent,
+	unsigned char alphaThreshold,
+	glm::vec2& hit)
 {
-    outInside = false;
-    outTransparent = false;
-    hit = glm::vec2(0, 0);
+	outInside = false;
+	outTransparent = false;
+	hit = glm::vec2(0, 0);
 
-    // 1. Bounding box test (fast)
-    if (pixelX < sprX || pixelX >= sprX + sprW ||
-        pixelY < sprY || pixelY >= sprY + sprH)
-    {
-        return false; // definitely not inside
-    }
+	// 1. Bounding box test (fast)
+	if (pixelX < sprX || pixelX >= sprX + sprW ||
+		pixelY < sprY || pixelY >= sprY + sprH)
+	{
+		return false; // definitely not inside
+	}
 
-    outInside = true;
+	outInside = true;
 
-    // 2. Compute sprite-relative pixel coordinates
-    int localX = pixelX - sprX;
-    int localY = pixelY - sprY;
+	// 2. Compute sprite-relative pixel coordinates
+	int localX = pixelX - sprX;
+	int localY = pixelY - sprY;
 
-    // Sprite textures use bottom-left origin by default.
-    // Screen pixels use top-left origin.
-    // Convert Y accordingly.
-    int texY = (sprH - 1) - localY;
-    int texX = localX;
+	// Sprite textures use bottom-left origin by default.
+	// Screen pixels use top-left origin.
+	// Convert Y accordingly.
+	int texY = (sprH - 1) - localY;
+	int texX = localX;
 
-    // 3. Read texture pixel data from GPU
-    //    (4 bytes per pixel: RGBA8)
-    std::vector<unsigned char> texData(sprW * sprH * 4);
+	// 3. Read texture pixel data from GPU
+	//    (4 bytes per pixel: RGBA8)
+	std::vector<unsigned char> texData(sprW * sprH * 4);
 
-    glBindTexture(GL_TEXTURE_2D, sprTex);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
+	glBindTexture(GL_TEXTURE_2D, sprTex);
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
 
-    // 4. Index into pixel buffer
-    int idx = (texY * sprW + texX) * 4;
-    unsigned char a = texData[idx + 3];  // ALPHA
+	// 4. Index into pixel buffer
+	int idx = (texY * sprW + texX) * 4;
+	unsigned char a = texData[idx + 3];  // ALPHA
 
-    // 5. Transparent?
-    outTransparent = (a < alphaThreshold);
+	// 5. Transparent?
+	outTransparent = (a < alphaThreshold);
 
-    hit = glm::vec2(localX, localY);
+	hit = glm::vec2(localX, localY);
 
-    return true;
+	return true;
 }
 
 
@@ -1780,280 +1805,280 @@ bool isPixelInsideSpriteAndTransparent(
 
 void detectEdgeCollisions()
 {
-    collisionPoints.clear();
+	collisionPoints.clear();
 
-    // Step 1: Render collision map (edge + density values)
-    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
-    glClearColor(0, 0, 0, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
+	// Step 1: Render collision map (edge + density values)
+	glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(collisionProgram);
-    setTextureUniform(collisionProgram, "density", 0, densityTex[currentDensity]);
-    setTextureUniform(collisionProgram, "obstacles", 1, obstacleTex);
-    glUniform2f(glGetUniformLocation(collisionProgram, "texelSize"),
-        1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUseProgram(collisionProgram);
+	setTextureUniform(collisionProgram, "density", 0, densityTex[currentDensity]);
+	setTextureUniform(collisionProgram, "obstacles", 1, obstacleTex);
+	glUniform2f(glGetUniformLocation(collisionProgram, "texelSize"),
+		1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
 
-    drawQuad();
+	drawQuad();
 
-    // Step 2: Read back the RG32F texture
-    std::vector<glm::vec2> pixelData(SIM_WIDTH * SIM_HEIGHT);
-    glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
-    glReadPixels(0, 0, SIM_WIDTH, SIM_HEIGHT, GL_RG, GL_FLOAT, pixelData.data());
+	// Step 2: Read back the RG32F texture
+	std::vector<glm::vec2> pixelData(SIM_WIDTH * SIM_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
+	glReadPixels(0, 0, SIM_WIDTH, SIM_HEIGHT, GL_RG, GL_FLOAT, pixelData.data());
 
-    // Step 3: Collect all non-zero collision points
-    for (int y = 0; y < SIM_HEIGHT; ++y)
-    {
-        for (int x = 0; x < SIM_WIDTH; ++x)
-        {
-            size_t idx = y * SIM_WIDTH + x;
-            glm::vec2 dens = pixelData[idx];
+	// Step 3: Collect all non-zero collision points
+	for (int y = 0; y < SIM_HEIGHT; ++y)
+	{
+		for (int x = 0; x < SIM_WIDTH; ++x)
+		{
+			size_t idx = y * SIM_WIDTH + x;
+			glm::vec2 dens = pixelData[idx];
 
-            // If either red or green density is present -> collision
-            if (dens.r > 1 || dens.g > 1)
-            {
-                if (dens.r > 1)
-                    dens.r = 1;
+			// If either red or green density is present -> collision
+			if (dens.r > 1 || dens.g > 1)
+			{
+				if (dens.r > 1)
+					dens.r = 1;
 
-                if (dens.g > 1)
-                    dens.g = 1;
+				if (dens.g > 1)
+					dens.g = 1;
 
-                collisionPoints.push_back(glm::vec4(
-                    static_cast<float>(x),
-                    static_cast<float>(SIM_HEIGHT - 1 - y),
-                    dens.r,   // red density
-                    dens.g    // green density
-                ));
-            }
-        }
-    }
-
-
-
-    {
-        if (collisionPoints.size() > 0)
-        {
-            vector<glm::vec2> protagonist_blackening_points;
-
-            for (size_t i = 0; i < collisionPoints.size(); i++)
-            {
-                //cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
-                //cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+				collisionPoints.push_back(glm::vec4(
+					static_cast<float>(x),
+					static_cast<float>(SIM_HEIGHT - 1 - y),
+					dens.r,   // red density
+					dens.g    // green density
+				));
+			}
+		}
+	}
 
 
 
-                bool inside = false, transparent = false;
+	{
+		if (collisionPoints.size() > 0)
+		{
+			vector<glm::vec2> protagonist_blackening_points;
+
+			for (size_t i = 0; i < collisionPoints.size(); i++)
+			{
+				//cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
+				//cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
 
 
 
-                glm::vec2 hit;
-
-                if (isPixelInsideSpriteAndTransparent(
-                    protagonist.tex,
-                    static_cast<int>(protagonist.x),
-                    static_cast<int>(protagonist.y),
-                    protagonist.width,
-                    protagonist.height,
-                    static_cast<int>(collisionPoints[i].x),
-                    static_cast<int>(collisionPoints[i].y),
-                    inside,
-                    transparent,
-                    127,
-                    hit))
-                {
-                    if (inside)
-                    {
-                        protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
-                    }
-                }
-            }
-
-            protagonist.add_blackening_points(protagonist_blackening_points);
-        }
-
-        for(size_t h = 0; h < foreground_chunked.size(); h++)
-      
-        {
-            vector<glm::vec2> blackening_points;
-
-            for (size_t i = 0; i < collisionPoints.size(); i++)
-            {
-                //cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
-                //cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+				bool inside = false, transparent = false;
 
 
 
-                bool inside = false, transparent = false;
+				glm::vec2 hit;
+
+				if (isPixelInsideSpriteAndTransparent(
+					protagonist.tex,
+					static_cast<int>(protagonist.x),
+					static_cast<int>(protagonist.y),
+					protagonist.width,
+					protagonist.height,
+					static_cast<int>(collisionPoints[i].x),
+					static_cast<int>(collisionPoints[i].y),
+					inside,
+					transparent,
+					127,
+					hit))
+				{
+					if (inside)
+					{
+						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
+					}
+				}
+			}
+
+			protagonist.add_blackening_points(protagonist_blackening_points);
+		}
+
+		for (size_t h = 0; h < foreground_chunked.size(); h++)
+
+		{
+			vector<glm::vec2> blackening_points;
+
+			for (size_t i = 0; i < collisionPoints.size(); i++)
+			{
+				//cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
+				//cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
 
 
 
-                glm::vec2 hit;
-
-                if (isPixelInsideSpriteAndTransparent(
-                    foreground_chunked[h].tex,
-                    static_cast<int>(foreground_chunked[h].x),
-                    static_cast<int>(foreground_chunked[h].y),
-                    foreground_chunked[h].width,
-                    foreground_chunked[h].height,
-                    static_cast<int>(collisionPoints[i].x),
-                    static_cast<int>(collisionPoints[i].y),
-                    inside,
-                    transparent,
-                    127,
-                    hit))
-                {
-                    if (inside)
-                    {
-                        blackening_points.push_back(glm::vec2(hit.x, hit.y));
-                    }
-                }
-            }
-
-            foreground_chunked[h].add_blackening_points(blackening_points);
-        }
+				bool inside = false, transparent = false;
 
 
 
-    }
+				glm::vec2 hit;
+
+				if (isPixelInsideSpriteAndTransparent(
+					foreground_chunked[h].tex,
+					static_cast<int>(foreground_chunked[h].x),
+					static_cast<int>(foreground_chunked[h].y),
+					foreground_chunked[h].width,
+					foreground_chunked[h].height,
+					static_cast<int>(collisionPoints[i].x),
+					static_cast<int>(collisionPoints[i].y),
+					inside,
+					transparent,
+					127,
+					hit))
+				{
+					if (inside)
+					{
+						blackening_points.push_back(glm::vec2(hit.x, hit.y));
+					}
+				}
+			}
+
+			foreground_chunked[h].add_blackening_points(blackening_points);
+		}
+
+
+
+	}
 }
 
 
 
 void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float dissipation) {
-    glBindFramebuffer(GL_FRAMEBUFFER, outputFBO);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, outputFBO);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(advectProgram);
-    setTextureUniform(advectProgram, "velocity", 0, velocityTex);
-    setTextureUniform(advectProgram, "quantity", 1, quantityTex);
-    setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
-    glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT * 100.0f);
-    glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
+	glUseProgram(advectProgram);
+	setTextureUniform(advectProgram, "velocity", 0, velocityTex);
+	setTextureUniform(advectProgram, "quantity", 1, quantityTex);
+	setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
+	glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT * 100.0f);
+	glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
 
-    drawQuad();
+	drawQuad();
 }
 
 void computeDivergence() {
-    glBindFramebuffer(GL_FRAMEBUFFER, divergenceFBO);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, divergenceFBO);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(divergenceProgram);
-    setTextureUniform(divergenceProgram, "velocity", 0, velocityTex[currentVelocity]);
-    setTextureUniform(divergenceProgram, "obstacles", 1, obstacleTex);
-    glUniform2f(glGetUniformLocation(divergenceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUseProgram(divergenceProgram);
+	setTextureUniform(divergenceProgram, "velocity", 0, velocityTex[currentVelocity]);
+	setTextureUniform(divergenceProgram, "obstacles", 1, obstacleTex);
+	glUniform2f(glGetUniformLocation(divergenceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
 
-    drawQuad();
+	drawQuad();
 }
 
 void clearPressure() {
-    glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[currentPressure]);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[currentPressure]);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void jacobi() {
-    glUseProgram(jacobiProgram);
-    glUniform2f(glGetUniformLocation(jacobiProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform1f(glGetUniformLocation(jacobiProgram, "alpha"), -1.0f);
-    glUniform1f(glGetUniformLocation(jacobiProgram, "rBeta"), 0.25f);
+	glUseProgram(jacobiProgram);
+	glUniform2f(glGetUniformLocation(jacobiProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUniform1f(glGetUniformLocation(jacobiProgram, "alpha"), -1.0f);
+	glUniform1f(glGetUniformLocation(jacobiProgram, "rBeta"), 0.25f);
 
-    for (int i = 0; i < JACOBI_ITERATIONS; i++) {
-        int dst = 1 - currentPressure;
-        glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[dst]);
-        glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	for (int i = 0; i < JACOBI_ITERATIONS; i++) {
+		int dst = 1 - currentPressure;
+		glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[dst]);
+		glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-        setTextureUniform(jacobiProgram, "pressure", 0, pressureTex[currentPressure]);
-        setTextureUniform(jacobiProgram, "divergence", 1, divergenceTex);
-        setTextureUniform(jacobiProgram, "obstacles", 2, obstacleTex);
+		setTextureUniform(jacobiProgram, "pressure", 0, pressureTex[currentPressure]);
+		setTextureUniform(jacobiProgram, "divergence", 1, divergenceTex);
+		setTextureUniform(jacobiProgram, "obstacles", 2, obstacleTex);
 
-        drawQuad();
-        currentPressure = dst;
-    }
+		drawQuad();
+		currentPressure = dst;
+	}
 }
 
 void subtractGradient() {
-    int dst = 1 - currentVelocity;
-    glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[dst]);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	int dst = 1 - currentVelocity;
+	glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[dst]);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(gradientSubtractProgram);
-    setTextureUniform(gradientSubtractProgram, "pressure", 0, pressureTex[currentPressure]);
-    setTextureUniform(gradientSubtractProgram, "velocity", 1, velocityTex[currentVelocity]);
-    setTextureUniform(gradientSubtractProgram, "obstacles", 2, obstacleTex);
-    glUniform2f(glGetUniformLocation(gradientSubtractProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUseProgram(gradientSubtractProgram);
+	setTextureUniform(gradientSubtractProgram, "pressure", 0, pressureTex[currentPressure]);
+	setTextureUniform(gradientSubtractProgram, "velocity", 1, velocityTex[currentVelocity]);
+	setTextureUniform(gradientSubtractProgram, "obstacles", 2, obstacleTex);
+	glUniform2f(glGetUniformLocation(gradientSubtractProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
 
-    drawQuad();
-    currentVelocity = dst;
+	drawQuad();
+	currentVelocity = dst;
 }
 
 void computeVorticity() {
-    glBindFramebuffer(GL_FRAMEBUFFER, vorticityFBO_obj);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, vorticityFBO_obj);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(vorticityProgram);
-    setTextureUniform(vorticityProgram, "velocity", 0, velocityTex[currentVelocity]);
-    setTextureUniform(vorticityProgram, "obstacles", 1, obstacleTex);
-    glUniform2f(glGetUniformLocation(vorticityProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUseProgram(vorticityProgram);
+	setTextureUniform(vorticityProgram, "velocity", 0, velocityTex[currentVelocity]);
+	setTextureUniform(vorticityProgram, "obstacles", 1, obstacleTex);
+	glUniform2f(glGetUniformLocation(vorticityProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
 
-    drawQuad();
+	drawQuad();
 }
 
 void applyVorticityForce() {
-    int dst = 1 - currentVelocity;
-    glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[dst]);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	int dst = 1 - currentVelocity;
+	glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[dst]);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(vorticityForceProgram);
-    setTextureUniform(vorticityForceProgram, "velocity", 0, velocityTex[currentVelocity]);
-    setTextureUniform(vorticityForceProgram, "vorticity", 1, vorticityTex);
-    setTextureUniform(vorticityForceProgram, "obstacles", 2, obstacleTex);
-    glUniform2f(glGetUniformLocation(vorticityForceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform1f(glGetUniformLocation(vorticityForceProgram, "dt"), DT);
-    glUniform1f(glGetUniformLocation(vorticityForceProgram, "scale"), VORTICITY_SCALE);
+	glUseProgram(vorticityForceProgram);
+	setTextureUniform(vorticityForceProgram, "velocity", 0, velocityTex[currentVelocity]);
+	setTextureUniform(vorticityForceProgram, "vorticity", 1, vorticityTex);
+	setTextureUniform(vorticityForceProgram, "obstacles", 2, obstacleTex);
+	glUniform2f(glGetUniformLocation(vorticityForceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUniform1f(glGetUniformLocation(vorticityForceProgram, "dt"), DT);
+	glUniform1f(glGetUniformLocation(vorticityForceProgram, "scale"), VORTICITY_SCALE);
 
-    drawQuad();
-    currentVelocity = dst;
+	drawQuad();
+	currentVelocity = dst;
 }
 
 void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius) {
-    int dst = 1 - current;
-    glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	int dst = 1 - current;
+	glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(addSourceProgram);
-    setTextureUniform(addSourceProgram, "field", 0, textures[current]);
-    setTextureUniform(addSourceProgram, "obstacles", 1, obstacleTex);
-    glUniform2f(glGetUniformLocation(addSourceProgram, "point"), x, y);
-    glUniform3f(glGetUniformLocation(addSourceProgram, "value"), vx, vy, vz);
-    glUniform1f(glGetUniformLocation(addSourceProgram, "radius"), radius);
-    glUniform2f(glGetUniformLocation(addSourceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    // Account for aspect ratio in splat
-    glUniform2f(glGetUniformLocation(addSourceProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
+	glUseProgram(addSourceProgram);
+	setTextureUniform(addSourceProgram, "field", 0, textures[current]);
+	setTextureUniform(addSourceProgram, "obstacles", 1, obstacleTex);
+	glUniform2f(glGetUniformLocation(addSourceProgram, "point"), x, y);
+	glUniform3f(glGetUniformLocation(addSourceProgram, "value"), vx, vy, vz);
+	glUniform1f(glGetUniformLocation(addSourceProgram, "radius"), radius);
+	glUniform2f(glGetUniformLocation(addSourceProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	// Account for aspect ratio in splat
+	glUniform2f(glGetUniformLocation(addSourceProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
 
-    drawQuad();
-    current = dst;
+	drawQuad();
+	current = dst;
 }
 
 void addObstacle(float x, float y, float radius, bool add) {
-    glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(obstacleProgram);
-    setTextureUniform(obstacleProgram, "obstacles", 0, obstacleTex);
-    glUniform2f(glGetUniformLocation(obstacleProgram, "point"), x, y);
-    glUniform1f(glGetUniformLocation(obstacleProgram, "radius"), radius);
-    glUniform2f(glGetUniformLocation(obstacleProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-    glUniform2f(glGetUniformLocation(obstacleProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
-    glUniform1f(glGetUniformLocation(obstacleProgram, "addOrRemove"), add ? 1.0f : 0.0f);
+	glUseProgram(obstacleProgram);
+	setTextureUniform(obstacleProgram, "obstacles", 0, obstacleTex);
+	glUniform2f(glGetUniformLocation(obstacleProgram, "point"), x, y);
+	glUniform1f(glGetUniformLocation(obstacleProgram, "radius"), radius);
+	glUniform2f(glGetUniformLocation(obstacleProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+	glUniform2f(glGetUniformLocation(obstacleProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
+	glUniform1f(glGetUniformLocation(obstacleProgram, "addOrRemove"), add ? 1.0f : 0.0f);
 
-    drawQuad();
+	drawQuad();
 
-    // Copy back to obstacle texture
-    glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
-    glUseProgram(copyProgram);
-    setTextureUniform(copyProgram, "source", 0, tempTex);
-    drawQuad();
+	// Copy back to obstacle texture
+	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+	glUseProgram(copyProgram);
+	setTextureUniform(copyProgram, "source", 0, tempTex);
+	drawQuad();
 }
 
 /**
@@ -2090,49 +2115,49 @@ void addObstacle(float x, float y, float radius, bool add) {
  *   addObstacleStamp(circleTex, 200, 150, 32, 32, false, 0.5f, true);
  */
 void addObstacleStamp(GLuint stampTexture, int pixelX, int pixelY,
-    int pixelWidth, int pixelHeight, bool add,
-    float threshold = 0.5f, bool useAlpha = true) {
-    glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
-    glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+	int pixelWidth, int pixelHeight, bool add,
+	float threshold = 0.5f, bool useAlpha = true) {
+	glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
+	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-    glUseProgram(obstacleStampProgram);
+	glUseProgram(obstacleStampProgram);
 
-    // Bind textures
-    setTextureUniform(obstacleStampProgram, "obstacles", 0, obstacleTex);
-    setTextureUniform(obstacleStampProgram, "stampTexture", 1, stampTexture);
+	// Bind textures
+	setTextureUniform(obstacleStampProgram, "obstacles", 0, obstacleTex);
+	setTextureUniform(obstacleStampProgram, "stampTexture", 1, stampTexture);
 
-    // Convert pixel coordinates to normalized texture coordinates
-    // Input: top-left origin (0,0), Y increases downward
-    // OpenGL texture coords: bottom-left origin (0,0), Y increases upward
+	// Convert pixel coordinates to normalized texture coordinates
+	// Input: top-left origin (0,0), Y increases downward
+	// OpenGL texture coords: bottom-left origin (0,0), Y increases upward
 
-    // Calculate center position from top-left corner
-    // Center in pixel coords (top-left origin)
-    float centerPixelX = pixelX + pixelWidth / 2.0f;
-    float centerPixelY = pixelY + pixelHeight / 2.0f;
+	// Calculate center position from top-left corner
+	// Center in pixel coords (top-left origin)
+	float centerPixelX = pixelX + pixelWidth / 2.0f;
+	float centerPixelY = pixelY + pixelHeight / 2.0f;
 
-    // Convert to normalized coords [0,1] with bottom-left origin
-    // Flip Y: OpenGL's Y=0 is at bottom, our input Y=0 is at top
-    float centerNormX = centerPixelX / (float)SIM_WIDTH;
-    float centerNormY = 1.0f - (centerPixelY / (float)SIM_HEIGHT);
+	// Convert to normalized coords [0,1] with bottom-left origin
+	// Flip Y: OpenGL's Y=0 is at bottom, our input Y=0 is at top
+	float centerNormX = centerPixelX / (float)SIM_WIDTH;
+	float centerNormY = 1.0f - (centerPixelY / (float)SIM_HEIGHT);
 
-    // Half-size in normalized coords
-    float halfSizeX = (float)pixelWidth / (2.0f * SIM_WIDTH);
-    float halfSizeY = (float)pixelHeight / (2.0f * SIM_HEIGHT);
+	// Half-size in normalized coords
+	float halfSizeX = (float)pixelWidth / (2.0f * SIM_WIDTH);
+	float halfSizeY = (float)pixelHeight / (2.0f * SIM_HEIGHT);
 
-    // Set uniforms
-    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampCenter"), centerNormX, centerNormY);
-    glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampHalfSize"), halfSizeX, halfSizeY);
-    glUniform1f(glGetUniformLocation(obstacleStampProgram, "threshold"), threshold);
-    glUniform1f(glGetUniformLocation(obstacleStampProgram, "addOrRemove"), add ? 1.0f : 0.0f);
-    glUniform1i(glGetUniformLocation(obstacleStampProgram, "useAlpha"), useAlpha ? 1 : 0);
+	// Set uniforms
+	glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampCenter"), centerNormX, centerNormY);
+	glUniform2f(glGetUniformLocation(obstacleStampProgram, "stampHalfSize"), halfSizeX, halfSizeY);
+	glUniform1f(glGetUniformLocation(obstacleStampProgram, "threshold"), threshold);
+	glUniform1f(glGetUniformLocation(obstacleStampProgram, "addOrRemove"), add ? 1.0f : 0.0f);
+	glUniform1i(glGetUniformLocation(obstacleStampProgram, "useAlpha"), useAlpha ? 1 : 0);
 
-    drawQuad();
+	drawQuad();
 
-    // Copy back to obstacle texture
-    glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
-    glUseProgram(copyProgram);
-    setTextureUniform(copyProgram, "source", 0, tempTex);
-    drawQuad();
+	// Copy back to obstacle texture
+	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+	glUseProgram(copyProgram);
+	setTextureUniform(copyProgram, "source", 0, tempTex);
+	drawQuad();
 }
 
 /**
@@ -2145,15 +2170,15 @@ void addObstacleStamp(GLuint stampTexture, int pixelX, int pixelY,
  * @return        OpenGL texture ID
  */
 GLuint createStampTextureFromData(const unsigned char* data, int width, int height) {
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    return tex;
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	return tex;
 }
 
 /**
@@ -2163,26 +2188,26 @@ GLuint createStampTextureFromData(const unsigned char* data, int width, int heig
  * @return        OpenGL texture ID of a circle stamp
  */
 GLuint createCircleStamp(int radius) {
-    int size = radius * 2;
-    std::vector<unsigned char> data(size * size * 4, 0);
+	int size = radius * 2;
+	std::vector<unsigned char> data(size * size * 4, 0);
 
-    for (int y = 0; y < size; y++) {
-        for (int x = 0; x < size; x++) {
-            float dx = x - radius + 0.5f;
-            float dy = y - radius + 0.5f;
-            float dist = sqrtf(dx * dx + dy * dy);
+	for (int y = 0; y < size; y++) {
+		for (int x = 0; x < size; x++) {
+			float dx = x - radius + 0.5f;
+			float dy = y - radius + 0.5f;
+			float dist = sqrtf(dx * dx + dy * dy);
 
-            int idx = (y * size + x) * 4;
-            if (dist <= radius) {
-                data[idx + 0] = 255;  // R
-                data[idx + 1] = 255;  // G
-                data[idx + 2] = 255;  // B
-                data[idx + 3] = 255;  // A
-            }
-        }
-    }
+			int idx = (y * size + x) * 4;
+			if (dist <= radius) {
+				data[idx + 0] = 255;  // R
+				data[idx + 1] = 255;  // G
+				data[idx + 2] = 255;  // B
+				data[idx + 3] = 255;  // A
+			}
+		}
+	}
 
-    return createStampTextureFromData(data.data(), size, size);
+	return createStampTextureFromData(data.data(), size, size);
 }
 
 /**
@@ -2194,37 +2219,37 @@ GLuint createCircleStamp(int radius) {
  * @return             OpenGL texture ID of a star stamp
  */
 GLuint createStarStamp(int outerRadius, int innerRadius, int points) {
-    int size = outerRadius * 2;
-    std::vector<unsigned char> data(size * size * 4, 0);
+	int size = outerRadius * 2;
+	std::vector<unsigned char> data(size * size * 4, 0);
 
-    float angleStep = 3.14159265f / points;
+	float angleStep = 3.14159265f / points;
 
-    for (int y = 0; y < size; y++) {
-        for (int x = 0; x < size; x++) {
-            float dx = x - outerRadius + 0.5f;
-            float dy = y - outerRadius + 0.5f;
-            float dist = sqrtf(dx * dx + dy * dy);
-            float angle = atan2f(dy, dx);
-            if (angle < 0) angle += 2.0f * 3.14159265f;
+	for (int y = 0; y < size; y++) {
+		for (int x = 0; x < size; x++) {
+			float dx = x - outerRadius + 0.5f;
+			float dy = y - outerRadius + 0.5f;
+			float dist = sqrtf(dx * dx + dy * dy);
+			float angle = atan2f(dy, dx);
+			if (angle < 0) angle += 2.0f * 3.14159265f;
 
-            // Calculate the radius at this angle for the star shape
-            int sector = (int)(angle / angleStep);
-            float localAngle = fmodf(angle, angleStep * 2.0f);
-            if (localAngle > angleStep) localAngle = angleStep * 2.0f - localAngle;
+			// Calculate the radius at this angle for the star shape
+			int sector = (int)(angle / angleStep);
+			float localAngle = fmodf(angle, angleStep * 2.0f);
+			if (localAngle > angleStep) localAngle = angleStep * 2.0f - localAngle;
 
-            float starRadius = innerRadius + (outerRadius - innerRadius) * (1.0f - localAngle / angleStep);
+			float starRadius = innerRadius + (outerRadius - innerRadius) * (1.0f - localAngle / angleStep);
 
-            int idx = (y * size + x) * 4;
-            if (dist <= starRadius) {
-                data[idx + 0] = 255;
-                data[idx + 1] = 255;
-                data[idx + 2] = 255;
-                data[idx + 3] = 255;
-            }
-        }
-    }
+			int idx = (y * size + x) * 4;
+			if (dist <= starRadius) {
+				data[idx + 0] = 255;
+				data[idx + 1] = 255;
+				data[idx + 2] = 255;
+				data[idx + 3] = 255;
+			}
+		}
+	}
 
-    return createStampTextureFromData(data.data(), size, size);
+	return createStampTextureFromData(data.data(), size, size);
 }
 
 /**
@@ -2235,8 +2260,8 @@ GLuint createStarStamp(int outerRadius, int innerRadius, int points) {
  * @return        OpenGL texture ID of a rectangle stamp
  */
 GLuint createRectangleStamp(int width, int height) {
-    std::vector<unsigned char> data(width * height * 4, 255);  // All white, fully opaque
-    return createStampTextureFromData(data.data(), width, height);
+	std::vector<unsigned char> data(width * height * 4, 255);  // All white, fully opaque
+	return createStampTextureFromData(data.data(), width, height);
 }
 
 /**
@@ -2249,118 +2274,118 @@ GLuint createRectangleStamp(int width, int height) {
  * @return            OpenGL texture ID, or 0 if loading failed
  */
 GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
-    int width, height, channels;
+	int width, height, channels;
 
-    out_data.clear();
+	out_data.clear();
 
-    // stb_image loads with (0,0) at top-left, which matches our coordinate system
-    stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
+	// stb_image loads with (0,0) at top-left, which matches our coordinate system
+	stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
 
-    unsigned char* data = stbi_load(filename, &width, &height, &channels, 4);  // Force RGBA
-    if (!data) {
-        std::cerr << "Failed to load texture: " << filename << std::endl;
-        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-        if (outWidth) *outWidth = 0;
-        if (outHeight) *outHeight = 0;
-        return 0;
-    }
+	unsigned char* data = stbi_load(filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!data) {
+		std::cerr << "Failed to load texture: " << filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
 
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    for (size_t i = 0; i < width * height * channels; i++)
-        out_data.push_back(data[i]);
+	for (size_t i = 0; i < width * height * channels; i++)
+		out_data.push_back(data[i]);
 
-    stbi_image_free(data);
+	stbi_image_free(data);
 
-    if (outWidth) *outWidth = width;
-    if (outHeight) *outHeight = height;
+	if (outWidth) *outWidth = width;
+	if (outHeight) *outHeight = height;
 
-    std::cout << "Loaded texture: " << filename << " (" << width << "x" << height << ")" << std::endl;
-    return tex;
+	std::cout << "Loaded texture: " << filename << " (" << width << "x" << height << ")" << std::endl;
+	return tex;
 }
 
 
 
 GLuint loadTextureFromFile_Triplet(
-    const char* up_filename,
-    const char* down_filename,
-    const char* rest_filename,
+	const char* up_filename,
+	const char* down_filename,
+	const char* rest_filename,
 
-    int* outWidth, int* outHeight, vector<unsigned char>& out_up_data, vector<unsigned char>& out_down_data, vector<unsigned char>& out_rest_data) {
-    int width, height, channels;
+	int* outWidth, int* outHeight, vector<unsigned char>& out_up_data, vector<unsigned char>& out_down_data, vector<unsigned char>& out_rest_data) {
+	int width, height, channels;
 
-    out_up_data.clear();
-    out_down_data.clear();
-    out_rest_data.clear();
+	out_up_data.clear();
+	out_down_data.clear();
+	out_rest_data.clear();
 
-    // stb_image loads with (0,0) at top-left, which matches our coordinate system
-    stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
-
-
-    unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
-    if (!up_data) {
-        std::cerr << "Failed to load texture: " << up_filename << std::endl;
-        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-        if (outWidth) *outWidth = 0;
-        if (outHeight) *outHeight = 0;
-        return 0;
-    }
-
-    unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
-    if (!down_data) {
-        std::cerr << "Failed to load texture: " << down_filename << std::endl;
-        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-        if (outWidth) *outWidth = 0;
-        if (outHeight) *outHeight = 0;
-        return 0;
-    }
-
-    unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
-    if (!rest_data) {
-        std::cerr << "Failed to load texture: " << rest_filename << std::endl;
-        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-        if (outWidth) *outWidth = 0;
-        if (outHeight) *outHeight = 0;
-        return 0;
-    }
-
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rest_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// stb_image loads with (0,0) at top-left, which matches our coordinate system
+	stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
 
 
+	unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!up_data) {
+		std::cerr << "Failed to load texture: " << up_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
 
-    for (size_t i = 0; i < width * height * channels; i++)
-        out_up_data.push_back(up_data[i]);
+	unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!down_data) {
+		std::cerr << "Failed to load texture: " << down_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
 
-    stbi_image_free(up_data);
+	unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
+	if (!rest_data) {
+		std::cerr << "Failed to load texture: " << rest_filename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
 
-    for (size_t i = 0; i < width * height * channels; i++)
-        out_down_data.push_back(down_data[i]);
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rest_data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    stbi_image_free(down_data);
 
-    for (size_t i = 0; i < width * height * channels; i++)
-        out_rest_data.push_back(rest_data[i]);
 
-    stbi_image_free(rest_data);
+	for (size_t i = 0; i < width * height * channels; i++)
+		out_up_data.push_back(up_data[i]);
 
-    if (outWidth) *outWidth = width;
-    if (outHeight) *outHeight = height;
+	stbi_image_free(up_data);
 
-    return tex;
+	for (size_t i = 0; i < width * height * channels; i++)
+		out_down_data.push_back(down_data[i]);
+
+	stbi_image_free(down_data);
+
+	for (size_t i = 0; i < width * height * channels; i++)
+		out_rest_data.push_back(rest_data[i]);
+
+	stbi_image_free(rest_data);
+
+	if (outWidth) *outWidth = width;
+	if (outHeight) *outHeight = height;
+
+	return tex;
 }
 
 
@@ -2381,86 +2406,86 @@ GLuint loadTextureFromFile_Triplet(
  */
 bool chunkForegroundTexture(const char* sourceFilename)
 {
-    foreground_chunked.clear();
+	foreground_chunked.clear();
 
-    int srcWidth, srcHeight, channels;
+	int srcWidth, srcHeight, channels;
 
-    // Load the source image
-    stbi_set_flip_vertically_on_load(0);
-    unsigned char* srcData = stbi_load(sourceFilename, &srcWidth, &srcHeight, &channels, 4);  // Force RGBA
+	// Load the source image
+	stbi_set_flip_vertically_on_load(0);
+	unsigned char* srcData = stbi_load(sourceFilename, &srcWidth, &srcHeight, &channels, 4);  // Force RGBA
 
-    if (!srcData) {
-        std::cerr << "Failed to load foreground for chunking: " << sourceFilename << std::endl;
-        std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-        return false;
-    }
+	if (!srcData) {
+		std::cerr << "Failed to load foreground for chunking: " << sourceFilename << std::endl;
+		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+		return false;
+	}
 
-    // Calculate number of tiles in each dimension
-    int tilesX = (srcWidth + foreground_chunk_size_width - 1) / foreground_chunk_size_width;   // Ceiling division
-    int tilesY = (srcHeight + foreground_chunk_size_height - 1) / foreground_chunk_size_height;
+	// Calculate number of tiles in each dimension
+	int tilesX = (srcWidth + foreground_chunk_size_width - 1) / foreground_chunk_size_width;   // Ceiling division
+	int tilesY = (srcHeight + foreground_chunk_size_height - 1) / foreground_chunk_size_height;
 
-    std::cout << "Chunking foreground (" << srcWidth << "x" << srcHeight << ") into "
-        << tilesX << "x" << tilesY << " tiles of " << foreground_chunk_size_width << "x" << foreground_chunk_size_height << std::endl;
+	std::cout << "Chunking foreground (" << srcWidth << "x" << srcHeight << ") into "
+		<< tilesX << "x" << tilesY << " tiles of " << foreground_chunk_size_width << "x" << foreground_chunk_size_height << std::endl;
 
-    // Allocate a buffer for each tile (RGBA, 4 bytes per pixel)
-    std::vector<unsigned char> tileData(foreground_chunk_size_width * foreground_chunk_size_height * 4, 0);
+	// Allocate a buffer for each tile (RGBA, 4 bytes per pixel)
+	std::vector<unsigned char> tileData(foreground_chunk_size_width * foreground_chunk_size_height * 4, 0);
 
-    // Process each tile
-    for (int ty = 0; ty < tilesY; ty++) {
-        for (int tx = 0; tx < tilesX; tx++) {
-            // Clear the tile buffer (transparent black)
-            std::fill(tileData.begin(), tileData.end(), 0);
+	// Process each tile
+	for (int ty = 0; ty < tilesY; ty++) {
+		for (int tx = 0; tx < tilesX; tx++) {
+			// Clear the tile buffer (transparent black)
+			std::fill(tileData.begin(), tileData.end(), 0);
 
-            // Calculate source region bounds
-            int srcStartX = tx * foreground_chunk_size_width;
-            int srcStartY = ty * foreground_chunk_size_height;
+			// Calculate source region bounds
+			int srcStartX = tx * foreground_chunk_size_width;
+			int srcStartY = ty * foreground_chunk_size_height;
 
-            // Calculate how many pixels to copy (handle edge tiles that may be smaller)
-            int copyWidth = std::min(foreground_chunk_size_width, srcWidth - srcStartX);
-            int copyHeight = std::min(foreground_chunk_size_height, srcHeight - srcStartY);
+			// Calculate how many pixels to copy (handle edge tiles that may be smaller)
+			int copyWidth = std::min(foreground_chunk_size_width, srcWidth - srcStartX);
+			int copyHeight = std::min(foreground_chunk_size_height, srcHeight - srcStartY);
 
-            // Copy pixels from source to tile
-            for (int y = 0; y < copyHeight; y++) {
-                for (int x = 0; x < copyWidth; x++) {
-                    int srcIdx = ((srcStartY + y) * srcWidth + (srcStartX + x)) * 4;
-                    int dstIdx = (y * foreground_chunk_size_width + x) * 4;
+			// Copy pixels from source to tile
+			for (int y = 0; y < copyHeight; y++) {
+				for (int x = 0; x < copyWidth; x++) {
+					int srcIdx = ((srcStartY + y) * srcWidth + (srcStartX + x)) * 4;
+					int dstIdx = (y * foreground_chunk_size_width + x) * 4;
 
-                    tileData[dstIdx + 0] = srcData[srcIdx + 0];  // R
-                    tileData[dstIdx + 1] = srcData[srcIdx + 1];  // G
-                    tileData[dstIdx + 2] = srcData[srcIdx + 2];  // B
-                    tileData[dstIdx + 3] = srcData[srcIdx + 3];  // A
-                }
-            }
+					tileData[dstIdx + 0] = srcData[srcIdx + 0];  // R
+					tileData[dstIdx + 1] = srcData[srcIdx + 1];  // G
+					tileData[dstIdx + 2] = srcData[srcIdx + 2];  // B
+					tileData[dstIdx + 3] = srcData[srcIdx + 3];  // A
+				}
+			}
 
-            // Create OpenGL texture for this tile
-            GLuint tileTex;
-            glGenTextures(1, &tileTex);
-            glBindTexture(GL_TEXTURE_2D, tileTex);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size_width, foreground_chunk_size_height,
-                0, GL_RGBA, GL_UNSIGNED_BYTE, tileData.data());
+			// Create OpenGL texture for this tile
+			GLuint tileTex;
+			glGenTextures(1, &tileTex);
+			glBindTexture(GL_TEXTURE_2D, tileTex);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, foreground_chunk_size_width, foreground_chunk_size_height,
+				0, GL_RGBA, GL_UNSIGNED_BYTE, tileData.data());
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-            // Create foreground_tile and add to vector
-           foreground_tile tile(
-           tileTex,
-           foreground_chunk_size_width,
-           foreground_chunk_size_height,
-           static_cast<float>(srcStartX),  // Position in original image coordinates
-           static_cast<float>(srcStartY),
-           tileData);
+			// Create foreground_tile and add to vector
+			foreground_tile tile(
+				tileTex,
+				foreground_chunk_size_width,
+				foreground_chunk_size_height,
+				static_cast<float>(srcStartX),  // Position in original image coordinates
+				static_cast<float>(srcStartY),
+				tileData);
 
-            foreground_chunked.push_back(tile);
-        }
-    }
+			foreground_chunked.push_back(tile);
+		}
+	}
 
-    stbi_image_free(srcData);
+	stbi_image_free(srcData);
 
-    std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
-    return true;
+	std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
+	return true;
 }
 
 /**
@@ -2487,92 +2512,92 @@ bool chunkForegroundTexture(const char* sourceFilename)
  *   drawSprite(myTexture, 200, 100, originalWidth * 2, originalHeight * 2);
  */
 void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight) {
-    if (texture == 0) return;
+	if (texture == 0) return;
 
-    // Enable blending for transparency
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// Enable blending for transparency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glUseProgram(spriteProgram);
+	glUseProgram(spriteProgram);
 
-    // Convert pixel coordinates to normalized device coordinates [-1, 1]
-    // Window coordinate system: (0,0) at top-left, Y increases downward
-    // NDC: (-1,-1) at bottom-left, (1,1) at top-right
+	// Convert pixel coordinates to normalized device coordinates [-1, 1]
+	// Window coordinate system: (0,0) at top-left, Y increases downward
+	// NDC: (-1,-1) at bottom-left, (1,1) at top-right
 
-    // Convert top-left corner position from pixel coords to NDC
-    // pixelX=0 -> ndcX=-1, pixelX=windowWidth -> ndcX=1
-    // pixelY=0 -> ndcY=1 (top), pixelY=windowHeight -> ndcY=-1 (bottom)
-    float ndcX = (2.0f * pixelX / SIM_WIDTH) - 1.0f;
-    float ndcY = 1.0f - (2.0f * pixelY / SIM_HEIGHT);  // Flip Y
+	// Convert top-left corner position from pixel coords to NDC
+	// pixelX=0 -> ndcX=-1, pixelX=windowWidth -> ndcX=1
+	// pixelY=0 -> ndcY=1 (top), pixelY=windowHeight -> ndcY=-1 (bottom)
+	float ndcX = (2.0f * pixelX / SIM_WIDTH) - 1.0f;
+	float ndcY = 1.0f - (2.0f * pixelY / SIM_HEIGHT);  // Flip Y
 
-    // Convert size from pixels to NDC units
-    float ndcWidth = 2.0f * pixelWidth / SIM_WIDTH;
-    float ndcHeight = 2.0f * pixelHeight / SIM_HEIGHT;
+	// Convert size from pixels to NDC units
+	float ndcWidth = 2.0f * pixelWidth / SIM_WIDTH;
+	float ndcHeight = 2.0f * pixelHeight / SIM_HEIGHT;
 
-    // The sprite shader expects position as top-left corner in NDC
-    // and size as the full width/height in NDC
-    // Adjust Y position since we draw from bottom-left of the sprite quad
-    float spritePosX = ndcX;
-    float spritePosY = ndcY - ndcHeight;  // Move down by height (NDC Y is flipped)
+	// The sprite shader expects position as top-left corner in NDC
+	// and size as the full width/height in NDC
+	// Adjust Y position since we draw from bottom-left of the sprite quad
+	float spritePosX = ndcX;
+	float spritePosY = ndcY - ndcHeight;  // Move down by height (NDC Y is flipped)
 
-    glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
-    glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
+	glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
+	glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(spriteProgram, "spriteTexture"), 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(glGetUniformLocation(spriteProgram, "spriteTexture"), 0);
 
-    drawQuad();
+	drawQuad();
 
-    glDisable(GL_BLEND);
+	glDisable(GL_BLEND);
 }
 
 void simulate()
 {
-    protagonist.integrate(DT);
+	protagonist.integrate(DT);
 
-    GLuint clearColor[4] = { 0, 0, 0, 0 };
-    glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
+	GLuint clearColor[4] = { 0, 0, 0, 0 };
+	glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
-    addObstacleStamp(protagonist.tex,
-        static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-        protagonist.width, protagonist.height, true,
-        1, true);
+	addObstacleStamp(protagonist.tex,
+		static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
+		protagonist.width, protagonist.height, true,
+		1, true);
 
-    for (size_t i = 0; i < foreground_chunked.size(); i++)
-    {
-        if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
-        {
-            addObstacleStamp(foreground_chunked[i].tex,
-                static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
-                foreground_chunked[i].width, foreground_chunked[i].height, true,
-                0.5, true);
-        }
-    }
-
-
+	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	{
+		if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
+		{
+			addObstacleStamp(foreground_chunked[i].tex,
+				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
+				foreground_chunked[i].width, foreground_chunked[i].height, true,
+				0.5, true);
+		}
+	}
 
 
 
-    // Advect velocity
-    advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
-    currentVelocity = 1 - currentVelocity;
 
-    // Advect density
-    advect(velocityTex[currentVelocity], densityTex[currentDensity], densityFBO[1 - currentDensity], DENSITY_DISSIPATION);
-    currentDensity = 1 - currentDensity;
 
-    // Vorticity confinement
-    if (1/*vorticityEnabled*/) {
-        computeVorticity();
-        applyVorticityForce();
-    }
+	// Advect velocity
+	advect(velocityTex[currentVelocity], velocityTex[currentVelocity], velocityFBO[1 - currentVelocity], VELOCITY_DISSIPATION);
+	currentVelocity = 1 - currentVelocity;
 
-    // Pressure projection
-    computeDivergence();
-    clearPressure();
-    jacobi();
-    subtractGradient();
+	// Advect density
+	advect(velocityTex[currentVelocity], densityTex[currentDensity], densityFBO[1 - currentDensity], DENSITY_DISSIPATION);
+	currentDensity = 1 - currentDensity;
+
+	// Vorticity confinement
+	if (1/*vorticityEnabled*/) {
+		computeVorticity();
+		applyVorticityForce();
+	}
+
+	// Pressure projection
+	computeDivergence();
+	clearPressure();
+	jacobi();
+	subtractGradient();
 
 
 
@@ -2582,308 +2607,308 @@ void simulate()
 void display()
 {
 
-    // Fixed time step
-    static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    static double accumulator = 0.0;
+	// Fixed time step
+	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	static double accumulator = 0.0;
 
-    double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    double frameTime = newTime - currentTime;
-    currentTime = newTime;
+	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	double frameTime = newTime - currentTime;
+	currentTime = newTime;
 
-    if (frameTime > DT)
-        frameTime = DT;
+	if (frameTime > DT)
+		frameTime = DT;
 
-    accumulator += frameTime;
+	accumulator += frameTime;
 
-    while (accumulator >= DT)
-    {
-        simulate();
-        accumulator -= DT;
-        GLOBAL_TIME += DT;
-    }
-
-
-
-
-
-
-    // Add continuous sources based on mouse input
-    if (leftMouseDown && !shiftDown) {
-        float x = (float)mouseX / windowWidth;
-        float y = 1.0f - (float)mouseY / windowHeight;
-
-        if (red_mode)
-            addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
-        else
-            addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
-    }
-
-    if (rightMouseDown) {
-        float x = (float)mouseX / windowWidth;
-        float y = 1.0f - (float)mouseY / windowHeight;
-        float dx = (float)(mouseX - lastMouseX) * 2.0f;
-        float dy = (float)(lastMouseY - mouseY) * 2.0f;
-
-        addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.0004f);
-    }
-
-    if (middleMouseDown || (leftMouseDown && shiftDown)) {
-        float x = (float)mouseX / windowWidth;
-        float y = 1.0f - (float)mouseY / windowHeight;
-        addObstacle(x, y, 0.02f, true);
-    }
-
-    lastMouseX = mouseX;
-    lastMouseY = mouseY;
+	while (accumulator >= DT)
+	{
+		simulate();
+		accumulator -= DT;
+		GLOBAL_TIME += DT;
+	}
 
 
 
 
 
 
-    // Detect fluid-obstacle collisions
-    static int collision_lastCallTime = 0;
-    int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
+	// Add continuous sources based on mouse input
+	if (leftMouseDown && !shiftDown) {
+		float x = (float)mouseX / windowWidth;
+		float y = 1.0f - (float)mouseY / windowHeight;
 
-    if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
-    {
-        detectEdgeCollisions();
-        collision_lastCallTime = curr_time_int;
-    }
+		if (red_mode)
+			addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
+		else
+			addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
+	}
 
+	if (rightMouseDown) {
+		float x = (float)mouseX / windowWidth;
+		float y = 1.0f - (float)mouseY / windowHeight;
+		float dx = (float)(mouseX - lastMouseX) * 2.0f;
+		float dy = (float)(lastMouseY - mouseY) * 2.0f;
 
+		addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.0004f);
+	}
 
+	if (middleMouseDown || (leftMouseDown && shiftDown)) {
+		float x = (float)mouseX / windowWidth;
+		float y = 1.0f - (float)mouseY / windowHeight;
+		addObstacle(x, y, 0.02f, true);
+	}
 
-
-
-
-    // Render to screen
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, windowWidth, windowHeight);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glUseProgram(displayProgram);
-    setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
-    setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
-    setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
-    setTextureUniform(displayProgram, "background", 3, background.tex);
-    glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
-    glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
-
-    drawQuad();
+	lastMouseX = mouseX;
+	lastMouseY = mouseY;
 
 
 
 
 
-    if (protagonist.tex != 0)
-    {
-        protagonist.update_tex();
 
-        drawSprite(protagonist.tex,
-            static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-            protagonist.width, protagonist.height);
-    }
+	// Detect fluid-obstacle collisions
+	static int collision_lastCallTime = 0;
+	int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
 
-    for (size_t i = 0; i < foreground_chunked.size(); i++)
-    {
-        if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
-        {
-            foreground_chunked[i].update_tex();
-
-            drawSprite(foreground_chunked[i].tex,
-                static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
-                foreground_chunked[i].width, foreground_chunked[i].height);
-        }
-    }
+	if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
+	{
+		detectEdgeCollisions();
+		collision_lastCallTime = curr_time_int;
+	}
 
 
 
 
-    displayFPS();
 
 
 
-    glutSwapBuffers();
-    glutPostRedisplay();
+	// Render to screen
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, windowWidth, windowHeight);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(displayProgram);
+	setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
+	setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
+	setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
+	setTextureUniform(displayProgram, "background", 3, background.tex);
+	glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
+	glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
+
+	drawQuad();
+
+
+
+
+
+	if (protagonist.tex != 0)
+	{
+		protagonist.update_tex();
+
+		drawSprite(protagonist.tex,
+			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
+			protagonist.width, protagonist.height);
+	}
+
+	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	{
+		if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
+		{
+			foreground_chunked[i].update_tex();
+
+			drawSprite(foreground_chunked[i].tex,
+				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
+				foreground_chunked[i].width, foreground_chunked[i].height);
+		}
+	}
+
+
+
+
+	displayFPS();
+
+
+
+	glutSwapBuffers();
+	glutPostRedisplay();
 }
 
 void reshape(int w, int h) {
-    windowWidth = w;
-    windowHeight = h;
+	windowWidth = w;
+	windowHeight = h;
 }
 
 void keyboard(unsigned char key, int x, int y)
 {
-    switch (key)
-    {
+	switch (key)
+	{
 
-    case 'x':
-    {
-        red_mode = !red_mode;
-        break;
-    }
+	case 'x':
+	{
+		red_mode = !red_mode;
+		break;
+	}
 
-    case 27:  // ESC
-    case 'q':
-    case 'Q':
-        exit(0);
-        break;
-    case 'r':
-    case 'R':
-        // Reset simulation
-        for (int i = 0; i < 2; i++) {
-            glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[i]);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[i]);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glBindFramebuffer(GL_FRAMEBUFFER, densityFBO[i]);
-            glClear(GL_COLOR_BUFFER_BIT);
-        }
-        std::cout << "Simulation reset" << std::endl;
-        break;
-    case 'o':
-    case 'O':
-        // Clear obstacles
-        glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
-        glClear(GL_COLOR_BUFFER_BIT);
-        std::cout << "Obstacles cleared" << std::endl;
-        break;
-    }
+	case 27:  // ESC
+	case 'q':
+	case 'Q':
+		exit(0);
+		break;
+	case 'r':
+	case 'R':
+		// Reset simulation
+		for (int i = 0; i < 2; i++) {
+			glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[i]);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[i]);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glBindFramebuffer(GL_FRAMEBUFFER, densityFBO[i]);
+			glClear(GL_COLOR_BUFFER_BIT);
+		}
+		std::cout << "Simulation reset" << std::endl;
+		break;
+	case 'o':
+	case 'O':
+		// Clear obstacles
+		glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+		glClear(GL_COLOR_BUFFER_BIT);
+		std::cout << "Obstacles cleared" << std::endl;
+		break;
+	}
 }
 
 void specialKeys(int key, int x, int y) {
-    if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
-        shiftDown = true;
-    }
+	if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
+		shiftDown = true;
+	}
 }
 
 void specialKeysUp(int key, int x, int y) {
-    shiftDown = false;
+	shiftDown = false;
 }
 
 void mouse(int button, int state, int x, int y) {
-    mouseX = x;
-    mouseY = y;
+	mouseX = x;
+	mouseY = y;
 
-    shiftDown = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+	shiftDown = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
 
-    if (button == GLUT_LEFT_BUTTON) {
-        leftMouseDown = (state == GLUT_DOWN);
-    }
-    else if (button == GLUT_RIGHT_BUTTON) {
-        rightMouseDown = (state == GLUT_DOWN);
-    }
-    else if (button == GLUT_MIDDLE_BUTTON) {
-        middleMouseDown = (state == GLUT_DOWN);
-    }
+	if (button == GLUT_LEFT_BUTTON) {
+		leftMouseDown = (state == GLUT_DOWN);
+	}
+	else if (button == GLUT_RIGHT_BUTTON) {
+		rightMouseDown = (state == GLUT_DOWN);
+	}
+	else if (button == GLUT_MIDDLE_BUTTON) {
+		middleMouseDown = (state == GLUT_DOWN);
+	}
 }
 
 void motion(int x, int y) {
-    mouseX = x;
-    mouseY = y;
+	mouseX = x;
+	mouseY = y;
 }
 
 void passiveMotion(int x, int y) {
-    lastMouseX = mouseX;
-    lastMouseY = mouseY;
-    mouseX = x;
-    mouseY = y;
+	lastMouseX = mouseX;
+	lastMouseY = mouseY;
+	mouseX = x;
+	mouseY = y;
 }
 
 
 
 void specialKeyboard(int key, int x, int y)
 {
-    switch (key) {
-    case GLUT_KEY_UP:
-        upKeyPressed = true;
-        break;
-    case GLUT_KEY_DOWN:
-        downKeyPressed = true;
-        break;
-    case GLUT_KEY_LEFT:
-        leftKeyPressed = true;
-        break;
-    case GLUT_KEY_RIGHT:
-        rightKeyPressed = true;
-        break;
-    }
+	switch (key) {
+	case GLUT_KEY_UP:
+		upKeyPressed = true;
+		break;
+	case GLUT_KEY_DOWN:
+		downKeyPressed = true;
+		break;
+	case GLUT_KEY_LEFT:
+		leftKeyPressed = true;
+		break;
+	case GLUT_KEY_RIGHT:
+		rightKeyPressed = true;
+		break;
+	}
 
 
-    float local_vel_x = 0;
-    float local_vel_y = 0;
+	float local_vel_x = 0;
+	float local_vel_y = 0;
 
-    // Combine key states to allow diagonal movement
-    if (upKeyPressed) {
-        local_vel_y = -1;
-    }
-    if (downKeyPressed) {
-        local_vel_y = 1;
-    }
-    if (leftKeyPressed) {
-        local_vel_x = -1;
-    }
-    if (rightKeyPressed) {
-        local_vel_x = 1;
-    }
+	// Combine key states to allow diagonal movement
+	if (upKeyPressed) {
+		local_vel_y = -1;
+	}
+	if (downKeyPressed) {
+		local_vel_y = 1;
+	}
+	if (leftKeyPressed) {
+		local_vel_x = -1;
+	}
+	if (rightKeyPressed) {
+		local_vel_x = 1;
+	}
 
-    float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+	float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
 
-    if (vel_length > 0)
-    {
-        local_vel_x /= vel_length * 2;
-        local_vel_y /= vel_length * 2;
-    }
+	if (vel_length > 0)
+	{
+		local_vel_x /= vel_length * 2;
+		local_vel_y /= vel_length * 2;
+	}
 
-    protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 // Modified specialKeyboardUp function to reset key states
 void specialKeyboardUp(int key, int x, int y)
 {
-    switch (key) {
-    case GLUT_KEY_UP:
-        upKeyPressed = false;
-        break;
-    case GLUT_KEY_DOWN:
-        downKeyPressed = false;
-        break;
-    case GLUT_KEY_LEFT:
-        leftKeyPressed = false;
-        break;
-    case GLUT_KEY_RIGHT:
-        rightKeyPressed = false;
-        break;
-    }
+	switch (key) {
+	case GLUT_KEY_UP:
+		upKeyPressed = false;
+		break;
+	case GLUT_KEY_DOWN:
+		downKeyPressed = false;
+		break;
+	case GLUT_KEY_LEFT:
+		leftKeyPressed = false;
+		break;
+	case GLUT_KEY_RIGHT:
+		rightKeyPressed = false;
+		break;
+	}
 
 
-    float local_vel_x = 0;
-    float local_vel_y = 0;
+	float local_vel_x = 0;
+	float local_vel_y = 0;
 
-    // Combine key states to allow diagonal movement
-    if (upKeyPressed) {
-        local_vel_y = -1;
-    }
-    if (downKeyPressed) {
-        local_vel_y = 1;
-    }
-    if (leftKeyPressed) {
-        local_vel_x = -1;
-    }
-    if (rightKeyPressed) {
-        local_vel_x = 1;
-    }
+	// Combine key states to allow diagonal movement
+	if (upKeyPressed) {
+		local_vel_y = -1;
+	}
+	if (downKeyPressed) {
+		local_vel_y = 1;
+	}
+	if (leftKeyPressed) {
+		local_vel_x = -1;
+	}
+	if (rightKeyPressed) {
+		local_vel_x = 1;
+	}
 
-    float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+	float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
 
-    if (vel_length > 0)
-    {
-        local_vel_x /= vel_length * 2;
-        local_vel_y /= vel_length * 2;
-    }
+	if (vel_length > 0)
+	{
+		local_vel_x /= vel_length * 2;
+		local_vel_y /= vel_length * 2;
+	}
 
-    protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 
@@ -2900,88 +2925,92 @@ void specialKeyboardUp(int key, int x, int y)
 
 
 int main(int argc, char** argv) {
-    // Initialize GLUT
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowSize(windowWidth, windowHeight);
-    glutInitContextVersion(4, 0);
-    glutInitContextProfile(GLUT_CORE_PROFILE);
-    glutCreateWindow("2D Navier-Stokes Fluid Simulation");
+	// Initialize GLUT
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+	glutInitWindowSize(windowWidth, windowHeight);
+	glutInitContextVersion(4, 0);
+	glutInitContextProfile(GLUT_CORE_PROFILE);
+	glutCreateWindow("2D Navier-Stokes Fluid Simulation");
 
-    // Initialize GLEW
-    glewExperimental = GL_TRUE;
-    GLenum err = glewInit();
-    if (err != GLEW_OK) {
-        std::cerr << "GLEW initialization failed: " << glewGetErrorString(err) << std::endl;
-        return -1;
-    }
+	// Initialize GLEW
+	glewExperimental = GL_TRUE;
+	GLenum err = glewInit();
+	if (err != GLEW_OK) {
+		std::cerr << "GLEW initialization failed: " << glewGetErrorString(err) << std::endl;
+		return -1;
+	}
 
-    // Clear any errors from GLEW init
-    while (glGetError() != GL_NO_ERROR);
+	// Clear any errors from GLEW init
+	while (glGetError() != GL_NO_ERROR);
 
-    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
-    std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
-
-
-    textRenderer = new TextRenderer("media/font.png", windowWidth, windowHeight);
-
-    // Initialize
-    initShaders();
-    initTextures();
-    initQuad();
+	std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+	std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
 
-    initCollisionResources();
+	textRenderer = new TextRenderer("media/font.png", windowWidth, windowHeight);
+
+	// Initialize
+	initShaders();
+	initTextures();
+	initQuad();
 
 
-    // Load protagonist texture
-    protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data);
-    if (protagonist.tex == 0)
-    {
-        std::cout << "Warning: Could not load protagonist sprite" << std::endl;
-        return 1;
-    }
+	initCollisionResources();
 
-    protagonist.x = 200;
-    protagonist.y = 300;
+	// Load protagonist texture
+	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.raw_up_data, protagonist.raw_down_data, protagonist.raw_rest_data);
+	if (protagonist.tex == 0)
+	{
+		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
+		return 1;
+	}
 
+	protagonist.to_present_up_data = protagonist.raw_up_data;
+	protagonist.to_present_down_data = protagonist.raw_down_data;
+	protagonist.to_present_rest_data = protagonist.raw_rest_data;
+	protagonist.rebuildPointers();
 
-
-    background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.raw_data);
-    if (background.tex == 0)
-    {
-        std::cout << "Warning: Could not load background sprite" << std::endl;
-        return 2;
-    }
-
-    if (!chunkForegroundTexture("media/foreground.png"))
-    {
-        std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
-        return 3;
-    }
+	protagonist.x = 200;
+	protagonist.y = 300;
 
 
 
-    //    printControls();
+	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.raw_data);
+	if (background.tex == 0)
+	{
+		std::cout << "Warning: Could not load background sprite" << std::endl;
+		return 2;
+	}
 
-        // Register callbacks
-    glutDisplayFunc(display);
-    glutReshapeFunc(reshape);
-    glutKeyboardFunc(keyboard);
-    glutSpecialFunc(specialKeys);
-    glutSpecialUpFunc(specialKeysUp);
-    glutMouseFunc(mouse);
-    glutMotionFunc(motion);
-    glutPassiveMotionFunc(passiveMotion);
-
-    glutSpecialFunc(specialKeyboard);
-    glutSpecialUpFunc(specialKeyboardUp);
+	if (!chunkForegroundTexture("media/foreground.png"))
+	{
+		std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
+		return 3;
+	}
 
 
-    glutFullScreen();
 
-    // Main loop
-    glutMainLoop();
+	//    printControls();
 
-    return 0;
+		// Register callbacks
+	glutDisplayFunc(display);
+	glutReshapeFunc(reshape);
+	glutKeyboardFunc(keyboard);
+	glutSpecialFunc(specialKeys);
+	glutSpecialUpFunc(specialKeysUp);
+	glutMouseFunc(mouse);
+	glutMotionFunc(motion);
+	glutPassiveMotionFunc(passiveMotion);
+
+	glutSpecialFunc(specialKeyboard);
+	glutSpecialUpFunc(specialKeyboardUp);
+
+
+	glutFullScreen();
+
+	// Main loop
+	glutMainLoop();
+
+	return 0;
 }
