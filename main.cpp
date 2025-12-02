@@ -229,7 +229,7 @@ public:
                             }
                             else
                             {
-                                glm::vec3 red_colour = hsbToRgb(60 * duration / animation_length, 1.0f, 1.0f);
+                                glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, 1.0f, sqrt(1.0f - duration / animation_length));
 
                                 to_present_data_pointers[j][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
                                 to_present_data_pointers[j][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
