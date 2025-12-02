@@ -122,8 +122,15 @@ public:
 
 	void add_blackening_points(const vector<glm::vec2>& locations)
 	{
-		for (size_t i = 0; i < locations.size(); i++)
-			blackening_age_map[locations[i]] = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+        for (size_t i = 0; i < locations.size(); i++)
+        {
+            float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+            map<glm::vec2, float>::iterator j = blackening_age_map.find(locations[i]);
+
+            //if (j == blackening_age_map.end())
+                blackening_age_map[locations[i]] = glut_curr_time;
+        }
 
 		to_present_data = raw_data;
 
