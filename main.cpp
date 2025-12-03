@@ -162,15 +162,10 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
-
-
-
 		for (size_t i = 0; i < to_present_data_pointers.size()/* && i < raw_data_pointers.size()*/; i++)
 		{
 			if (to_present_data_pointers[i] == 0 /*|| raw_data_pointers[i] == 0*/)
 				continue;
-
-			//memcpy(to_present_data_pointers[i], raw_data_pointers[i], width * height * 4 * sizeof(unsigned char));
 
 			for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
 			{
@@ -384,7 +379,7 @@ public:
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_down_data.data());
 
-		else // REST_STATE
+		else if(state == REST_STATE)
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_rest_data.data());
