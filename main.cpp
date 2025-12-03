@@ -264,12 +264,10 @@ class sprite : public pre_sprite
 public:
 
 	vector<unsigned char> to_present_data;
-	vector<unsigned char> raw_data;
 
 	sprite(const sprite& other)
 		: pre_sprite(other),
-		to_present_data(other.to_present_data),
-		raw_data(other.raw_data)
+		to_present_data(other.to_present_data)
 	{
 		// Re-point to THIS object's vectors, not the copied-from object's
 		to_present_data_pointers.clear();
@@ -459,8 +457,8 @@ public:
 		x = srcStartX;  // Position in original image coordinates
 		y = srcStartY;
 
-		raw_data = src_raw_data;
-		to_present_data = raw_data;
+		//raw_data = src_raw_data;
+		to_present_data = src_raw_data;
 
 
 	}
@@ -1852,7 +1850,7 @@ void detectEdgeCollisions()
 
 
 	{
-		if (collisionPoints.size() > 0)
+		if (1)//collisionPoints.size() > 0)
 		{
 			vector<glm::vec2> protagonist_blackening_points;
 
@@ -2962,7 +2960,7 @@ int main(int argc, char** argv) {
 	protagonist.x = 200;
 	protagonist.y = 300;
 
-	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.raw_data);
+	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.to_present_data);
 	if (background.tex == 0)
 	{
 		std::cout << "Warning: Could not load background sprite" << std::endl;
