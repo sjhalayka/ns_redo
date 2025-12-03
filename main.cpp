@@ -194,33 +194,33 @@ public:
 							falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
 							const float alpha = falloff * MAX_ALPHA;
 
-							const size_t idx = (y * width + x) * 4;
+							const size_t index = (y * width + x) * 4;
 
 
 
 							const float duration = glut_curr_time - ci->second;
 
-							const float animation_length = 1.0;
+							const float animation_length = 5.0;
 
 							if (duration >= animation_length)
 							{
-								to_present_data_pointers[i][idx + 0] = 0;
-								to_present_data_pointers[i][idx + 1] = 0;
-								to_present_data_pointers[i][idx + 2] = 0;
+								to_present_data_pointers[i][index + 0] = 0;
+								to_present_data_pointers[i][index + 1] = 0;
+								to_present_data_pointers[i][index + 2] = 0;
 							}
 							else
 							{
 								const glm::vec3 current(
-									to_present_data_pointers[i][idx + 0],
-									to_present_data_pointers[i][idx + 1],
-									to_present_data_pointers[i][idx + 2]
+									to_present_data_pointers[i][index + 0],
+									to_present_data_pointers[i][index + 1],
+									to_present_data_pointers[i][index + 2]
 								);
 
 								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
 
-								to_present_data_pointers[i][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-								to_present_data_pointers[i][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-								to_present_data_pointers[i][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+								to_present_data_pointers[i][index + 0] = red_colour.r;// static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+								to_present_data_pointers[i][index + 1] = red_colour.g;// static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+								to_present_data_pointers[i][index + 2] = red_colour.b;// static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
 							}
 
 						}
@@ -1984,27 +1984,27 @@ void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, f
 	drawQuad();
 	current = dst;
 }
-
-void addObstacle(float x, float y, float radius, bool add) {
-	glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
-	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
-
-	glUseProgram(obstacleProgram);
-	setTextureUniform(obstacleProgram, "obstacles", 0, obstacleTex);
-	glUniform2f(glGetUniformLocation(obstacleProgram, "point"), x, y);
-	glUniform1f(glGetUniformLocation(obstacleProgram, "radius"), radius);
-	glUniform2f(glGetUniformLocation(obstacleProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform2f(glGetUniformLocation(obstacleProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
-	glUniform1f(glGetUniformLocation(obstacleProgram, "addOrRemove"), add ? 1.0f : 0.0f);
-
-	drawQuad();
-
-	// Copy back to obstacle texture
-	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
-	glUseProgram(copyProgram);
-	setTextureUniform(copyProgram, "source", 0, tempTex);
-	drawQuad();
-}
+//
+//void addObstacle(float x, float y, float radius, bool add) {
+//	glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
+//	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+//
+//	glUseProgram(obstacleProgram);
+//	setTextureUniform(obstacleProgram, "obstacles", 0, obstacleTex);
+//	glUniform2f(glGetUniformLocation(obstacleProgram, "point"), x, y);
+//	glUniform1f(glGetUniformLocation(obstacleProgram, "radius"), radius);
+//	glUniform2f(glGetUniformLocation(obstacleProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+//	glUniform2f(glGetUniformLocation(obstacleProgram, "aspectRatio"), (float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
+//	glUniform1f(glGetUniformLocation(obstacleProgram, "addOrRemove"), add ? 1.0f : 0.0f);
+//
+//	drawQuad();
+//
+//	// Copy back to obstacle texture
+//	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+//	glUseProgram(copyProgram);
+//	setTextureUniform(copyProgram, "source", 0, tempTex);
+//	drawQuad();
+//}
 
 /**
  * Add or remove obstacles using a sprite texture as a stamp.
@@ -2539,23 +2539,38 @@ void display()
 {
 
 	// Fixed time step
-	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	static double accumulator = 0.0;
+	//static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//static double accumulator = 0.0;
 
-	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	double frameTime = newTime - currentTime;
-	currentTime = newTime;
+	//double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//double frameTime = newTime - currentTime;
+	//currentTime = newTime;
 
-	if (frameTime > DT)
-		frameTime = DT;
+	//if (frameTime > DT)
+	//	frameTime = DT;
 
-	accumulator += frameTime;
+	//accumulator += frameTime;
 
-	while (accumulator >= DT)
+	//while (accumulator >= DT)
+	//{
+	//	simulate();
+	//	accumulator -= DT;
+	//	GLOBAL_TIME += DT;
+	//}
+
+
+	static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
+	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+	const float d = 1.0 / FPS;
+
+	DT = currentTime - lastTime;
+
+	if (DT > d)
 	{
 		simulate();
-		accumulator -= DT;
 		GLOBAL_TIME += DT;
+		lastTime = currentTime;
 	}
 
 
@@ -2583,11 +2598,7 @@ void display()
 		addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.0004f);
 	}
 
-	if (middleMouseDown || (leftMouseDown && shiftDown)) {
-		float x = (float)mouseX / windowWidth;
-		float y = 1.0f - (float)mouseY / windowHeight;
-		addObstacle(x, y, 0.02f, true);
-	}
+
 
 	lastMouseX = mouseX;
 	lastMouseY = mouseY;
