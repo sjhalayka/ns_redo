@@ -162,9 +162,9 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
-		for (size_t i = 0; i < to_present_data_pointers.size()/* && i < raw_data_pointers.size()*/; i++)
+		for (size_t i = 0; i < to_present_data_pointers.size(); i++)
 		{
-			if (to_present_data_pointers[i] == 0 /*|| raw_data_pointers[i] == 0*/)
+			if (to_present_data_pointers[i] == 0)
 				continue;
 
 			for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
@@ -192,56 +192,35 @@ public:
 						{
 							float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
 							falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
+							const float alpha = falloff * MAX_ALPHA;
 
-							// Optional: use smoothstep for even smoother falloff
-							// float t = distSq * INV_RADIUS_SQ;
-							// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
+							const size_t idx = (y * width + x) * 4;
 
-							float alpha = falloff * MAX_ALPHA;
+							const glm::vec3 current(
+								to_present_data_pointers[i][idx + 0],
+								to_present_data_pointers[i][idx + 1],
+								to_present_data_pointers[i][idx + 2]
+							);
 
-							size_t idx = (y * width + x) * 4;
+							const float duration = glut_curr_time - ci->second;
 
+							const float animation_length = 1.0;
 
+							if (duration >= animation_length)
 							{
-
-						//							*to_present_data_pointers[j] = *raw_data_pointers[j];
-
-
-
-
-															// Blend orange with existing color (additive or screen-like blending)
-															// We'll do a soft additive blend toward orange
-								glm::vec3 current(
-									to_present_data_pointers[i][idx + 0],
-									to_present_data_pointers[i][idx + 1],
-									to_present_data_pointers[i][idx + 2]
-								);
-
-								const float duration = glut_curr_time - ci->second;
-
-								const float animation_length = 1.0;
-
-								if (duration >= animation_length)
-								{
-									//glm::vec3 blended = current + (COLOUR - current) * alpha;
-
-									//unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-									//unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-									//unsigned char b = (unsigned char)std::min(255.0f, blended.z);
-
-									to_present_data_pointers[i][idx + 0] = 0;
-									to_present_data_pointers[i][idx + 1] = 0;
-									to_present_data_pointers[i][idx + 2] = 0;
-								}
-								else
-								{
-									glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, sqrt(1.0f - duration / animation_length));
-
-									to_present_data_pointers[i][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-									to_present_data_pointers[i][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-									to_present_data_pointers[i][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
-								}
+								to_present_data_pointers[i][idx + 0] = 0;
+								to_present_data_pointers[i][idx + 1] = 0;
+								to_present_data_pointers[i][idx + 2] = 0;
 							}
+							else
+							{
+								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, sqrt(1.0f - duration / animation_length));
+
+								to_present_data_pointers[i][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+								to_present_data_pointers[i][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+								to_present_data_pointers[i][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+							}
+
 						}
 					}
 				}
@@ -331,7 +310,7 @@ public:
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_down_data.data());
 
-		else if(state == REST_STATE)
+		else if (state == REST_STATE)
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_rest_data.data());
@@ -2266,10 +2245,10 @@ GLuint loadTextureFromFile_Triplet(
 	const char* down_filename,
 	const char* rest_filename,
 	int* outWidth, int* outHeight,
-	vector<unsigned char>& out_up_data, 
-	vector<unsigned char>& out_down_data, 
+	vector<unsigned char>& out_up_data,
+	vector<unsigned char>& out_down_data,
 	vector<unsigned char>& out_rest_data,
-	tri_sprite &t) 
+	tri_sprite& t)
 {
 	int width, height, channels;
 
