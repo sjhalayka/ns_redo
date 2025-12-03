@@ -155,7 +155,7 @@ public:
 		y = y + vel_y * dt;
 	}
 
-	void add_blackening_points(const vector<glm::vec2>& locations)
+	void animate_blackening(const vector<glm::vec2>& locations)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
@@ -196,11 +196,7 @@ public:
 
 							const size_t idx = (y * width + x) * 4;
 
-							const glm::vec3 current(
-								to_present_data_pointers[i][idx + 0],
-								to_present_data_pointers[i][idx + 1],
-								to_present_data_pointers[i][idx + 2]
-							);
+
 
 							const float duration = glut_curr_time - ci->second;
 
@@ -214,6 +210,12 @@ public:
 							}
 							else
 							{
+								const glm::vec3 current(
+									to_present_data_pointers[i][idx + 0],
+									to_present_data_pointers[i][idx + 1],
+									to_present_data_pointers[i][idx + 2]
+								);
+
 								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
 
 								to_present_data_pointers[i][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
@@ -224,10 +226,6 @@ public:
 						}
 					}
 				}
-
-				//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-				//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
-
 			}
 		}
 
@@ -1820,7 +1818,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			protagonist.add_blackening_points(protagonist_blackening_points);
+			protagonist.animate_blackening(protagonist_blackening_points);
 		}
 
 		for (size_t h = 0; h < foreground_chunked.size(); h++)
@@ -1861,7 +1859,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			foreground_chunked[h].add_blackening_points(blackening_points);
+			foreground_chunked[h].animate_blackening(blackening_points);
 		}
 
 
