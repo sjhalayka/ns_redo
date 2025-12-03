@@ -210,17 +210,24 @@ public:
 							}
 							else
 							{
-								const glm::vec3 current(
-									to_present_data_pointers[i][index + 0],
-									to_present_data_pointers[i][index + 1],
-									to_present_data_pointers[i][index + 2]
-								);
+								//const glm::vec3 current(
+								//	to_present_data_pointers[i][index + 0],
+								//	to_present_data_pointers[i][index + 1],
+								//	to_present_data_pointers[i][index + 2]
+								//);
 
-								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
+								//glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
 
-								to_present_data_pointers[i][index + 0] = red_colour.r;// static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-								to_present_data_pointers[i][index + 1] = red_colour.g;// static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-								to_present_data_pointers[i][index + 2] = red_colour.b;// static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+								float t = 1 - duration / animation_length;
+								float t2 = t * t;
+								float t4 = t2 * t2;
+								float r = 255.0f * min(1.f, t * 1.8f);
+								float g = 255.0f * min(1.f, t2 * 1.5f);
+								float b = 255.0f * t4;
+
+								to_present_data_pointers[i][index + 0] = r;// static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+								to_present_data_pointers[i][index + 1] = g;// static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+								to_present_data_pointers[i][index + 2] = b;// static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
 							}
 
 						}
