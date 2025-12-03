@@ -137,7 +137,7 @@ public:
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
 
 	vector<unsigned char*> to_present_data_pointers;
-	vector<unsigned char*> raw_data_pointers;
+	//vector<unsigned char*> raw_data_pointers;
 	virtual void update_tex(void) = 0;
 
 	bool isOnscreen(void)
@@ -165,12 +165,12 @@ public:
 
 
 
-		for (size_t i = 0; i < to_present_data_pointers.size() && i < raw_data_pointers.size(); i++)
+		for (size_t i = 0; i < to_present_data_pointers.size()/* && i < raw_data_pointers.size()*/; i++)
 		{
-			if (to_present_data_pointers[i] == 0 || raw_data_pointers[i] == 0)
+			if (to_present_data_pointers[i] == 0 /*|| raw_data_pointers[i] == 0*/)
 				continue;
 
-			memcpy(to_present_data_pointers[i], raw_data_pointers[i], width * height * 4 * sizeof(unsigned char));
+			//memcpy(to_present_data_pointers[i], raw_data_pointers[i], width * height * 4 * sizeof(unsigned char));
 
 			for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
 			{
@@ -224,7 +224,7 @@ public:
 
 								const float duration = glut_curr_time - ci->second;
 
-								const float animation_length = 1;
+								const float animation_length = 1.0;
 
 								if (duration >= animation_length)
 								{
@@ -278,15 +278,15 @@ public:
 	{
 		// Re-point to THIS object's vectors, not the copied-from object's
 		to_present_data_pointers.clear();
-		raw_data_pointers.clear();
+		//raw_data_pointers.clear();
 		to_present_data_pointers.push_back(&to_present_data[0]);
-		raw_data_pointers.push_back(&raw_data[0]);
+		//raw_data_pointers.push_back(&raw_data[0]);
 	}
 
 	sprite(void)
 	{
 		to_present_data_pointers.push_back(&to_present_data[0]);
-		raw_data_pointers.push_back(&raw_data[0]);
+		//raw_data_pointers.push_back(&raw_data[0]);
 	}
 
 	void update_tex(void)
@@ -310,9 +310,9 @@ public:
 	std::vector<unsigned char> to_present_down_data;
 	std::vector<unsigned char> to_present_rest_data;
 
-	std::vector<unsigned char> raw_up_data;
-	std::vector<unsigned char> raw_down_data;
-	std::vector<unsigned char> raw_rest_data;
+	//std::vector<unsigned char> raw_up_data;
+	//std::vector<unsigned char> raw_down_data;
+	//std::vector<unsigned char> raw_rest_data;
 
 	int state = REST_STATE;
 
@@ -322,7 +322,7 @@ public:
 	void rebuildPointers()
 	{
 		to_present_data_pointers.clear();
-		raw_data_pointers.clear();
+		//raw_data_pointers.clear();
 
 		// Only push valid pointers (vectors may be empty)
 		auto addIfNotEmpty = [&](std::vector<unsigned char>& v,
@@ -332,13 +332,13 @@ public:
 					list.push_back(v.data());
 			};
 
-		addIfNotEmpty(to_present_up_data, to_present_data_pointers);
+		addIfNotEmpty(to_present_up_data,   to_present_data_pointers);
 		addIfNotEmpty(to_present_down_data, to_present_data_pointers);
 		addIfNotEmpty(to_present_rest_data, to_present_data_pointers);
 
-		addIfNotEmpty(raw_up_data, raw_data_pointers);
-		addIfNotEmpty(raw_down_data, raw_data_pointers);
-		addIfNotEmpty(raw_rest_data, raw_data_pointers);
+		//addIfNotEmpty(raw_up_data, raw_data_pointers);
+		//addIfNotEmpty(raw_down_data, raw_data_pointers);
+		//addIfNotEmpty(raw_rest_data, raw_data_pointers);
 	}
 
 	//----------------------------------------------------------------------
@@ -358,9 +358,9 @@ public:
 		to_present_up_data(other.to_present_up_data),
 		to_present_down_data(other.to_present_down_data),
 		to_present_rest_data(other.to_present_rest_data),
-		raw_up_data(other.raw_up_data),
-		raw_down_data(other.raw_down_data),
-		raw_rest_data(other.raw_rest_data),
+		//raw_up_data(other.raw_up_data),
+		//raw_down_data(other.raw_down_data),
+		//raw_rest_data(other.raw_rest_data),
 		state(other.state)
 	{
 		// Copy is complete — now rebuild pointers safely
@@ -2956,22 +2956,16 @@ int main(int argc, char** argv) {
 	initCollisionResources();
 
 	// Load protagonist texture
-	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.raw_up_data, protagonist.raw_down_data, protagonist.raw_rest_data);
+	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data);
 	if (protagonist.tex == 0)
 	{
 		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
 		return 1;
 	}
 
-	protagonist.to_present_up_data = protagonist.raw_up_data;
-	protagonist.to_present_down_data = protagonist.raw_down_data;
-	protagonist.to_present_rest_data = protagonist.raw_rest_data;
 	protagonist.rebuildPointers();
-
 	protagonist.x = 200;
 	protagonist.y = 300;
-
-
 
 	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.raw_data);
 	if (background.tex == 0)
