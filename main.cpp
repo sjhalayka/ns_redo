@@ -138,6 +138,7 @@ public:
 
 	vector<unsigned char*> to_present_data_pointers;
 	vector<unsigned char*> raw_data_pointers;
+	virtual void update_tex(void) = 0;
 
 	bool isOnscreen(void)
 	{
@@ -161,99 +162,102 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
-		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
+
+
+
+		for (size_t i = 0; i < to_present_data_pointers.size() && i < raw_data_pointers.size(); i++)
 		{
-			glm::vec2 point(ci->first.x, ci->first.y);
+			if (to_present_data_pointers[i] == 0 || raw_data_pointers[i] == 0)
+				continue;
 
-			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
-			const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-			const glm::vec3 COLOUR(0, 0, 0);
-			const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
+			memcpy(to_present_data_pointers[i], raw_data_pointers[i], width * height * 4 * sizeof(unsigned char));
 
-			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
-			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
-			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
-			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
-
-			for (int y = minY; y <= maxY; ++y)
+			for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
 			{
-				for (int x = minX; x <= maxX; ++x)
+				glm::vec2 point(ci->first.x, ci->first.y);
+
+				const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+				const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
+				const glm::vec3 COLOUR(0, 0, 0);
+				const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
+
+				int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
+				int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
+				int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
+				int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
+
+				for (int y = minY; y <= maxY; ++y)
 				{
-					glm::vec2 diff(x - point.x, y - point.y);
-					float distSq = diff.x * diff.x + diff.y * diff.y;
-
-					if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
+					for (int x = minX; x <= maxX; ++x)
 					{
-						float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
-						falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
+						glm::vec2 diff(x - point.x, y - point.y);
+						float distSq = diff.x * diff.x + diff.y * diff.y;
 
-						// Optional: use smoothstep for even smoother falloff
-						// float t = distSq * INV_RADIUS_SQ;
-						// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
-
-						float alpha = falloff * MAX_ALPHA;
-
-						size_t idx = (y * width + x) * 4;
-
-
-						for (size_t j = 0; j < to_present_data_pointers.size() && j < raw_data_pointers.size(); j++)
+						if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
 						{
+							float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
+							falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
 
-							if (to_present_data_pointers[j] == 0 || raw_data_pointers[j] == 0)
-								continue;
+							// Optional: use smoothstep for even smoother falloff
+							// float t = distSq * INV_RADIUS_SQ;
+							// falloff = 1.0f - t * t * (3.0f - 2.0f * t);
 
-							//cout << to_present_data_pointers.size() << " " << raw_data_pointers.size() << endl;
+							float alpha = falloff * MAX_ALPHA;
 
-							*to_present_data_pointers[j] = *raw_data_pointers[j];
-
-
+							size_t idx = (y * width + x) * 4;
 
 
-							// Blend orange with existing color (additive or screen-like blending)
-							// We'll do a soft additive blend toward orange
-							glm::vec3 current(
-								to_present_data_pointers[j][idx + 0],
-								to_present_data_pointers[j][idx + 1],
-								to_present_data_pointers[j][idx + 2]
-							);
-
-							const float duration = glut_curr_time - ci->second;
-
-							const float animation_length = 1;
-
-							if (duration >= animation_length)
 							{
-								//glm::vec3 blended = current + (COLOUR - current) * alpha;
 
-								//unsigned char r = (unsigned char)std::min(255.0f, blended.x);
-								//unsigned char g = (unsigned char)std::min(255.0f, blended.y);
-								//unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+						//							*to_present_data_pointers[j] = *raw_data_pointers[j];
 
-								to_present_data_pointers[j][idx + 0] = 0;
-								to_present_data_pointers[j][idx + 1] = 0;
-								to_present_data_pointers[j][idx + 2] = 0;
-							}
-							else
-							{
-								glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, sqrt(1.0f - duration / animation_length));
 
-								to_present_data_pointers[j][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-								to_present_data_pointers[j][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-								to_present_data_pointers[j][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+
+
+															// Blend orange with existing color (additive or screen-like blending)
+															// We'll do a soft additive blend toward orange
+								glm::vec3 current(
+									to_present_data_pointers[i][idx + 0],
+									to_present_data_pointers[i][idx + 1],
+									to_present_data_pointers[i][idx + 2]
+								);
+
+								const float duration = glut_curr_time - ci->second;
+
+								const float animation_length = 1;
+
+								if (duration >= animation_length)
+								{
+									//glm::vec3 blended = current + (COLOUR - current) * alpha;
+
+									//unsigned char r = (unsigned char)std::min(255.0f, blended.x);
+									//unsigned char g = (unsigned char)std::min(255.0f, blended.y);
+									//unsigned char b = (unsigned char)std::min(255.0f, blended.z);
+
+									to_present_data_pointers[i][idx + 0] = 0;
+									to_present_data_pointers[i][idx + 1] = 0;
+									to_present_data_pointers[i][idx + 2] = 0;
+								}
+								else
+								{
+									glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, sqrt(1.0f - duration / animation_length));
+
+									to_present_data_pointers[i][idx + 0] = static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
+									to_present_data_pointers[i][idx + 1] = static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
+									to_present_data_pointers[i][idx + 2] = static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+								}
 							}
 						}
 					}
 				}
+
+				//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
+				//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
+
 			}
-
-			//std::cout << "new soft blackening at (" << point.x << ", " << point.y << ")" << std::endl;
-			//std::cout << "total blackened points: " << blackening_points.size() << std::endl;
-
 		}
 
-
-		//  if (made_change)
-
+		update_tex();
 	}
 };
 
@@ -290,9 +294,6 @@ public:
 		glBindTexture(GL_TEXTURE_2D, tex);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, to_present_data.data());
 	}
-
-
-
 };
 
 
@@ -2703,8 +2704,6 @@ void display()
 
 	if (protagonist.tex != 0)
 	{
-		protagonist.update_tex();
-
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
 			protagonist.width, protagonist.height);
@@ -2714,8 +2713,6 @@ void display()
 	{
 		if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
 		{
-			foreground_chunked[i].update_tex();
-
 			drawSprite(foreground_chunked[i].tex,
 				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
 				foreground_chunked[i].width, foreground_chunked[i].height);
