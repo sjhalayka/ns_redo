@@ -173,7 +173,6 @@ public:
 
 				const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
 				const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-				const glm::vec3 COLOUR(0, 0, 0);
 				const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
 
 				int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
@@ -210,12 +209,6 @@ public:
 							}
 							else
 							{
-								//const glm::vec3 current(
-								//	to_present_data_pointers[i][index + 0],
-								//	to_present_data_pointers[i][index + 1],
-								//	to_present_data_pointers[i][index + 2]
-								//);
-
 								//glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
 
 								float t = 1 - duration / animation_length;
@@ -225,9 +218,9 @@ public:
 								float g = 255.0f * min(1.f, t2 * 1.5f);
 								float b = 255.0f * t4;
 
-								to_present_data_pointers[i][index + 0] = r;// static_cast<unsigned char>(naive_lerp(current.r, red_colour.r, duration / animation_length));
-								to_present_data_pointers[i][index + 1] = g;// static_cast<unsigned char>(naive_lerp(current.g, red_colour.g, duration / animation_length));
-								to_present_data_pointers[i][index + 2] = b;// static_cast<unsigned char>(naive_lerp(current.b, red_colour.b, duration / animation_length));
+								to_present_data_pointers[i][index + 0] = static_cast<unsigned int>(r);
+								to_present_data_pointers[i][index + 1] = static_cast<unsigned int>(g);
+								to_present_data_pointers[i][index + 2] = static_cast<unsigned int>(b);
 							}
 
 						}
@@ -2408,16 +2401,44 @@ bool chunkForegroundTexture(const char* sourceFilename)
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-			// Create foreground_tile and add to vector
-			foreground_tile tile(
-				tileTex,
-				foreground_chunk_size_width,
-				foreground_chunk_size_height,
-				static_cast<float>(srcStartX),  // Position in original image coordinates
-				static_cast<float>(srcStartY),
-				tileData);
 
-			foreground_chunked.push_back(tile);
+
+
+
+
+			// Create foreground_tile and add to vector
+
+
+			bool found_non_transparent = false;
+
+			for (size_t i = 0; i < foreground_chunk_size_width; i++)
+			{
+				for (size_t j = 0; j < foreground_chunk_size_height; j++)
+				{
+					size_t index = (j * foreground_chunk_size_width + i) * 4;
+
+					if (tileData[index + 3] > 0)
+					{
+						found_non_transparent = true;
+						i = foreground_chunk_size_width;
+						j = foreground_chunk_size_height;
+						break;
+					}
+				}
+			}
+
+			if (found_non_transparent == true)
+			{
+				foreground_tile tile(
+					tileTex,
+					foreground_chunk_size_width,
+					foreground_chunk_size_height,
+					static_cast<float>(srcStartX),  // Position in original image coordinates
+					static_cast<float>(srcStartY),
+					tileData);
+
+				foreground_chunked.push_back(tile);
+			}
 		}
 	}
 
@@ -2547,39 +2568,39 @@ void display()
 {
 
 	// Fixed time step
-	//static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	//static double accumulator = 0.0;
+	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	static double accumulator = 0.0;
 
-	//double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	//double frameTime = newTime - currentTime;
-	//currentTime = newTime;
+	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	double frameTime = newTime - currentTime;
+	currentTime = newTime;
 
-	//if (frameTime > DT)
-	//	frameTime = DT;
+	if (frameTime > DT)
+		frameTime = DT;
 
-	//accumulator += frameTime;
+	accumulator += frameTime;
 
-	//while (accumulator >= DT)
-	//{
-	//	simulate();
-	//	accumulator -= DT;
-	//	GLOBAL_TIME += DT;
-	//}
-
-
-	static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
-	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-
-	const float d = 1.0 / FPS;
-
-	DT = currentTime - lastTime;
-
-	if (DT > d)
+	while (accumulator >= DT)
 	{
 		simulate();
+		accumulator -= DT;
 		GLOBAL_TIME += DT;
-		lastTime = currentTime;
 	}
+
+
+	//static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
+	//float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+	//const float d = 1.0f / FPS;
+	//
+	//DT = currentTime - lastTime;
+
+	//if (DT > d)
+	//{
+	//	simulate();
+	//	GLOBAL_TIME += DT;
+	//	lastTime = currentTime;
+	//}
 
 
 
