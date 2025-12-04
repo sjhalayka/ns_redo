@@ -1820,7 +1820,7 @@ void detectEdgeCollisions()
 					127,
 					hit))
 				{
-					if (inside)
+					if (inside && collisionPoints[i].w > 0)
 					{
 						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
 					}
