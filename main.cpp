@@ -417,11 +417,13 @@ public:
 	}
 };
 
+// to do: cull bullets that hit things and cull bullets off screen
+
 class sine_bullet : public bullet
 {
 public:
-	float sinusoidal_frequency = 5.0f;
-	float sinusoidal_amplitude = 0.001f;
+	float sinusoidal_frequency = 50.0f;
+	float sinusoidal_amplitude = 0.01f;
 	bool sinusoidal_shift = false;
 
 	void integrate(float dt)
@@ -2657,7 +2659,7 @@ const float MIN_BULLET_INTERVAL = 0.25f;
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
 
 bool x3_fire = false;
-bool x5_fire = false;
+bool x5_fire = true;
 
 
 
@@ -2679,7 +2681,7 @@ void fireBullet(void)
 
 	s.to_present_data = bullet_template.to_present_data;
 	s.x = (protagonist.x + protagonist.width);
-	s.y = (protagonist.y + protagonist.height) - protagonist.height/2.0;
+	s.y = (protagonist.y + protagonist.height) - protagonist.height / 2.0f;
 	s.y = windowHeight - 1 - s.y;
 
 	s.x /= windowWidth;
@@ -2719,7 +2721,7 @@ void fireBullet(void)
 		newBullet.vel_x = 1.0f * cos(angle);
 		newBullet.vel_y = 1.0f * sin(angle);
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 0.005f;
+//		newBullet.sinusoidal_amplitude = 0.005f;
 		newBullet.birth_time = GLOBAL_TIME;// GLOBAL_TIME;
 		newBullet.death_time = -1;
 
