@@ -980,10 +980,11 @@ uniform float dt;
 uniform float dissipation;
 
 void main() {
-    if (texture(obstacles, texCoord).x > 0.5) {
-        fragColor = vec4(0.0);
-        return;
-    }
+// note: do not erase density
+//    if (texture(obstacles, texCoord).x > 0.5) {
+//        fragColor = vec4(0.0);
+//        return;
+//    }
     
     vec2 vel = texture(velocity, texCoord).xy;
     vec2 pos = texCoord - vel * texelSize * dt;
@@ -1006,10 +1007,11 @@ uniform vec2 texelSize;
 
 void main() {
     float oC = texture(obstacles, texCoord).x;
-    if (oC > 0.5) {
-        fragColor = vec4(0.0);
-        return;
-    }
+// note: do not erase density
+//    if (oC > 0.5) {
+ //       fragColor = vec4(0.0);
+ //       return;
+ //   }
     
     vec2 vL = texture(velocity, texCoord - vec2(texelSize.x, 0.0)).xy;
     vec2 vR = texture(velocity, texCoord + vec2(texelSize.x, 0.0)).xy;
