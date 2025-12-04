@@ -31,7 +31,7 @@ const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.975f;
 const float VELOCITY_DISSIPATION = 1.0;// 0.99999f;
-const float VORTICITY_SCALE = 10.0f;
+const float VORTICITY_SCALE = 1.0f;
 
 bool red_mode = true;
 
@@ -428,7 +428,10 @@ public:
 
 	void integrate(float dt)
 	{
-		float aspect = windowWidth / float(windowHeight);
+		const float old_x = x;
+		const float old_y = y;
+
+		const float aspect = windowWidth / float(windowHeight);
 
 		float dirX = vel_x * aspect * DT;
 		float dirY = vel_y * DT;
@@ -2679,6 +2682,7 @@ void fireBullet(void)
 
 	sine_bullet s;
 
+	s.tex = bullet_template.tex;
 	s.to_present_data = bullet_template.to_present_data;
 	s.x = (protagonist.x + protagonist.width);
 	s.y = (protagonist.y + protagonist.height) - protagonist.height / 2.0f;
@@ -2787,6 +2791,8 @@ void display()
 			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 1, 0, 0, 0.00008f);
 		else
 			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 0, 1, 0, 0.00008f);
+
+		addSource(velocityTex, velocityFBO, currentVelocity, ally_bullets[i]->x, ally_bullets[i]->y, ally_bullets[i]->vel_x, ally_bullets[i]->vel_y, 0.0f, 0.00004f);
 	}
 
 
@@ -2807,7 +2813,7 @@ void display()
 		float dx = (float)(mouseX - lastMouseX) * 2.0f;
 		float dy = (float)(lastMouseY - mouseY) * 2.0f;
 
-		addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.0004f);
+		addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
 	}
 
 
