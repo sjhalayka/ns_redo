@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <tuple>
+#include <chrono>
 using namespace std;
 
 
@@ -403,9 +404,80 @@ public:
 };
 
 
+class bullet : public sprite
+{
+public:
+	float birth_time = 0;
+	float death_time = -1;
+
+	virtual void integrate(float dt)
+	{
+
+
+	}
+};
+
+class sine_bullet : public bullet
+{
+public:
+	float sinusoidal_frequency = 5.0f;
+	float sinusoidal_amplitude = 0.001f;
+	bool sinusoidal_shift = false;
+
+	void integrate(float dt)
+	{
+		float aspect = windowWidth / float(windowHeight);
+
+		float dirX = vel_x * aspect * DT;
+		float dirY = vel_y * DT;
+
+		// Normalize the direction vector
+		float dirLength = sqrt(dirX * dirX + dirY * dirY);
+		if (dirLength > 0) {
+			dirX /= dirLength;
+			dirY /= dirLength;
+		}
+
+		// Calculate the perpendicular direction vector (rotate 90 degrees)
+		float perpX = -dirY;
+		float perpY = dirX;
+
+		// Calculate time-based sinusoidal amplitude
+		// Use the birth_time to ensure continuous motion
+		float timeSinceCreation = GLOBAL_TIME - birth_time;
+		float frequency = sinusoidal_frequency; // Controls how many waves appear
+		float amplitude = sinusoidal_amplitude; // Controls wave height
+
+
+		float sinValue = 0;
+
+		if (sinusoidal_shift)
+			sinValue = -sin(timeSinceCreation * frequency);
+		else
+			sinValue = sin(timeSinceCreation * frequency);
+
+		// Move forward along original path
+		float forwardSpeed = dirLength; // Original velocity magnitude
+		x += dirX * forwardSpeed;
+		y += dirY * forwardSpeed;
+
+		// Add sinusoidal motion perpendicular to the path
+		x += perpX * sinValue * amplitude;
+		y += perpY * sinValue * amplitude;
+	}
+};
+
+
+vector<unique_ptr<bullet>> ally_bullets;
+
+
+
+
 
 friendly_ship protagonist;
 background_tile background;
+bullet bullet_template;
+
 
 const int foreground_chunk_size_width = 360;
 const int foreground_chunk_size_height = 360;
@@ -2516,6 +2588,15 @@ void simulate()
 {
 	protagonist.integrate(DT);
 
+	for (size_t i = 0; i < ally_bullets.size(); i++)
+	{
+		ally_bullets[i]->integrate(DT);
+	}
+
+
+
+
+
 	GLuint clearColor[4] = { 0, 0, 0, 0 };
 	glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
@@ -2564,6 +2645,93 @@ void simulate()
 
 }
 
+
+
+
+
+bool spacePressed = false;
+
+const float MIN_BULLET_INTERVAL = 0.25f;
+
+// Add a variable to track the time of the last fired bullet
+std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
+
+bool x3_fire = false;
+bool x5_fire = false;
+
+
+
+
+
+void fireBullet(void)
+{
+	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> timeSinceLastBullet = currentTime - lastBulletTime;
+
+	if (timeSinceLastBullet.count() < MIN_BULLET_INTERVAL)
+		return;
+
+	lastBulletTime = currentTime;
+
+	cout << "firing bullet" << endl;
+
+	sine_bullet s;
+
+	s.to_present_data = bullet_template.to_present_data;
+	s.x = (protagonist.x + protagonist.width);
+	s.y = (protagonist.y + protagonist.height) - protagonist.height/2.0;
+	s.y = windowHeight - 1 - s.y;
+
+	s.x /= windowWidth;
+	s.y /= windowHeight;
+
+	cout << s.x << " " << s.y << endl;
+
+
+	static const float pi = 4.0f * atanf(1.0f);
+
+	float angle_start = 0;
+	float angle_end = 0;
+	size_t num_streams = 1;
+
+	if (x3_fire) {
+		angle_start = 0.1f;
+		angle_end = -0.1f;
+		num_streams = 3;
+	}
+
+	if (x5_fire) {
+		angle_start = 0.2f;
+		angle_end = -0.2f;
+		num_streams = 5;
+	}
+
+	float angle_step = 0;
+	if (num_streams > 1) {
+		angle_step = (angle_end - angle_start) / (num_streams - 1);
+	}
+
+	float angle = angle_start;
+
+	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
+	{
+		sine_bullet newBullet = s;
+		newBullet.vel_x = 1.0f * cos(angle);
+		newBullet.vel_y = 1.0f * sin(angle);
+		newBullet.sinusoidal_shift = false;
+		newBullet.sinusoidal_amplitude = 0.005f;
+		newBullet.birth_time = GLOBAL_TIME;// GLOBAL_TIME;
+		newBullet.death_time = -1;
+
+		cout << "Added new bullet" << endl;
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+
+		cout << "Added new bullet" << endl;
+		newBullet.sinusoidal_shift = true;
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+	}
+}
+
 void display()
 {
 
@@ -2604,7 +2772,20 @@ void display()
 
 
 
+	if (spacePressed)
+		fireBullet();
 
+
+
+
+
+	for (size_t i = 0; i < ally_bullets.size(); i++)
+	{
+		if (red_mode)
+			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 1, 0, 0, 0.00008f);
+		else
+			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 0, 1, 0, 0.00008f);
+	}
 
 
 	// Add continuous sources based on mouse input
@@ -2709,6 +2890,9 @@ void keyboard(unsigned char key, int x, int y)
 {
 	switch (key)
 	{
+	case ' ': // Space bar
+		spacePressed = true;
+		break;
 
 	case 'x':
 	{
@@ -2847,6 +3031,8 @@ void specialKeyboardUp(int key, int x, int y)
 	case GLUT_KEY_RIGHT:
 		rightKeyPressed = false;
 		break;
+
+
 	}
 
 
@@ -2878,7 +3064,18 @@ void specialKeyboardUp(int key, int x, int y)
 	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
+void keyboardup(unsigned char key, int x, int y) {
+	switch (key) {
+	case ' ': // Space bar
 
+		spacePressed = false;
+
+
+
+
+		break;
+	}
+}
 
 
 #pragma comment(lib, "freeglut")
@@ -2949,7 +3146,12 @@ int main(int argc, char** argv) {
 		return 3;
 	}
 
-
+	bullet_template.tex = loadTextureFromFile("media/bullet.png", &bullet_template.width, &bullet_template.height, bullet_template.to_present_data);
+	if (bullet_template.tex == 0)
+	{
+		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
+		return 4;
+	}
 
 	//    printControls();
 
@@ -2965,7 +3167,7 @@ int main(int argc, char** argv) {
 
 	glutSpecialFunc(specialKeyboard);
 	glutSpecialUpFunc(specialKeyboardUp);
-
+	glutKeyboardUpFunc(keyboardup);
 
 	glutFullScreen();
 
