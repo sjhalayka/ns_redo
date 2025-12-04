@@ -422,33 +422,50 @@ public:
 class sine_bullet : public bullet
 {
 public:
-	float sinusoidal_frequency = 50.0f;
+	float sinusoidal_frequency = 500.0f;
 	float sinusoidal_amplitude = 0.01f;
 	bool sinusoidal_shift = false;
 
-	void integrate(float dt) override
+
+
+	void integrate(float dt)
 	{
-		// Store the base position before sinusoidal offset
-		float base_x = x + vel_x * dt;
-		float base_y = y + vel_y * dt;
+		// Store old position for reference
+		float old_x = x;
+		float old_y = y;
+
+		// Update base position using current velocity
+		x = old_x + vel_x * dt;
+		y = old_y + vel_y * dt;
 
 		// Direction vector (normalized)
 		float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
-		float dirX = (dirLength > 0) ? vel_x / dirLength : 1.0f;
-		float dirY = (dirLength > 0) ? vel_y / dirLength : 0.0f;
+		if (dirLength > 0.0001f) {
+			float dirX = vel_x / dirLength;
+			float dirY = vel_y / dirLength;
 
-		// Perpendicular direction (for sinusoidal motion)
-		float perpX = -dirY;
-		float perpY = dirX;
+			// Perpendicular direction (for sinusoidal motion)
+			float perpX = -dirY;
+			float perpY = dirX;
 
-		// Time-based sinusoidal offset
-		float timeSinceCreation = GLOBAL_TIME - birth_time;
-		float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
-			: sin(timeSinceCreation * sinusoidal_frequency);
+			// Time-based sinusoidal offset
+			float timeSinceCreation = GLOBAL_TIME - birth_time;
+			float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
+				: sin(timeSinceCreation * sinusoidal_frequency);
 
-		// Final position: base + perpendicular sinusoidal offset (all in pixels)
-		x = base_x + perpX * sinValue * sinusoidal_amplitude;
-		y = base_y + perpY * sinValue * sinusoidal_amplitude;
+			// Apply sinusoidal offset to position (in pixels)
+			x += 0.005* perpX * sinValue * sinusoidal_amplitude;
+			y += 0.005 * perpY * sinValue * sinusoidal_amplitude;
+
+			// Calculate the velocity from the position change (for visual/display purposes)
+			// Note: This doesn't actually change the base velocity vector
+			float actualVelX = (x - old_x) / dt;
+			float actualVelY = (y - old_y) / dt;
+
+			// If you want the velocity to reflect the sinusoidal motion, update it:
+			vel_x = actualVelX;
+			vel_y = actualVelY;
+		}
 	}
 
 };
@@ -2709,7 +2726,7 @@ void fireBullet(void)
 		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
 		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 5.0f;  // amplitude in PIXELS
+		newBullet.sinusoidal_amplitude = 50.0f;  // amplitude in PIXELS
 		newBullet.sinusoidal_frequency = 10.0f;
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
