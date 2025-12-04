@@ -454,8 +454,8 @@ public:
 				: sin(timeSinceCreation * sinusoidal_frequency);
 
 			// Apply sinusoidal offset to position (in pixels)
-			x += 0.005* perpX * sinValue * sinusoidal_amplitude;
-			y += 0.005 * perpY * sinValue * sinusoidal_amplitude;
+			x += 0.005f * perpX * sinValue * sinusoidal_amplitude;
+			y += 0.005f * perpY * sinValue * sinusoidal_amplitude;
 
 			// Calculate the velocity from the position change (for visual/display purposes)
 			// Note: This doesn't actually change the base velocity vector
@@ -525,6 +525,20 @@ GLuint spriteProgram;
 
 // Quad VAO
 GLuint quadVAO, quadVBO;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1693,6 +1707,131 @@ void initQuad() {
 
 
 
+const char* lineVertexSource = R"(
+#version 400 core
+layout(location = 0) in vec2 aPosition;
+layout(location = 1) in vec4 aColor;
+
+out vec4 vColor;
+
+uniform vec2 resolution;  // Window dimensions
+
+void main() {
+    // Convert from pixel coordinates to NDC [-1, 1]
+    vec2 ndc = (aPosition / resolution) * 2.0 - 1.0;
+    ndc.y = -ndc.y;  // Flip Y (screen coords have Y down, OpenGL has Y up)
+    
+    gl_Position = vec4(ndc, 0.0, 1.0);
+    vColor = aColor;
+}
+)";
+
+const char* lineFragmentSource = R"(
+#version 400 core
+in vec4 vColor;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vColor;
+}
+)";
+
+// ----- Data Structures -----
+
+struct LineVertex {
+	glm::vec2 position;
+	glm::vec4 color;
+};
+
+struct Line {
+	glm::vec2 start;
+	glm::vec2 end;
+	glm::vec4 color;  // RGBA, values 0.0-1.0
+
+	Line(glm::vec2 s, glm::vec2 e, glm::vec4 c)
+		: start(s), end(e), color(c) {
+	}
+
+	// Convenience constructor with default white color
+	Line(glm::vec2 s, glm::vec2 e)
+		: start(s), end(e), color(1.0f, 1.0f, 1.0f, 1.0f) {
+	}
+};
+
+
+
+
+
+
+GLuint lineProgram = 0;
+GLuint lineVAO = 0;
+GLuint lineVBO = 0;
+std::vector<Line> lines;  // Your vector of lines
+
+
+void initLineRenderer() {
+	// Create shader program
+	lineProgram = createProgram(lineVertexSource, lineFragmentSource);
+
+	// Create VAO and VBO
+	glGenVertexArrays(1, &lineVAO);
+	glGenBuffers(1, &lineVBO);
+
+	glBindVertexArray(lineVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+
+	// Position attribute (location 0)
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(LineVertex),
+		(void*)offsetof(LineVertex, position));
+
+	// Color attribute (location 1)
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(LineVertex),
+		(void*)offsetof(LineVertex, color));
+
+	glBindVertexArray(0);
+}
+
+// ----- Drawing -----
+
+void drawLines(const std::vector<Line>& linesToDraw) {
+	if (linesToDraw.empty()) return;
+
+	// Build vertex data from lines
+	std::vector<LineVertex> vertices;
+	vertices.reserve(linesToDraw.size() * 2);
+
+	for (const auto& line : linesToDraw) {
+		vertices.push_back({ line.start, line.color });
+		vertices.push_back({ line.end, line.color });
+	}
+
+	// Upload vertex data
+	glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+	glBufferData(GL_ARRAY_BUFFER,
+		vertices.size() * sizeof(LineVertex),
+		vertices.data(),
+		GL_DYNAMIC_DRAW);
+
+	// Draw
+	glUseProgram(lineProgram);
+	glUniform2f(glGetUniformLocation(lineProgram, "resolution"),
+		(float)windowWidth, (float)windowHeight);
+
+	glBindVertexArray(lineVAO);
+	glDrawArrays(GL_LINES, 0, (GLsizei)vertices.size());
+	glBindVertexArray(0);
+}
+
+// Optional: Draw with custom line width
+void drawLinesWithWidth(const std::vector<Line>& linesToDraw, float width) {
+	glLineWidth(width);
+	drawLines(linesToDraw);
+	glLineWidth(1.0f);  // Reset to default
+}
+
+
 void initCollisionResources()
 {
 	// 2-channel floating point texture: R = red density, G = green density
@@ -2674,7 +2813,7 @@ void simulate()
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.25f;
+const float MIN_BULLET_INTERVAL = 1.0f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -2896,6 +3035,22 @@ void display()
 	displayFPS();
 
 
+
+	lines.clear();
+
+	for (size_t i = 0; i < ally_bullets.size(); i++)
+	{
+		lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
+
+	}
+
+	//lines.push_back(Line(glm::vec2(100, 100), glm::vec2(500, 300), glm::vec4(1, 0, 0, 1)));  // Red
+	//lines.push_back(Line(glm::vec2(200, 200), glm::vec2(600, 400), glm::vec4(0, 1, 0, 1)));  // Green
+	//lines.push_back(Line(glm::vec2(50, 50), glm::vec2(400, 500)));  // White (default)
+
+
+
+	drawLinesWithWidth(lines, 4.0f);
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -3138,6 +3293,11 @@ int main(int argc, char** argv) {
 	initShaders();
 	initTextures();
 	initQuad();
+
+
+
+	initLineRenderer();
+
 
 
 	initCollisionResources();
