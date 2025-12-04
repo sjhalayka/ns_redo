@@ -426,52 +426,39 @@ public:
 	float sinusoidal_amplitude = 0.01f;
 	bool sinusoidal_shift = false;
 
-	void integrate(float dt)
+	void integrate(float dt) override
 	{
-		const float old_x = x;
-		const float old_y = y;
+		// Store the base position before sinusoidal offset
+		float base_x = x + vel_x * dt;
+		float base_y = y + vel_y * dt;
 
-		const float aspect = windowWidth / float(windowHeight);
+		// Direction vector (normalized)
+		float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
+		float dirX = (dirLength > 0) ? vel_x / dirLength : 1.0f;
+		float dirY = (dirLength > 0) ? vel_y / dirLength : 0.0f;
 
-		float dirX = vel_x * aspect * DT;
-		float dirY = vel_y * DT;
-
-		// Normalize the direction vector
-		float dirLength = sqrt(dirX * dirX + dirY * dirY);
-		if (dirLength > 0) {
-			dirX /= dirLength;
-			dirY /= dirLength;
-		}
-
-		// Calculate the perpendicular direction vector (rotate 90 degrees)
+		// Perpendicular direction (for sinusoidal motion)
 		float perpX = -dirY;
 		float perpY = dirX;
 
-		// Calculate time-based sinusoidal amplitude
-		// Use the birth_time to ensure continuous motion
+		// Time-based sinusoidal offset
 		float timeSinceCreation = GLOBAL_TIME - birth_time;
-		float frequency = sinusoidal_frequency; // Controls how many waves appear
-		float amplitude = sinusoidal_amplitude; // Controls wave height
+		float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
+			: sin(timeSinceCreation * sinusoidal_frequency);
 
-
-		float sinValue = 0;
-
-		if (sinusoidal_shift)
-			sinValue = -sin(timeSinceCreation * frequency);
-		else
-			sinValue = sin(timeSinceCreation * frequency);
-
-		// Move forward along original path
-		float forwardSpeed = dirLength; // Original velocity magnitude
-		x += dirX * forwardSpeed;
-		y += dirY * forwardSpeed;
-
-		// Add sinusoidal motion perpendicular to the path
-		x += perpX * sinValue * amplitude;
-		y += perpY * sinValue * amplitude;
+		// Final position: base + perpendicular sinusoidal offset (all in pixels)
+		x = base_x + perpX * sinValue * sinusoidal_amplitude;
+		y = base_y + perpY * sinValue * sinusoidal_amplitude;
 	}
+
 };
 
+inline float pixelToNormX(float px) { return px / (float)SIM_WIDTH; }
+inline float pixelToNormY(float py) { return 1.0f - py / (float)SIM_HEIGHT; }  // Flip Y
+
+// Convert pixel velocity to normalized velocity  
+inline float velPixelToNormX(float vx) { return vx / (float)SIM_WIDTH; }
+inline float velPixelToNormY(float vy) { return -vy / (float)SIM_HEIGHT; }
 
 vector<unique_ptr<bullet>> ally_bullets;
 
@@ -2044,7 +2031,8 @@ void applyVorticityForce() {
 	currentVelocity = dst;
 }
 
-void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius) {
+void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius) 
+{
 	int dst = 1 - current;
 	glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
 	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
@@ -2593,13 +2581,26 @@ void simulate()
 {
 	protagonist.integrate(DT);
 
-	for (size_t i = 0; i < ally_bullets.size(); i++)
+
+
+
+	//for (size_t i = 0; i < ally_bullets.size(); i++)
+	//{
+	//	ally_bullets[i]->integrate(DT);
+	//}
+
+	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
 	{
-		ally_bullets[i]->integrate(DT);
+		(*it)->integrate(DT);
+
+		if (false == (*it)->isOnscreen())
+		{
+			cout << "culling ally bullet" << endl;
+			it = ally_bullets.erase(it);
+		}
+		else
+			it++;
 	}
-
-
-
 
 
 	GLuint clearColor[4] = { 0, 0, 0, 0 };
@@ -2667,7 +2668,6 @@ bool x5_fire = true;
 
 
 
-
 void fireBullet(void)
 {
 	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
@@ -2678,65 +2678,52 @@ void fireBullet(void)
 
 	lastBulletTime = currentTime;
 
-	cout << "firing bullet" << endl;
-
 	sine_bullet s;
 
 	s.tex = bullet_template.tex;
 	s.to_present_data = bullet_template.to_present_data;
-	s.x = (protagonist.x + protagonist.width);
-	s.y = (protagonist.y + protagonist.height) - protagonist.height / 2.0f;
-	s.y = windowHeight - 1 - s.y;
 
-	s.x /= windowWidth;
-	s.y /= windowHeight;
-
-	cout << s.x << " " << s.y << endl;
-
+	// Position in PIXELS (no normalization)
+	s.x = protagonist.x + protagonist.width;
+	s.y = protagonist.y + protagonist.height / 2.0f;
+	s.width = bullet_template.width;
+	s.height = bullet_template.height;
 
 	static const float pi = 4.0f * atanf(1.0f);
 
-	float angle_start = 0;
-	float angle_end = 0;
+	float angle_start = 0, angle_end = 0;
 	size_t num_streams = 1;
 
-	if (x3_fire) {
-		angle_start = 0.1f;
-		angle_end = -0.1f;
-		num_streams = 3;
-	}
+	if (x3_fire) { angle_start = 0.1f; angle_end = -0.1f; num_streams = 3; }
+	if (x5_fire) { angle_start = 0.2f; angle_end = -0.2f; num_streams = 5; }
 
-	if (x5_fire) {
-		angle_start = 0.2f;
-		angle_end = -0.2f;
-		num_streams = 5;
-	}
-
-	float angle_step = 0;
-	if (num_streams > 1) {
-		angle_step = (angle_end - angle_start) / (num_streams - 1);
-	}
-
+	float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
 	float angle = angle_start;
+
+	// Bullet speed in PIXELS per second
+	const float BULLET_SPEED = 1600.0f;  // Adjust as needed
 
 	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
 	{
 		sine_bullet newBullet = s;
-		newBullet.vel_x = 1.0f * cos(angle);
-		newBullet.vel_y = 1.0f * sin(angle);
+		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
+		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-//		newBullet.sinusoidal_amplitude = 0.005f;
-		newBullet.birth_time = GLOBAL_TIME;// GLOBAL_TIME;
+		newBullet.sinusoidal_amplitude = 5.0f;  // amplitude in PIXELS
+		newBullet.sinusoidal_frequency = 10.0f;
+		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
 
-		cout << "Added new bullet" << endl;
 		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
 
-		cout << "Added new bullet" << endl;
 		newBullet.sinusoidal_shift = true;
 		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
 	}
 }
+
+
+
+
 
 void display()
 {
@@ -2787,12 +2774,20 @@ void display()
 
 	for (size_t i = 0; i < ally_bullets.size(); i++)
 	{
-		if (red_mode)
-			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 1, 0, 0, 0.00008f);
-		else
-			addSource(densityTex, densityFBO, currentDensity, ally_bullets[i]->x, ally_bullets[i]->y, 0, 1, 0, 0.00008f);
+		// Convert pixel position to normalized for addSource
+		float normX = pixelToNormX(ally_bullets[i]->x);
+		float normY = pixelToNormY(ally_bullets[i]->y);
 
-		addSource(velocityTex, velocityFBO, currentVelocity, ally_bullets[i]->x, ally_bullets[i]->y, ally_bullets[i]->vel_x, ally_bullets[i]->vel_y, 0.0f, 0.00004f);
+		// Convert pixel velocity to normalized for addSource
+		float normVelX = velPixelToNormX(ally_bullets[i]->vel_x);
+		float normVelY = velPixelToNormY(ally_bullets[i]->vel_y);
+
+		if (red_mode)
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
+		else
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+
+		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.000008f);
 	}
 
 
