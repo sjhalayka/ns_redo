@@ -2820,26 +2820,45 @@ void simulate()
 			it++;
 	}
 
-
 	for (size_t i = 0; i < ally_bullets.size(); i++)
 	{
-		// Convert pixel position to normalized for addSource
-		float normX = pixelToNormX(ally_bullets[i]->x);
-		float normY = pixelToNormY(ally_bullets[i]->y);
+		auto& bullet = ally_bullets[i];
 
-		// Convert pixel velocity to normalized for addSource
-		float normVelX = velPixelToNormX(ally_bullets[i]->vel_x);
-		float normVelY = velPixelToNormY(ally_bullets[i]->vel_y);
+		// Calculate bullet speed
+		float speed = sqrt(bullet->vel_x * bullet->vel_x + bullet->vel_y * bullet->vel_y);
 
-		if (red_mode)
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
-		else
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+		// Adaptive samples: faster bullets automatically get more samples
+		// At 1600 px/sec (typical speed), this gives ~8 samples
+		// At 800 px/sec, this gives ~4 samples
+		int pathSamples = 120/FPS;// static_cast<int>((speed / FPS / 1000.0f));
+		//pathSamples = std::min(pathSamples, 5);  // Cap at 15 to prevent excessive GPU load
 
-		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.0001f);
+		if (pathSamples < 1)
+			pathSamples = 1;
 
+		float prevX = bullet->x - bullet->vel_x * DT;
+		float prevY = bullet->y - bullet->vel_y * DT;
+
+		for (int step = 0; step < pathSamples; step++)
+		{
+			float t = static_cast<float>(step) / pathSamples;
+
+			float sampleX = prevX + (bullet->x - prevX) * t;
+			float sampleY = prevY + (bullet->y - prevY) * t;
+
+			float normX = pixelToNormX(sampleX);
+			float normY = pixelToNormY(sampleY);
+
+			if (red_mode)
+				addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
+			else
+				addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+
+			float normVelX = velPixelToNormX(bullet->vel_x);
+			float normVelY = velPixelToNormY(bullet->vel_y);
+			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00005f);
+		}
 	}
-
 
 
 
