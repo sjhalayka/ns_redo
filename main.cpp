@@ -36,7 +36,7 @@ const float VORTICITY_SCALE = 1.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 30;
+const float FPS = 120;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -1989,7 +1989,7 @@ void detectEdgeCollisions()
 			glm::vec2 dens = pixelData[idx];
 
 			// If either red or green density is present -> collision
-			if (dens.r > 1 || dens.g > 1)
+			if (dens.r > 0.1 || dens.g > 0.1)
 			{
 				if (dens.r > 1)
 					dens.r = 1;
@@ -2932,8 +2932,8 @@ void display()
 	double frameTime = newTime - currentTime;
 	currentTime = newTime;
 
-	//if (frameTime > DT)
-	//	frameTime = DT;
+	if (frameTime > 1.0)
+		frameTime = 1.0;
 
 	accumulator += frameTime;
 
@@ -2945,19 +2945,6 @@ void display()
 	}
 
 
-	//static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
-	//float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-
-	//const float d = 1.0f / FPS;
-	//
-	//DT = currentTime - lastTime;
-
-	//if (DT > d)
-	//{
-	//	simulate();
-	//	GLOBAL_TIME += DT;
-	//	lastTime = currentTime;
-	//}
 
 
 
