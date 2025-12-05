@@ -36,7 +36,7 @@ const float VORTICITY_SCALE = 1.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 120;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -2214,6 +2214,7 @@ void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, f
 	drawQuad();
 	current = dst;
 }
+
 //
 //void addObstacle(float x, float y, float radius, bool add) {
 //	glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
@@ -2836,6 +2837,7 @@ void simulate()
 			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
 		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.0001f);
+
 	}
 
 
