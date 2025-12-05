@@ -2187,7 +2187,7 @@ void applyVorticityForce() {
 	currentVelocity = dst;
 }
 
-void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius) 
+void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius)
 {
 	int dst = 1 - current;
 	glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
@@ -2738,13 +2738,6 @@ void simulate()
 	protagonist.integrate(DT);
 
 
-
-
-	//for (size_t i = 0; i < ally_bullets.size(); i++)
-	//{
-	//	ally_bullets[i]->integrate(DT);
-	//}
-
 	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
 	{
 		(*it)->integrate(DT);
@@ -2757,6 +2750,27 @@ void simulate()
 		else
 			it++;
 	}
+
+
+	for (size_t i = 0; i < ally_bullets.size(); i++)
+	{
+		// Convert pixel position to normalized for addSource
+		float normX = pixelToNormX(ally_bullets[i]->x);
+		float normY = pixelToNormY(ally_bullets[i]->y);
+
+		// Convert pixel velocity to normalized for addSource
+		float normVelX = velPixelToNormX(ally_bullets[i]->vel_x);
+		float normVelY = velPixelToNormY(ally_bullets[i]->vel_y);
+
+		if (red_mode)
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
+		else
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+
+		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.000008f);
+	}
+
+
 
 
 	GLuint clearColor[4] = { 0, 0, 0, 0 };
@@ -2928,23 +2942,7 @@ void display()
 
 
 
-	for (size_t i = 0; i < ally_bullets.size(); i++)
-	{
-		// Convert pixel position to normalized for addSource
-		float normX = pixelToNormX(ally_bullets[i]->x);
-		float normY = pixelToNormY(ally_bullets[i]->y);
 
-		// Convert pixel velocity to normalized for addSource
-		float normVelX = velPixelToNormX(ally_bullets[i]->vel_x);
-		float normVelY = velPixelToNormY(ally_bullets[i]->vel_y);
-
-		if (red_mode)
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
-		else
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
-
-		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.000008f);
-	}
 
 
 	// Add continuous sources based on mouse input
