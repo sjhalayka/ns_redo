@@ -36,7 +36,7 @@ const float VORTICITY_SCALE = 1.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 120;
+const float FPS = 30;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -2107,7 +2107,7 @@ void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float diss
 	setTextureUniform(advectProgram, "quantity", 1, quantityTex);
 	setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
 	glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT  * 100.0f );
+	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT * 100.0f);
 	glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
 
 	drawQuad();
