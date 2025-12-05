@@ -454,8 +454,8 @@ public:
 				: sin(timeSinceCreation * sinusoidal_frequency);
 
 			// Apply sinusoidal offset to position (in pixels)
-			x += 0.005f * perpX * sinValue * sinusoidal_amplitude;
-			y += 0.005f * perpY * sinValue * sinusoidal_amplitude;
+			x += perpX * sinValue * sinusoidal_amplitude * dt;
+			y += perpY * sinValue * sinusoidal_amplitude * dt;
 
 			// Calculate the velocity from the position change (for visual/display purposes)
 			// Note: This doesn't actually change the base velocity vector
@@ -2099,7 +2099,7 @@ void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float diss
 	setTextureUniform(advectProgram, "quantity", 1, quantityTex);
 	setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
 	glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT * 100.0f);
+	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT /** 100.0f*/);
 	glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
 
 	drawQuad();
@@ -2906,8 +2906,8 @@ void display()
 	double frameTime = newTime - currentTime;
 	currentTime = newTime;
 
-	if (frameTime > DT)
-		frameTime = DT;
+	//if (frameTime > DT)
+	//	frameTime = DT;
 
 	accumulator += frameTime;
 
