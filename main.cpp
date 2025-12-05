@@ -30,18 +30,26 @@ const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.975f;
-const float VELOCITY_DISSIPATION = 1.0;// 0.99999f;
+const float VELOCITY_DISSIPATION = 0.9f;
 const float VORTICITY_SCALE = 1.0f;
 
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 120;
+const float FPS = 60;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
 
+bool spacePressed = false;
 
+const float MIN_BULLET_INTERVAL = 1.0f;
+
+// Add a variable to track the time of the last fired bullet
+std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
+
+bool x3_fire = false;
+bool x5_fire = true;
 
 
 // Window dimensions
@@ -2099,7 +2107,7 @@ void advect(GLuint velocityTex, GLuint quantityTex, GLuint outputFBO, float diss
 	setTextureUniform(advectProgram, "quantity", 1, quantityTex);
 	setTextureUniform(advectProgram, "obstacles", 2, obstacleTex);
 	glUniform2f(glGetUniformLocation(advectProgram, "texelSize"), 1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT /** 100.0f*/);
+	glUniform1f(glGetUniformLocation(advectProgram, "dt"), DT  * 100.0f );
 	glUniform1f(glGetUniformLocation(advectProgram, "dissipation"), dissipation);
 
 	drawQuad();
@@ -2733,8 +2741,68 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 	glDisable(GL_BLEND);
 }
 
+
+void fireBullet(void)
+{
+	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> timeSinceLastBullet = currentTime - lastBulletTime;
+
+	if (timeSinceLastBullet.count() < MIN_BULLET_INTERVAL)
+		return;
+
+	lastBulletTime = currentTime;
+
+	sine_bullet s;
+
+	s.tex = bullet_template.tex;
+	s.to_present_data = bullet_template.to_present_data;
+
+	// Position in PIXELS (no normalization)
+	s.x = protagonist.x + protagonist.width;
+	s.y = protagonist.y + protagonist.height / 2.0f;
+	s.width = bullet_template.width;
+	s.height = bullet_template.height;
+
+	static const float pi = 4.0f * atanf(1.0f);
+
+	float angle_start = 0, angle_end = 0;
+	size_t num_streams = 1;
+
+	if (x3_fire) { angle_start = 0.1f; angle_end = -0.1f; num_streams = 3; }
+	if (x5_fire) { angle_start = 0.2f; angle_end = -0.2f; num_streams = 5; }
+
+	float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
+	float angle = angle_start;
+
+	// Bullet speed in PIXELS per second
+	const float BULLET_SPEED = 1600.0f;  // Adjust as needed
+
+	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
+	{
+		sine_bullet newBullet = s;
+		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
+		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
+		newBullet.sinusoidal_shift = false;
+		newBullet.sinusoidal_amplitude = 50.0f;  // amplitude in PIXELS
+		newBullet.sinusoidal_frequency = 10.0f;
+		newBullet.birth_time = GLOBAL_TIME;
+		newBullet.death_time = -1;
+
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+
+		newBullet.sinusoidal_shift = true;
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+	}
+}
+
+
 void simulate()
 {
+
+	if (spacePressed)
+		fireBullet();
+
+
 	protagonist.integrate(DT);
 
 
@@ -2767,7 +2835,7 @@ void simulate()
 		else
 			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
-		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.000008f);
+		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.0001f);
 	}
 
 
@@ -2825,71 +2893,9 @@ void simulate()
 
 
 
-bool spacePressed = false;
-
-const float MIN_BULLET_INTERVAL = 1.0f;
-
-// Add a variable to track the time of the last fired bullet
-std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
-
-bool x3_fire = false;
-bool x5_fire = true;
 
 
 
-
-void fireBullet(void)
-{
-	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<float> timeSinceLastBullet = currentTime - lastBulletTime;
-
-	if (timeSinceLastBullet.count() < MIN_BULLET_INTERVAL)
-		return;
-
-	lastBulletTime = currentTime;
-
-	sine_bullet s;
-
-	s.tex = bullet_template.tex;
-	s.to_present_data = bullet_template.to_present_data;
-
-	// Position in PIXELS (no normalization)
-	s.x = protagonist.x + protagonist.width;
-	s.y = protagonist.y + protagonist.height / 2.0f;
-	s.width = bullet_template.width;
-	s.height = bullet_template.height;
-
-	static const float pi = 4.0f * atanf(1.0f);
-
-	float angle_start = 0, angle_end = 0;
-	size_t num_streams = 1;
-
-	if (x3_fire) { angle_start = 0.1f; angle_end = -0.1f; num_streams = 3; }
-	if (x5_fire) { angle_start = 0.2f; angle_end = -0.2f; num_streams = 5; }
-
-	float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
-	float angle = angle_start;
-
-	// Bullet speed in PIXELS per second
-	const float BULLET_SPEED = 1600.0f;  // Adjust as needed
-
-	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
-	{
-		sine_bullet newBullet = s;
-		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
-		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
-		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 50.0f;  // amplitude in PIXELS
-		newBullet.sinusoidal_frequency = 10.0f;
-		newBullet.birth_time = GLOBAL_TIME;
-		newBullet.death_time = -1;
-
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
-
-		newBullet.sinusoidal_shift = true;
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
-	}
-}
 
 
 
@@ -2897,7 +2903,6 @@ void fireBullet(void)
 
 void display()
 {
-
 	// Fixed time step
 	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 	static double accumulator = 0.0;
@@ -2935,8 +2940,6 @@ void display()
 
 
 
-	if (spacePressed)
-		fireBullet();
 
 
 
