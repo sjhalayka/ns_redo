@@ -30,7 +30,7 @@ using namespace std;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 120;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -3251,7 +3251,6 @@ void display()
 		simulate();
 		accumulator -= DT;
 		GLOBAL_TIME += DT;
-	}
 
 
 
@@ -3264,121 +3263,128 @@ void display()
 
 
 
+		// Add continuous sources based on mouse input
+		if (leftMouseDown && !shiftDown) {
+			float x = (float)mouseX / windowWidth;
+			float y = 1.0f - (float)mouseY / windowHeight;
 
-	// Add continuous sources based on mouse input
-	if (leftMouseDown && !shiftDown) {
-		float x = (float)mouseX / windowWidth;
-		float y = 1.0f - (float)mouseY / windowHeight;
-
-		if (red_mode)
-			addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
-		else
-			addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
-	}
-
-	if (rightMouseDown) {
-		float x = (float)mouseX / windowWidth;
-		float y = 1.0f - (float)mouseY / windowHeight;
-		float dx = (float)(mouseX - lastMouseX) * 2.0f;
-		float dy = (float)(lastMouseY - mouseY) * 2.0f;
-
-		addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
-	}
-
-
-
-	lastMouseX = mouseX;
-	lastMouseY = mouseY;
-
-
-
-
-
-
-	// Detect fluid-obstacle collisions
-	static int collision_lastCallTime = 0;
-	int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
-
-	if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
-	{
-		detectEdgeCollisions();
-		collision_lastCallTime = curr_time_int;
-	}
-
-
-
-
-
-
-
-	// Render to screen
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, windowWidth, windowHeight);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glUseProgram(displayProgram);
-	setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
-	setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
-	setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
-	setTextureUniform(displayProgram, "background", 3, background.tex);
-	glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
-	glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
-
-	drawQuad();
-
-
-
-
-
-	if (protagonist.tex != 0)
-	{
-		drawSprite(protagonist.tex,
-			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height);
-	}
-
-	for (size_t i = 0; i < foreground_chunked.size(); i++)
-	{
-		if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
-		{
-			drawSprite(foreground_chunked[i].tex,
-				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
-				foreground_chunked[i].width, foreground_chunked[i].height);
+			if (red_mode)
+				addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
+			else
+				addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
 		}
-	}
 
+		if (rightMouseDown) {
+			float x = (float)mouseX / windowWidth;
+			float y = 1.0f - (float)mouseY / windowHeight;
+			float dx = (float)(mouseX - lastMouseX) * 2.0f;
+			float dy = (float)(lastMouseY - mouseY) * 2.0f;
 
-
-
-	displayFPS();
-
-
-
-	//lines.clear();
-
-	//for (size_t i = 0; i < ally_bullets.size(); i++)
-	//{
-	//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
-
-	//}
-
-
-//	drawLinesWithWidth(lines, 4.0f);
-
-
-
-
-
-	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
-	{
-		if((*it)->to_be_culled)
-		{
-			cout << "culling ally bullet" << endl;
-			it = ally_bullets.erase(it);
+			addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
 		}
-		else
-			it++;
+
+
+
+		lastMouseX = mouseX;
+		lastMouseY = mouseY;
+
+
+
+
+
+
+		// Detect fluid-obstacle collisions
+		static int collision_lastCallTime = 0;
+		int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
+
+		if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
+		{
+			detectEdgeCollisions();
+			collision_lastCallTime = curr_time_int;
+		}
+
+
+
+
+
+
+
+		// Render to screen
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, windowWidth, windowHeight);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glUseProgram(displayProgram);
+		setTextureUniform(displayProgram, "density", 0, densityTex[currentDensity]);
+		setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
+		setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
+		setTextureUniform(displayProgram, "background", 3, background.tex);
+		glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
+		glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
+
+		drawQuad();
+
+
+
+
+
+		if (protagonist.tex != 0)
+		{
+			drawSprite(protagonist.tex,
+				static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
+				protagonist.width, protagonist.height);
+		}
+
+		for (size_t i = 0; i < foreground_chunked.size(); i++)
+		{
+			if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
+			{
+				drawSprite(foreground_chunked[i].tex,
+					static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
+					foreground_chunked[i].width, foreground_chunked[i].height);
+			}
+		}
+
+
+
+
+		displayFPS();
+
+
+
+		//lines.clear();
+
+		//for (size_t i = 0; i < ally_bullets.size(); i++)
+		//{
+		//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
+
+		//}
+
+
+	//	drawLinesWithWidth(lines, 4.0f);
+
+
+
+
+
+		for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
+		{
+			if ((*it)->to_be_culled)
+			{
+				cout << "culling ally bullet" << endl;
+				it = ally_bullets.erase(it);
+			}
+			else
+				it++;
+		}
+
+
+
+
 	}
+
+
+
 
 
 
