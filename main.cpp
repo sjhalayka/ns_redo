@@ -25,6 +25,15 @@ using namespace std;
 
 
 
+
+
+bool red_mode = true;
+
+float GLOBAL_TIME = 0;
+const float FPS = 60;
+float DT = 1.0f / FPS;
+const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
+
 // Simulation parameters
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
@@ -33,12 +42,7 @@ const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 1.0f;
 
-bool red_mode = true;
 
-float GLOBAL_TIME = 0;
-const float FPS = 30;
-float DT = 1.0f / FPS;
-const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
 
 bool spacePressed = false;
@@ -429,8 +433,6 @@ public:
 	}
 };
 
-// to do: cull bullets that hit things and cull bullets off screen
-
 class sine_bullet : public bullet
 {
 public:
@@ -452,8 +454,8 @@ public:
 		//elapsed = global_time_end - app_start_time;
 
 		// Store the original direction vector
-		float dirX = vel_x * inv_aspect * DT;
-		float dirY = vel_y * DT;
+		float dirX = vel_x * inv_aspect * dt;
+		float dirY = vel_y * dt;
 
 		// Normalize the direction vector
 		float dirLength = sqrt(dirX * dirX + dirY * dirY);
@@ -490,8 +492,8 @@ public:
 		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
 
 
-		//float actualVelX = (x - old_x) / dt;
-		//float actualVelY = (y - old_y) / dt;
+		//float actualVelX = (x - old_x) * dt;
+		//float actualVelY = (y - old_y) *  dt;
 
 		//// If you want the velocity to reflect the sinusoidal motion, update it:
 		//vel_x = actualVelX;
