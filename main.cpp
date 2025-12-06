@@ -29,7 +29,7 @@ using namespace std;
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
-const float DENSITY_DISSIPATION = 0.95f;
+const float DENSITY_DISSIPATION = 0.75f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 1.0f;
 
@@ -3038,7 +3038,7 @@ void simulate()
 			if (false == foreground_chunked[i].isOnscreen())
 				continue;
 
-			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1.0);
+			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
 
 			if (true == found_collision)
 				break;
