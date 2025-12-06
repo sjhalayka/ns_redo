@@ -3056,7 +3056,7 @@ void simulate()
 		auto& bullet = ally_bullets[i];
 
 		// Calculate bullet speed
-		float speed = sqrt(bullet->vel_x * bullet->vel_x + bullet->vel_y * bullet->vel_y);
+	//	float speed = sqrt(bullet->vel_x * bullet->vel_x + bullet->vel_y * bullet->vel_y);
 
 		// Adaptive samples: faster bullets automatically get more samples
 		// At 1600 px/sec (typical speed), this gives ~8 samples
