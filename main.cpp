@@ -36,7 +36,7 @@ const float VORTICITY_SCALE = 1.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 30;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -438,99 +438,42 @@ public:
 
 	void integrate(float dt)
 	{
-		float inv_aspect = windowHeight / float(windowWidth);
-		const float prevPosX = x;
-		const float prevPosY = y;
-
-		// Store the original direction vector
-		float dirX = vel_x * inv_aspect * dt;
-		float dirY = vel_y * dt;
-
-		// Normalize the direction vector
-		float dirLength = sqrt(dirX * dirX + dirY * dirY);
-		if (dirLength > 0) {
-			dirX /= dirLength;
-			dirY /= dirLength;
-		}
-
-		// Calculate the perpendicular direction vector (rotate 90 degrees)
-		float perpX = -dirY;
-		float perpY = dirX;
-
-		// Calculate time-based sinusoidal amplitude
-		// Use the birth_time to ensure continuous motion
-		float timeSinceCreation = GLOBAL_TIME - birth_time;
-		float frequency = sinusoidal_frequency; // Controls how many waves appear
-		float amplitude = sinusoidal_amplitude * (120.0f/FPS); // Controls wave height
-
-
-		float sinValue = 0;
-
-		if (sinusoidal_shift)
-			sinValue = -sin(timeSinceCreation * frequency);
-		else
-			sinValue = sin(timeSinceCreation * frequency);
-
-		// Move forward along original path
-		float forwardSpeed = dirLength; // Original velocity magnitude
-		x += dirX * forwardSpeed;
-		y += dirY * forwardSpeed;
-
-		// Add sinusoidal motion perpendicular to the path
-		x += perpX * sinValue * amplitude;
-		y += perpY * sinValue * amplitude;
-
-
-		//float actualVelX = (x - prevPosX);// / dt;
-		//float actualVelY = (y - prevPosY);// / dt;
-
-		//// If you want the velocity to reflect the sinusoidal motion, update it:
-		//vel_x = actualVelX;
-		//vel_y = actualVelY;
-
-
-
-
-
-
-
-
 		// Store old position for reference
-		//float old_x = x;
-		//float old_y = y;
+		float old_x = x;
+		float old_y = y;
 
-		//// Update base position using current velocity
-		//x = old_x + vel_x * dt;
-		//y = old_y + vel_y * dt;
+		// Update base position using current velocity
+		x = old_x + vel_x * dt;
+		y = old_y + vel_y * dt;
 
-		//// Direction vector (normalized)
-		//float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
-		//if (dirLength > 0.0001f) {
-		//	float dirX = vel_x / dirLength;
-		//	float dirY = vel_y / dirLength;
+		// Direction vector (normalized)
+		float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
+		if (dirLength > 0.0001f) {
+			float dirX = vel_x / dirLength;
+			float dirY = vel_y / dirLength;
 
-		//	// Perpendicular direction (for sinusoidal motion)
-		//	float perpX = -dirY;
-		//	float perpY = dirX;
+			// Perpendicular direction (for sinusoidal motion)
+			float perpX = -dirY;
+			float perpY = dirX;
 
-		//	// Time-based sinusoidal offset
-		//	float timeSinceCreation = GLOBAL_TIME - birth_time;
-		//	float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
-		//		: sin(timeSinceCreation * sinusoidal_frequency);
+			// Time-based sinusoidal offset
+			float timeSinceCreation = GLOBAL_TIME - birth_time;
+			float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
+				: sin(timeSinceCreation * sinusoidal_frequency);
 
-		//	// Apply sinusoidal offset to position (in pixels)
-		//	x += perpX * sinValue * sinusoidal_amplitude * dt;
-		//	y += perpY * sinValue * sinusoidal_amplitude * dt;
+			// Apply sinusoidal offset to position (in pixels)
+			x += perpX * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
+			y += perpY * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
 
-		//	// Calculate the velocity from the position change (for visual/display purposes)
-		//	// Note: This doesn't actually change the base velocity vector
-		//	float actualVelX = (x - old_x) / dt;
-		//	float actualVelY = (y - old_y) / dt;
+			// Calculate the velocity from the position change (for visual/display purposes)
+			// Note: This doesn't actually change the base velocity vector
+			float actualVelX = (x - old_x) / dt;
+			float actualVelY = (y - old_y) / dt;
 
-		//	// If you want the velocity to reflect the sinusoidal motion, update it:
-		//	vel_x = actualVelX;
-		//	vel_y = actualVelY;
-		//}
+			// If you want the velocity to reflect the sinusoidal motion, update it:
+			vel_x = actualVelX;
+			vel_y = actualVelY;
+		}
 	}
 
 };
@@ -2841,7 +2784,7 @@ void fireBullet(void)
 		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
 		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 2.0f;  // amplitude in PIXELS
+		newBullet.sinusoidal_amplitude = 20.0f;  // amplitude in PIXELS
 		newBullet.sinusoidal_frequency = 10.0f;
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
