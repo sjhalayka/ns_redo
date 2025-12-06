@@ -29,21 +29,21 @@ using namespace std;
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
-const float DENSITY_DISSIPATION = 0.85f;
+const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 1.0f;
 
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 30;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.25f;
+const float MIN_BULLET_INTERVAL = 0.5f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -140,6 +140,8 @@ public:
 	int height = 0;
 	float x = 0;
 	float y = 0;
+	float old_x = 0;
+	float old_y = 0;
 	float vel_x = 0;
 	float vel_y = 0;
 
@@ -222,6 +224,7 @@ public:
 							{
 								//glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
 
+								// From JoeJ on gamedev.net
 								float t = 1 - duration / animation_length;
 								float t2 = t * t;
 								float t4 = t2 * t2;
@@ -233,7 +236,6 @@ public:
 								to_present_data_pointers[i][index + 1] = static_cast<unsigned int>(g);
 								to_present_data_pointers[i][index + 2] = static_cast<unsigned int>(b);
 							}
-
 						}
 					}
 				}
@@ -440,42 +442,116 @@ public:
 
 	void integrate(float dt)
 	{
-		// Store old position for reference
-		float old_x = x;
-		float old_y = y;
+		const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
 
-		// Update base position using current velocity
-		x = old_x + vel_x * dt;
-		y = old_y + vel_y * dt;
+		old_x = x;
+		old_y = y;
 
-		// Direction vector (normalized)
-		float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
-		if (dirLength > 0.0001f) {
-			float dirX = vel_x / dirLength;
-			float dirY = vel_y / dirLength;
+		//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
+		//std::chrono::duration<float, std::milli> elapsed;
+		//elapsed = global_time_end - app_start_time;
 
-			// Perpendicular direction (for sinusoidal motion)
-			float perpX = -dirY;
-			float perpY = dirX;
+		// Store the original direction vector
+		float dirX = vel_x * inv_aspect * DT;
+		float dirY = vel_y * DT;
 
-			// Time-based sinusoidal offset
-			float timeSinceCreation = GLOBAL_TIME - birth_time;
-			float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
-				: sin(timeSinceCreation * sinusoidal_frequency);
-
-			// Apply sinusoidal offset to position (in pixels)
-			x += perpX * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
-			y += perpY * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
-
-			// Calculate the velocity from the position change (for visual/display purposes)
-			// Note: This doesn't actually change the base velocity vector
-			float actualVelX = (x - old_x) / dt;
-			float actualVelY = (y - old_y) / dt;
-
-			// If you want the velocity to reflect the sinusoidal motion, update it:
-			vel_x = actualVelX;
-			vel_y = actualVelY;
+		// Normalize the direction vector
+		float dirLength = sqrt(dirX * dirX + dirY * dirY);
+		if (dirLength > 0) {
+			dirX /= dirLength;
+			dirY /= dirLength;
 		}
+
+		// Calculate the perpendicular direction vector (rotate 90 degrees)
+		float perpX = -dirY;
+		float perpY = dirX;
+
+		// Calculate time-based sinusoidal amplitude
+		// Use the birth_time to ensure continuous motion
+		float timeSinceCreation = GLOBAL_TIME - birth_time;
+		float frequency = sinusoidal_frequency; // Controls how many waves appear
+		float amplitude = sinusoidal_amplitude; // Controls wave height
+
+
+		float sinValue = 0;
+
+		if (sinusoidal_shift)
+			sinValue = -sin(timeSinceCreation * frequency);
+		else
+			sinValue = sin(timeSinceCreation * frequency);
+
+		// Move forward along original path
+		float forwardSpeed = dirLength; // Original velocity magnitude
+		x += dirX * forwardSpeed;
+		y += dirY * forwardSpeed;
+
+		// Add sinusoidal motion perpendicular to the path
+		x += perpX * sinValue * amplitude * dt * (120.0f / FPS);
+		y += perpY * sinValue * amplitude * dt * (120.0f / FPS);
+
+
+		//float actualVelX = (x - old_x) / dt;
+		//float actualVelY = (y - old_y) / dt;
+
+		//// If you want the velocity to reflect the sinusoidal motion, update it:
+		//vel_x = actualVelX;
+		//vel_y = actualVelY;
+
+
+
+
+		//// Add in random walking, like lightning (from original code)
+		//float rand_x = 0, rand_y = 0;
+		//RandomUnitVector(rand_x, rand_y);
+		//stamp.posX += rand_x * stamp.path_randomization;
+		//stamp.posY += rand_y * stamp.path_randomization;
+
+
+
+
+
+
+
+
+		// Store old position for reference
+		//float old_x = x;
+		//float old_y = y;
+
+		//// Update base position using current velocity
+		//x = old_x + vel_x * dt;
+		//y = old_y + vel_y * dt;
+
+		//// Direction vector (normalized)
+		//float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
+		//
+		//if (dirLength > 0.0001f) 
+		//{
+		//	float dirX = vel_x / dirLength;
+		//	float dirY = vel_y / dirLength;
+
+		//	// Perpendicular direction (for sinusoidal motion)
+		//	float perpX = -dirY;
+		//	float perpY = dirX;
+
+		//	// Time-based sinusoidal offset
+		//	float timeSinceCreation = GLOBAL_TIME - birth_time;
+
+		//	float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
+		//		: sin(timeSinceCreation * sinusoidal_frequency);
+
+		//	// Apply sinusoidal offset to position (in pixels)
+		//	x += perpX * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
+		//	y += perpY * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
+
+		//	// Calculate the velocity from the position change (for visual/display purposes)
+		//	// Note: This doesn't actually change the base velocity vector
+		//	float actualVelX = (x - old_x) / dt;
+		//	float actualVelY = (y - old_y) / dt;
+
+		//	// If you want the velocity to reflect the sinusoidal motion, update it:
+		//	vel_x = actualVelX;
+		//	vel_y = actualVelY;
+		//}
 	}
 
 };
@@ -2996,7 +3072,7 @@ void fireBullet(void)
 	float angle = angle_start;
 
 	// Bullet speed in PIXELS per second
-	const float BULLET_SPEED = 1600.0f;  // Adjust as needed
+	const float BULLET_SPEED = 1600.0;  // Adjust as needed
 
 	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
 	{
@@ -3004,8 +3080,8 @@ void fireBullet(void)
 		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
 		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 20.0f;  // amplitude in PIXELS
-		newBullet.sinusoidal_frequency = 10.0f;
+		newBullet.sinusoidal_amplitude = 60;  // amplitude in PIXELS
+		newBullet.sinusoidal_frequency = 10;
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
 
@@ -3061,14 +3137,14 @@ void simulate()
 		// Adaptive samples: faster bullets automatically get more samples
 		// At 1600 px/sec (typical speed), this gives ~8 samples
 		// At 800 px/sec, this gives ~4 samples
-		int pathSamples = 120 / FPS;// static_cast<int>((speed / FPS / 1000.0f));
+		int pathSamples = 10;// *(120.0 / FPS);// static_cast<int>((speed / FPS / 1000.0f));
 		//pathSamples = std::min(pathSamples, 5);  // Cap at 15 to prevent excessive GPU load
 
 		if (pathSamples < 1)
 			pathSamples = 1;
 
-		float prevX = bullet->x - bullet->vel_x * DT;
-		float prevY = bullet->y - bullet->vel_y * DT;
+		float prevX = bullet->old_x;// bullet->x - bullet->vel_x * DT;
+		float prevY = bullet->old_y;// y - bullet->vel_y * DT;
 
 		for (int step = 0; step < pathSamples; step++)
 		{
@@ -3085,9 +3161,9 @@ void simulate()
 			else
 				addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
-			float normVelX = velPixelToNormX(bullet->vel_x);
-			float normVelY = velPixelToNormY(bullet->vel_y);
-			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00005f);
+			//float normVelX = velPixelToNormX(bullet->vel_x);
+			//float normVelY = velPixelToNormY(bullet->vel_y);
+			//addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00005f);
 		}
 	}
 
