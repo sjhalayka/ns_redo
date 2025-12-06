@@ -149,6 +149,8 @@ public:
 	//vector<unsigned char*> raw_data_pointers;
 	virtual void update_tex(void) = 0;
 
+	bool to_be_culled = false;
+
 	bool isOnscreen(void)
 	{
 		return
@@ -540,7 +542,225 @@ GLuint quadVAO, quadVBO;
 
 
 
+bool detectSpriteOverlap(const pre_sprite& sprA, const pre_sprite& sprB, unsigned char alphaThreshold = 1)
+{
+	// First, do a fast bounding box test
+	// sprA's bounding box
+	float aLeft = sprA.x;
+	float aRight = sprA.x + sprA.width;
+	float aTop = sprA.y;
+	float aBottom = sprA.y + sprA.height;
 
+	// sprB's bounding box
+	float bLeft = sprB.x;
+	float bRight = sprB.x + sprB.width;
+	float bTop = sprB.y;
+	float bBottom = sprB.y + sprB.height;
+
+	// Check for bounding box overlap
+	if (aRight <= bLeft || bRight <= aLeft || aBottom <= bTop || bBottom <= aTop)
+	{
+		return false; // No bounding box overlap, no collision possible
+	}
+
+	// Calculate the overlapping region in screen coordinates
+	int overlapLeft = static_cast<int>(std::max(aLeft, bLeft));
+	int overlapRight = static_cast<int>(std::min(aRight, bRight));
+	int overlapTop = static_cast<int>(std::max(aTop, bTop));
+	int overlapBottom = static_cast<int>(std::min(aBottom, bBottom));
+
+	// Get the pixel data pointers
+	// Use the first available to_present_data pointer (index 0)
+	// For tri_sprite, this will be one of the state textures
+	if (sprA.to_present_data_pointers.empty() || sprA.to_present_data_pointers[0] == nullptr)
+		return false;
+	if (sprB.to_present_data_pointers.empty() || sprB.to_present_data_pointers[0] == nullptr)
+		return false;
+
+	const unsigned char* dataA = sprA.to_present_data_pointers[0];
+	const unsigned char* dataB = sprB.to_present_data_pointers[0];
+
+	// Iterate over the overlapping region
+	for (int screenY = overlapTop; screenY < overlapBottom; screenY++)
+	{
+		for (int screenX = overlapLeft; screenX < overlapRight; screenX++)
+		{
+			// Convert screen coordinates to local sprite coordinates for sprite A
+			int localAX = screenX - static_cast<int>(sprA.x);
+			int localAY = screenY - static_cast<int>(sprA.y);
+
+			// Convert screen coordinates to local sprite coordinates for sprite B
+			int localBX = screenX - static_cast<int>(sprB.x);
+			int localBY = screenY - static_cast<int>(sprB.y);
+
+			// Bounds check (should be within bounds due to overlap calculation, but be safe)
+			if (localAX < 0 || localAX >= sprA.width || localAY < 0 || localAY >= sprA.height)
+				continue;
+			if (localBX < 0 || localBX >= sprB.width || localBY < 0 || localBY >= sprB.height)
+				continue;
+
+			// Calculate pixel indices (RGBA format, 4 bytes per pixel)
+			// Data is stored row by row from top to bottom
+			size_t indexA = (static_cast<size_t>(localAY) * sprA.width + localAX) * 4;
+			size_t indexB = (static_cast<size_t>(localBY) * sprB.width + localBX) * 4;
+
+			// Get alpha values (alpha is at offset +3 in RGBA)
+			unsigned char alphaA = dataA[indexA + 3];
+			unsigned char alphaB = dataB[indexB + 3];
+
+			// If both pixels are non-transparent, we have a collision
+			if (alphaA >= alphaThreshold && alphaB >= alphaThreshold)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+
+/**
+ * Get the active pixel data for a tri_sprite based on its current state.
+ * Helper function used by the collision detection functions.
+ */
+const unsigned char* getTriSpriteActiveData(const tri_sprite& spr)
+{
+	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+		return spr.to_present_up_data.data();
+	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
+		return spr.to_present_down_data.data();
+	else if (!spr.to_present_rest_data.empty())
+		return spr.to_present_rest_data.data();
+	return nullptr;
+}
+
+bool detectTriSpriteToSpriteOverlap(
+	const tri_sprite& triSpr,
+	const sprite& spr,
+	unsigned char alphaThreshold = 1)
+{
+	// Fast bounding box test
+	float aLeft = triSpr.x;
+	float aRight = triSpr.x + triSpr.width;
+	float aTop = triSpr.y;
+	float aBottom = triSpr.y + triSpr.height;
+
+	float bLeft = spr.x;
+	float bRight = spr.x + spr.width;
+	float bTop = spr.y;
+	float bBottom = spr.y + spr.height;
+
+	if (aRight <= bLeft || bRight <= aLeft || aBottom <= bTop || bBottom <= aTop)
+	{
+		return false;
+	}
+
+	int overlapLeft = static_cast<int>(std::max(aLeft, bLeft));
+	int overlapRight = static_cast<int>(std::min(aRight, bRight));
+	int overlapTop = static_cast<int>(std::max(aTop, bTop));
+	int overlapBottom = static_cast<int>(std::min(aBottom, bBottom));
+
+	// Get tri_sprite data based on current state
+	const unsigned char* dataA = getTriSpriteActiveData(triSpr);
+
+	// Get sprite data
+	const unsigned char* dataB = spr.to_present_data.empty() ? nullptr : spr.to_present_data.data();
+
+	if (dataA == nullptr || dataB == nullptr)
+		return false;
+
+	for (int screenY = overlapTop; screenY < overlapBottom; screenY++)
+	{
+		for (int screenX = overlapLeft; screenX < overlapRight; screenX++)
+		{
+			int localAX = screenX - static_cast<int>(triSpr.x);
+			int localAY = screenY - static_cast<int>(triSpr.y);
+			int localBX = screenX - static_cast<int>(spr.x);
+			int localBY = screenY - static_cast<int>(spr.y);
+
+			if (localAX < 0 || localAX >= triSpr.width || localAY < 0 || localAY >= triSpr.height)
+				continue;
+			if (localBX < 0 || localBX >= spr.width || localBY < 0 || localBY >= spr.height)
+				continue;
+
+			size_t indexA = (static_cast<size_t>(localAY) * triSpr.width + localAX) * 4;
+			size_t indexB = (static_cast<size_t>(localBY) * spr.width + localBX) * 4;
+
+			unsigned char alphaA = dataA[indexA + 3];
+			unsigned char alphaB = dataB[indexB + 3];
+
+			if (alphaA >= alphaThreshold && alphaB >= alphaThreshold)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+bool detectTriSpriteOverlap(const tri_sprite& sprA, const tri_sprite& sprB, unsigned char alphaThreshold = 1)
+{
+	// Fast bounding box test
+	float aLeft = sprA.x;
+	float aRight = sprA.x + sprA.width;
+	float aTop = sprA.y;
+	float aBottom = sprA.y + sprA.height;
+
+	float bLeft = sprB.x;
+	float bRight = sprB.x + sprB.width;
+	float bTop = sprB.y;
+	float bBottom = sprB.y + sprB.height;
+
+	if (aRight <= bLeft || bRight <= aLeft || aBottom <= bTop || bBottom <= aTop)
+	{
+		return false;
+	}
+
+	int overlapLeft = static_cast<int>(std::max(aLeft, bLeft));
+	int overlapRight = static_cast<int>(std::min(aRight, bRight));
+	int overlapTop = static_cast<int>(std::max(aTop, bTop));
+	int overlapBottom = static_cast<int>(std::min(aBottom, bBottom));
+
+	// Get the correct data pointer based on current state
+	const unsigned char* dataA = getTriSpriteActiveData(sprA);
+	const unsigned char* dataB = getTriSpriteActiveData(sprB);
+
+	if (dataA == nullptr || dataB == nullptr)
+		return false;
+
+	for (int screenY = overlapTop; screenY < overlapBottom; screenY++)
+	{
+		for (int screenX = overlapLeft; screenX < overlapRight; screenX++)
+		{
+			int localAX = screenX - static_cast<int>(sprA.x);
+			int localAY = screenY - static_cast<int>(sprA.y);
+			int localBX = screenX - static_cast<int>(sprB.x);
+			int localBY = screenY - static_cast<int>(sprB.y);
+
+			if (localAX < 0 || localAX >= sprA.width || localAY < 0 || localAY >= sprA.height)
+				continue;
+			if (localBX < 0 || localBX >= sprB.width || localBY < 0 || localBY >= sprB.height)
+				continue;
+
+			size_t indexA = (static_cast<size_t>(localAY) * sprA.width + localAX) * 4;
+			size_t indexB = (static_cast<size_t>(localBY) * sprB.width + localBX) * 4;
+
+			unsigned char alphaA = dataA[indexA + 3];
+			unsigned char alphaB = dataB[indexB + 3];
+
+			if (alphaA >= alphaThreshold && alphaB >= alphaThreshold)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
 
 
 
@@ -2807,17 +3027,28 @@ void simulate()
 	protagonist.integrate(DT);
 
 
-	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
+	for (auto it = ally_bullets.begin(); it != ally_bullets.end(); it++)
 	{
 		(*it)->integrate(DT);
 
-		if (false == (*it)->isOnscreen())
+		bool found_collision = false;
+
+		for (size_t i = 0; i < foreground_chunked.size(); i++)
+		{
+			if (false == foreground_chunked[i].isOnscreen())
+				continue;
+
+			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1.0);
+
+			if (true == found_collision)
+				break;
+		}
+
+		if (false == (*it)->isOnscreen() || found_collision)
 		{
 			cout << "culling ally bullet" << endl;
-			it = ally_bullets.erase(it);
+			(*it)->to_be_culled = true;
 		}
-		else
-			it++;
 	}
 
 	for (size_t i = 0; i < ally_bullets.size(); i++)
@@ -3060,6 +3291,24 @@ void display()
 
 
 	drawLinesWithWidth(lines, 4.0f);
+
+
+
+
+
+	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
+	{
+		if((*it)->to_be_culled)
+		{
+			cout << "culling ally bullet" << endl;
+			it = ally_bullets.erase(it);
+		}
+		else
+			it++;
+	}
+
+
+
 
 	glutSwapBuffers();
 	glutPostRedisplay();
