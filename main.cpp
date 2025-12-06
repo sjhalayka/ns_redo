@@ -29,21 +29,21 @@ using namespace std;
 const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
-const float DENSITY_DISSIPATION = 0.75f;
+const float DENSITY_DISSIPATION = 0.85f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 1.0f;
 
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 30;
+const float FPS = 60;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 1.0f;
+const float MIN_BULLET_INTERVAL = 0.5f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -3038,7 +3038,7 @@ void simulate()
 			if (false == foreground_chunked[i].isOnscreen())
 				continue;
 
-			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
+			 found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
 
 			if (true == found_collision)
 				break;
