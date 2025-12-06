@@ -470,7 +470,7 @@ public:
 		// Use the birth_time to ensure continuous motion
 		float timeSinceCreation = GLOBAL_TIME - birth_time;
 		float frequency = sinusoidal_frequency; // Controls how many waves appear
-		float amplitude = sinusoidal_amplitude; // Controls wave height
+		float amplitude = sinusoidal_amplitude * dt; // Controls wave height
 
 
 		float sinValue = 0;
@@ -486,8 +486,8 @@ public:
 		y += dirY * forwardSpeed;
 
 		// Add sinusoidal motion perpendicular to the path
-		x += perpX * sinValue * amplitude * dt * (120.0f / FPS);
-		y += perpY * sinValue * amplitude * dt * (120.0f / FPS);
+		x += perpX * sinValue * amplitude * dt;// *(120.0f / FPS);
+		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
 
 
 		//float actualVelX = (x - old_x) / dt;
@@ -3080,7 +3080,7 @@ void fireBullet(void)
 		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
 		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 60;  // amplitude in PIXELS
+		newBullet.sinusoidal_amplitude = 300/DT;  // amplitude in PIXELS
 		newBullet.sinusoidal_frequency = 10;
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
