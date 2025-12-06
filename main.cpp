@@ -3276,21 +3276,16 @@ void display()
 
 
 
-	lines.clear();
+	//lines.clear();
 
-	for (size_t i = 0; i < ally_bullets.size(); i++)
-	{
-		lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
+	//for (size_t i = 0; i < ally_bullets.size(); i++)
+	//{
+	//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
 
-	}
-
-	//lines.push_back(Line(glm::vec2(100, 100), glm::vec2(500, 300), glm::vec4(1, 0, 0, 1)));  // Red
-	//lines.push_back(Line(glm::vec2(200, 200), glm::vec2(600, 400), glm::vec4(0, 1, 0, 1)));  // Green
-	//lines.push_back(Line(glm::vec2(50, 50), glm::vec2(400, 500)));  // White (default)
+	//}
 
 
-
-	drawLinesWithWidth(lines, 4.0f);
+//	drawLinesWithWidth(lines, 4.0f);
 
 
 
