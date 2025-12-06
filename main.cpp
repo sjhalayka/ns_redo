@@ -3137,7 +3137,7 @@ void simulate()
 		// Adaptive samples: faster bullets automatically get more samples
 		// At 1600 px/sec (typical speed), this gives ~8 samples
 		// At 800 px/sec, this gives ~4 samples
-		int pathSamples = 10;// *(120.0 / FPS);// static_cast<int>((speed / FPS / 1000.0f));
+		int pathSamples = (120.0 / FPS);// static_cast<int>((speed / FPS / 1000.0f));
 		//pathSamples = std::min(pathSamples, 5);  // Cap at 15 to prevent excessive GPU load
 
 		if (pathSamples < 1)
