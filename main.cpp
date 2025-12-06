@@ -30,7 +30,7 @@ const int SIM_WIDTH = 1920;
 const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.95f;
-const float VELOCITY_DISSIPATION = 0.999f;
+const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 1.0f;
 
 bool red_mode = true;
