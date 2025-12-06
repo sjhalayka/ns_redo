@@ -36,7 +36,7 @@ const float VORTICITY_SCALE = 1.0f;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 30;
+const float FPS = 60;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -461,7 +461,7 @@ public:
 		// Use the birth_time to ensure continuous motion
 		float timeSinceCreation = GLOBAL_TIME - birth_time;
 		float frequency = sinusoidal_frequency; // Controls how many waves appear
-		float amplitude = sinusoidal_amplitude; // Controls wave height
+		float amplitude = sinusoidal_amplitude * (120.0f/FPS); // Controls wave height
 
 
 		float sinValue = 0;
