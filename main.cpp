@@ -42,6 +42,9 @@ const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 0.1f;
 
+float TURBULENCE_AMPLITUDE = 50.0;
+float TURBULENCE_FREQUENCY = 50.0f;
+float TURBULENCE_SCALE = 0.01;
 
 
 
@@ -2524,9 +2527,9 @@ void applyTurbulence()
 	glUseProgram(turbulenceForceProgram);
 
 	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "time"), GLOBAL_TIME);
-	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "amplitude"), 100.0f);
-	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "frequency"), 50.0f);
-	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "scale"), 0.01f);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "amplitude"), TURBULENCE_AMPLITUDE);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "frequency"), TURBULENCE_FREQUENCY);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "scale"), TURBULENCE_SCALE);
 
 	glUniform2f(glGetUniformLocation(turbulenceForceProgram, "texelSize"),
 		1.0f / SIM_WIDTH,
