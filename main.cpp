@@ -3288,7 +3288,7 @@ void simulate()
 	{
 		auto& bullet = ally_bullets[i];
 
-		int pathSamples = static_cast<int>(120.0 / FPS);// static_cast<int>((speed / FPS / 1000.0f));
+		int pathSamples = 10;// static_cast<int>((speed / FPS / 1000.0f));
 
 		if (pathSamples < 1)
 			pathSamples = 1;
