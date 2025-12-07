@@ -40,7 +40,7 @@ const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
-const float VORTICITY_SCALE = 10.0f;
+const float VORTICITY_SCALE = 0.1f;
 
 
 
@@ -2524,9 +2524,9 @@ void applyTurbulence()
 	glUseProgram(turbulenceForceProgram);
 
 	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "time"), GLOBAL_TIME);
-	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "amplitude"), 10.0f);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "amplitude"), 100.0f);
 	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "frequency"), 50.0f);
-	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "scale"), 0.1f);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "scale"), 0.01f);
 
 	glUniform2f(glGetUniformLocation(turbulenceForceProgram, "texelSize"),
 		1.0f / SIM_WIDTH,
