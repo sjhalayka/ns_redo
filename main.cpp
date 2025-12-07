@@ -91,6 +91,15 @@ struct CompareVec2
 };
 
 
+void RandomUnitVector(float& x_out, float& y_out)
+{
+	const static float pi = 4.0f * atanf(1.0f);
+
+	const float a = (rand() / float(RAND_MAX)) * 2.0f * pi;
+
+	x_out = cos(a);
+	y_out = sin(a);
+}
 
 float naive_lerp(float a, float b, float t)
 {
@@ -152,7 +161,7 @@ public:
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
 
 	vector<unsigned char*> to_present_data_pointers;
-	//vector<unsigned char*> raw_data_pointers;
+
 	virtual void update_tex(void) = 0;
 
 	bool to_be_culled = false;
@@ -189,8 +198,7 @@ public:
 				glm::vec2 point(ci->first.x, ci->first.y);
 
 				const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
-				const float INV_RADIUS_SQ = 1.0f / (BRUSH_RADIUS * BRUSH_RADIUS);
-				const float MAX_ALPHA = 0.1f;            // Maximum intensity at center
+				const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 				int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
 				int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
@@ -204,15 +212,9 @@ public:
 						glm::vec2 diff(x - point.x, y - point.y);
 						float distSq = diff.x * diff.x + diff.y * diff.y;
 
-						if (distSq < BRUSH_RADIUS * BRUSH_RADIUS)
+						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
-							float falloff = 1.0f - distSq * INV_RADIUS_SQ;  // Linear falloff (smoothstep optional)
-							falloff = falloff * falloff;                    // Quadratic for softer edge (optional: smoothstep)
-							const float alpha = falloff * MAX_ALPHA;
-
 							const size_t index = (y * width + x) * 4;
-
-
 
 							const float duration = glut_curr_time - ci->second;
 
@@ -344,7 +346,6 @@ public:
 
 
 
-
 class friendly_ship : public ship
 {
 public:
@@ -370,7 +371,6 @@ public:
 		update_tex();
 	}
 
-	float health;
 };
 
 
@@ -386,6 +386,12 @@ public:
 };
 
 
+class boss_ship : public ship
+{
+public:
+
+
+};
 
 
 class foreground_tile : public sprite
@@ -407,10 +413,7 @@ public:
 
 		//raw_data = src_raw_data;
 		to_present_data = src_raw_data;
-
-
 	}
-	//    float health;
 };
 
 class background_tile : public sprite
@@ -438,9 +441,7 @@ class sine_bullet : public bullet
 public:
 	float sinusoidal_frequency;
 	float sinusoidal_amplitude;
-	bool sinusoidal_shift = false;
-
-
+	bool sinusoidal_shift;
 
 	void integrate(float dt)
 	{
@@ -491,69 +492,11 @@ public:
 		x += perpX * sinValue * amplitude * dt;// *(120.0f / FPS);
 		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
 
-
-		//float actualVelX = (x - old_x) * dt;
-		//float actualVelY = (y - old_y) *  dt;
-
-		//// If you want the velocity to reflect the sinusoidal motion, update it:
-		//vel_x = actualVelX;
-		//vel_y = actualVelY;
-
-
-
-
-		//// Add in random walking, like lightning (from original code)
-		//float rand_x = 0, rand_y = 0;
-		//RandomUnitVector(rand_x, rand_y);
-		//stamp.posX += rand_x * stamp.path_randomization;
-		//stamp.posY += rand_y * stamp.path_randomization;
-
-
-
-
-
-
-
-
-		// Store old position for reference
-		//float old_x = x;
-		//float old_y = y;
-
-		//// Update base position using current velocity
-		//x = old_x + vel_x * dt;
-		//y = old_y + vel_y * dt;
-
-		//// Direction vector (normalized)
-		//float dirLength = sqrt(vel_x * vel_x + vel_y * vel_y);
-		//
-		//if (dirLength > 0.0001f) 
-		//{
-		//	float dirX = vel_x / dirLength;
-		//	float dirY = vel_y / dirLength;
-
-		//	// Perpendicular direction (for sinusoidal motion)
-		//	float perpX = -dirY;
-		//	float perpY = dirX;
-
-		//	// Time-based sinusoidal offset
-		//	float timeSinceCreation = GLOBAL_TIME - birth_time;
-
-		//	float sinValue = sinusoidal_shift ? -sin(timeSinceCreation * sinusoidal_frequency)
-		//		: sin(timeSinceCreation * sinusoidal_frequency);
-
-		//	// Apply sinusoidal offset to position (in pixels)
-		//	x += perpX * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
-		//	y += perpY * sinValue * sinusoidal_amplitude * dt * (120.0f / FPS);
-
-		//	// Calculate the velocity from the position change (for visual/display purposes)
-		//	// Note: This doesn't actually change the base velocity vector
-		//	float actualVelX = (x - old_x) / dt;
-		//	float actualVelY = (y - old_y) / dt;
-
-		//	// If you want the velocity to reflect the sinusoidal motion, update it:
-		//	vel_x = actualVelX;
-		//	vel_y = actualVelY;
-		//}
+		float path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+		float rand_x = 0, rand_y = 0;
+		RandomUnitVector(rand_x, rand_y);
+		x += rand_x * path_randomization;
+		y += rand_y * path_randomization;
 	}
 
 };
@@ -3133,20 +3076,13 @@ void simulate()
 	{
 		auto& bullet = ally_bullets[i];
 
-		// Calculate bullet speed
-	//	float speed = sqrt(bullet->vel_x * bullet->vel_x + bullet->vel_y * bullet->vel_y);
-
-		// Adaptive samples: faster bullets automatically get more samples
-		// At 1600 px/sec (typical speed), this gives ~8 samples
-		// At 800 px/sec, this gives ~4 samples
 		int pathSamples = static_cast<int>(120.0 / FPS);// static_cast<int>((speed / FPS / 1000.0f));
-		//pathSamples = std::min(pathSamples, 5);  // Cap at 15 to prevent excessive GPU load
 
 		if (pathSamples < 1)
 			pathSamples = 1;
 
-		float prevX = bullet->old_x;// bullet->x - bullet->vel_x * DT;
-		float prevY = bullet->old_y;// y - bullet->vel_y * DT;
+		float prevX = bullet->old_x;
+		float prevY = bullet->old_y;
 
 		for (int step = 0; step < pathSamples; step++)
 		{
@@ -3163,8 +3099,8 @@ void simulate()
 			else
 				addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
-			float actualVelX = (bullet->x - bullet->old_x) / DT * 1.0f;
-			float actualVelY = (bullet->y - bullet->old_y) / DT * 1.0f;
+			float actualVelX = (bullet->x - bullet->old_x) / DT;
+			float actualVelY = (bullet->y - bullet->old_y) / DT;
 
 			float normVelX = velPixelToNormX(actualVelX);
 			float normVelY = velPixelToNormY(actualVelY);
@@ -3244,8 +3180,8 @@ void display()
 	double frameTime = newTime - currentTime;
 	currentTime = newTime;
 
-	if (frameTime > 1.0)
-		frameTime = 1.0;
+	if (frameTime > DT*10.0)
+		frameTime = DT*10.0;
 
 	accumulator += frameTime;
 
@@ -3254,63 +3190,6 @@ void display()
 		simulate();
 		accumulator -= DT;
 		GLOBAL_TIME += DT;
-
-
-
-
-
-
-
-
-
-
-
-
-		//// Add continuous sources based on mouse input
-		//if (leftMouseDown && !shiftDown) {
-		//	float x = (float)mouseX / windowWidth;
-		//	float y = 1.0f - (float)mouseY / windowHeight;
-
-		//	if (red_mode)
-		//		addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
-		//	else
-		//		addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
-		//}
-
-		//if (rightMouseDown) {
-		//	float x = (float)mouseX / windowWidth;
-		//	float y = 1.0f - (float)mouseY / windowHeight;
-		//	float dx = (float)(mouseX - lastMouseX) * 2.0f;
-		//	float dy = (float)(lastMouseY - mouseY) * 2.0f;
-
-		//	addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
-		//}
-
-
-
-		lastMouseX = mouseX;
-		lastMouseY = mouseY;
-
-		// Detect fluid-obstacle collisions
-		static int collision_lastCallTime = 0;
-		int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
-
-		if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
-		{
-			detectEdgeCollisions();
-			collision_lastCallTime = curr_time_int;
-		}
-
-		for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
-		{
-			if ((*it)->to_be_culled)
-			{
-				cout << "culling ally bullet" << endl;
-				it = ally_bullets.erase(it);
-			}
-			else
-				it++;
-		}
 	}
 
 
@@ -3361,14 +3240,63 @@ void display()
 
 	//for (size_t i = 0; i < ally_bullets.size(); i++)
 	//{
-	//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + ally_bullets[i]->vel_x, ally_bullets[i]->y + ally_bullets[i]->vel_y), glm::vec4(1, 0, 0, 1)));
+	//	float vel_x = (ally_bullets[i]->x - ally_bullets[i]->old_x) / DT;
+	//	float vel_y = (ally_bullets[i]->y - ally_bullets[i]->old_y) / DT;
+
+
+	//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + vel_x, ally_bullets[i]->y + vel_y), glm::vec4(1, 0, 0, 1)));
 
 	//}
 
 
-//	drawLinesWithWidth(lines, 4.0f);
+	//drawLinesWithWidth(lines, 4.0f);
 
 
+
+		//// Add continuous sources based on mouse input
+		//if (leftMouseDown && !shiftDown) {
+		//	float x = (float)mouseX / windowWidth;
+		//	float y = 1.0f - (float)mouseY / windowHeight;
+
+		//	if (red_mode)
+		//		addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
+		//	else
+		//		addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
+		//}
+
+		//if (rightMouseDown) {
+		//	float x = (float)mouseX / windowWidth;
+		//	float y = 1.0f - (float)mouseY / windowHeight;
+		//	float dx = (float)(mouseX - lastMouseX) * 2.0f;
+		//	float dy = (float)(lastMouseY - mouseY) * 2.0f;
+
+		//	addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
+		//}
+
+
+	lastMouseX = mouseX;
+	lastMouseY = mouseY;
+
+	// Detect fluid-obstacle collisions
+	static int collision_lastCallTime = 0;
+	int curr_time_int = glutGet(GLUT_ELAPSED_TIME);
+
+	if (curr_time_int - collision_lastCallTime >= COLLISION_INTERVAL_MS)
+	{
+		detectEdgeCollisions();
+		collision_lastCallTime = curr_time_int;
+	}
+
+	for (auto it = ally_bullets.begin(); it != ally_bullets.end();)
+	{
+		if ((*it)->to_be_culled)
+		{
+			cout << "culling ally bullet" << endl;
+			it = ally_bullets.erase(it);
+		}
+		else
+			it++;
+	}
 
 
 	glutSwapBuffers();
