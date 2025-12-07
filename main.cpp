@@ -389,7 +389,7 @@ public:
 };
 
 
-class boss_ship : public ship
+class boss_ship : public enemy_ship
 {
 public:
 
@@ -513,14 +513,17 @@ inline float velPixelToNormY(float vy) { return -vy / (float)SIM_HEIGHT; }
 
 vector<unique_ptr<bullet>> ally_bullets;
 
+vector<unique_ptr<enemy_ship>> enemy_ships;
 
 
 
-
+// These global objects do not need to generate new tex(es)
 friendly_ship protagonist;
 background_tile background;
 bullet bullet_template;
-
+enemy_ship enemy0_template;
+enemy_ship enemy1_template;
+boss_ship boss_template;
 
 const int foreground_chunk_size_width = 360;
 const int foreground_chunk_size_height = 108;
@@ -3245,7 +3248,16 @@ void simulate()
 		}
 	}
 
-
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		{
+			addObstacleStamp(enemy_ships[i]->tex,
+				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
+				enemy_ships[i]->width, enemy_ships[i]->height, true,
+				0.5, true);
+		}
+	}
 
 
 
@@ -3347,6 +3359,15 @@ void display()
 		}
 	}
 
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		{
+			drawSprite(enemy_ships[i]->tex,
+				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
+				enemy_ships[i]->width, enemy_ships[i]->height);
+		}
+	}
 
 
 
@@ -3628,7 +3649,8 @@ void keyboardup(unsigned char key, int x, int y) {
 
 
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
 	// Initialize GLUT
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
@@ -3697,6 +3719,30 @@ int main(int argc, char** argv) {
 		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
 		return 4;
 	}
+
+	enemy0_template.tex = loadTextureFromFile_Triplet("media/enemy0_up.png", "media/enemy0_down.png", "media/enemy0_rest.png", &enemy0_template.width, &enemy0_template.height, enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data, enemy0_template);
+	if (enemy0_template.tex == 0)
+	{
+		std::cout << "Warning: Could not load enemy0_template sprite" << std::endl;
+		return 5;
+	}
+
+	enemy1_template.tex = loadTextureFromFile_Triplet("media/enemy1_up.png", "media/enemy1_down.png", "media/enemy1_rest.png", &enemy1_template.width, &enemy1_template.height, enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data, enemy1_template);
+	if (enemy1_template.tex == 0)
+	{
+		std::cout << "Warning: Could not load enemy1_template sprite" << std::endl;
+		return 6;
+	}
+
+	enemy_ships.push_back(make_unique<enemy_ship>(enemy0_template));
+	enemy_ships.push_back(make_unique<enemy_ship>(enemy1_template));
+
+	enemy_ships[0]->x = 300;
+	enemy_ships[0]->y = 200;
+
+	enemy_ships[1]->x = 400;
+	enemy_ships[1]->y = 300;
+
 
 	//    printControls();
 
