@@ -1724,11 +1724,11 @@ void main()
         color4 = vec4(1.0, 1.0, 1.0, 0.0);
 
     // toon shading:
-    if (d < 0.25) {
+    if (d < 0.5) {
         fragColor = color1;
-    } else if (d < 0.5) {
-        fragColor = color2;
     } else if (d < 0.75) {
+        fragColor = color2;
+    } else if (d < 0.95) {
         fragColor = color3;
     } else {
         fragColor = color4;
