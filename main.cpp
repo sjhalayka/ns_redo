@@ -294,6 +294,8 @@ class tri_sprite : public pre_sprite
 {
 public:
 
+	//bool local_textures = false;
+
 	std::vector<unsigned char> to_present_up_data;
 	std::vector<unsigned char> to_present_down_data;
 	std::vector<unsigned char> to_present_rest_data;
@@ -312,6 +314,26 @@ public:
 	{
 
 	}
+
+	void use_local_textures(
+		const std::vector<unsigned char> &src_to_present_up_data,
+		const std::vector<unsigned char> &src_to_present_down_data,
+		const std::vector<unsigned char> &src_to_present_rest_data)
+	{
+		if(src_to_present_up_data.size() > 0)
+			to_present_up_data = src_to_present_up_data;
+
+		if (src_to_present_down_data.size() > 0)
+			to_present_down_data = src_to_present_down_data;
+		
+		if (src_to_present_rest_data.size() > 0)
+			to_present_rest_data = src_to_present_rest_data;
+
+		rebuild_pointers();
+		update_tex();
+	}
+
+
 
 	//----------------------------------------------------------------------
 	//  Update OpenGL texture based on state
@@ -2422,7 +2444,46 @@ void detectEdgeCollisions()
 		}
 
 
+		for (size_t h = 0; h < enemy_ships.size(); h++)
 
+		{
+			vector<glm::vec2> blackening_points;
+
+			for (size_t i = 0; i < collisionPoints.size(); i++)
+			{
+				//cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
+				//cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+
+
+
+				bool inside = false, transparent = false;
+
+
+
+				glm::vec2 hit;
+
+				if (isPixelInsideSpriteAndTransparent(
+					enemy_ships[h]->tex,
+					static_cast<int>(enemy_ships[h]->x),
+					static_cast<int>(enemy_ships[h]->y),
+					enemy_ships[h]->width,
+					enemy_ships[h]->height,
+					static_cast<int>(collisionPoints[i].x),
+					static_cast<int>(collisionPoints[i].y),
+					inside,
+					transparent,
+					127,
+					hit))
+				{
+					if (inside && collisionPoints[i].z == 1)
+					{
+						blackening_points.push_back(glm::vec2(hit.x, hit.y));
+					}
+				}
+			}
+
+			enemy_ships[h]->animate_blackening(blackening_points);
+		}
 	}
 }
 
@@ -3184,6 +3245,20 @@ void simulate()
 				break;
 		}
 
+		for (size_t i = 0; i < enemy_ships.size(); i++)
+		{
+			if (false == enemy_ships[i]->isOnscreen())
+				continue;
+
+
+
+			found_collision = detectTriSpriteToSpriteOverlap(*enemy_ships[i], *(*it), 1);
+
+			if (true == found_collision)
+				break;
+		}
+
+
 		if (false == (*it)->isOnscreen() || found_collision)
 		{
 			cout << "culling ally bullet" << endl;
@@ -3739,10 +3814,11 @@ int main(int argc, char** argv)
 
 	enemy_ships[0]->x = 300;
 	enemy_ships[0]->y = 200;
+	enemy_ships[0]->use_local_textures(enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data);
 
 	enemy_ships[1]->x = 400;
 	enemy_ships[1]->y = 300;
-
+	enemy_ships[1]->use_local_textures(enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data);
 
 	//    printControls();
 
