@@ -30,7 +30,7 @@ using namespace std;
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 30;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
