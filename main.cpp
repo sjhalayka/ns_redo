@@ -40,7 +40,7 @@ const int SIM_HEIGHT = 1080;
 const int JACOBI_ITERATIONS = 20;
 const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
-const float VORTICITY_SCALE = 1.0f;
+const float VORTICITY_SCALE = 10.0f;
 
 
 
@@ -492,11 +492,11 @@ public:
 		x += perpX * sinValue * amplitude * dt;// *(120.0f / FPS);
 		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
 
-		float path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
-		float rand_x = 0, rand_y = 0;
-		RandomUnitVector(rand_x, rand_y);
-		x += rand_x * path_randomization;
-		y += rand_y * path_randomization;
+		//float path_randomization = 10;// (rand() / float(RAND_MAX)) * 0.01f;
+		//float rand_x = 0, rand_y = 0;
+		//RandomUnitVector(rand_x, rand_y);
+		//x += rand_x * path_randomization;
+		//y += rand_y * path_randomization;
 	}
 
 };
