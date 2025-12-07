@@ -3296,7 +3296,7 @@ void simulate()
 		float prevX = bullet->old_x;
 		float prevY = bullet->old_y;
 
-		for (int step = 0; step < pathSamples; step++)
+		for (int step = 0; step <= pathSamples; step++)
 		{
 			float t = static_cast<float>(step) / pathSamples;
 
