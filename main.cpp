@@ -553,6 +553,10 @@ GLuint obstacleProgram;
 GLuint obstacleStampProgram;
 GLuint copyProgram;
 GLuint spriteProgram;
+GLuint turbulenceForceProgram;
+
+
+
 
 // Quad VAO
 GLuint quadVAO, quadVBO;
@@ -1819,6 +1823,83 @@ void main() {
 }
 )";
 
+const char* turbulenceForceFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D velocity;
+uniform sampler2D obstacles;
+
+uniform vec2 texelSize;
+uniform float time;
+uniform float amplitude;     // e.g. 0.5–3.0
+uniform float frequency;     // e.g. 2–10
+uniform float scale;         // turbulence strength (multiply final force)
+
+//
+// Simple 2D procedural noise: sin + cos swirl
+//
+float hash(vec2 p)
+{
+    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+float noise(vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+
+    vec2 u = f*f*(3.0 - 2.0*f);
+
+    return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+}
+
+//
+// Convert noise into a curl (pseudo-vorticity) force
+//
+vec2 curlNoise(vec2 uv)
+{
+    float eps = 0.01;
+
+    float nL = noise(uv - vec2(eps, 0.0));
+    float nR = noise(uv + vec2(eps, 0.0));
+    float nB = noise(uv - vec2(0.0, eps));
+    float nT = noise(uv + vec2(0.0, eps));
+
+    // Numerical curl
+    float curl = (nT - nB) - (nR - nL);
+
+    // Rotate curl scalar into 2D vector
+    return vec2( curl, -curl );
+}
+
+void main()
+{
+    if(texture(obstacles, texCoord).r > 0.5) {
+        fragColor = vec4(0.0);
+        return;
+    }
+
+    // Build turbulence domain
+    vec2 uv = texCoord * frequency + vec2(time * 0.15);
+
+    // Compute curl noise
+    vec2 turb = curlNoise(uv) * amplitude;
+
+    // Add to velocity
+    vec2 vel = texture(velocity, texCoord).xy;
+    vel += turb * scale;
+
+    fragColor = vec4(vel, 0.0, 1.0);
+}
+)";
+
 
 GLuint createProgram(const char* vertexSource, const char* fragmentSource) {
 	GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
@@ -1879,6 +1960,8 @@ void initShaders() {
 	obstacleStampProgram = createProgram(vertexShaderSource, obstacleStampFragmentSource);
 	copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
 	spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
+	turbulenceForceProgram = createProgram(vertexShaderSource, turbulenceForceFragmentSource);
+
 }
 
 void initTextures() {
@@ -2434,6 +2517,36 @@ void applyVorticityForce() {
 
 	drawQuad();
 	currentVelocity = dst;
+}
+
+void applyTurbulence()
+{
+	glUseProgram(turbulenceForceProgram);
+
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "time"), GLOBAL_TIME);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "amplitude"), 10.0f);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "frequency"), 50.0f);
+	glUniform1f(glGetUniformLocation(turbulenceForceProgram, "scale"), 0.1f);
+
+	glUniform2f(glGetUniformLocation(turbulenceForceProgram, "texelSize"),
+		1.0f / SIM_WIDTH,
+		1.0f / SIM_HEIGHT);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, velocityTex[currentVelocity]);
+	glUniform1i(glGetUniformLocation(turbulenceForceProgram, "velocity"), 0);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, obstacleTex);
+	glUniform1i(glGetUniformLocation(turbulenceForceProgram, "obstacles"), 1);
+
+	int nextVelocity = 1 - currentVelocity;
+	glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[nextVelocity]);
+
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	currentVelocity = nextVelocity;
 }
 
 void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, float vx, float vy, float vz, float radius)
@@ -3025,7 +3138,7 @@ void fireBullet(void)
 		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
 		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
 		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 300/DT;  // amplitude in PIXELS
+		newBullet.sinusoidal_amplitude = 300 / DT;  // amplitude in PIXELS
 		newBullet.sinusoidal_frequency = 10;
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
@@ -3059,7 +3172,7 @@ void simulate()
 			if (false == foreground_chunked[i].isOnscreen())
 				continue;
 
-			 found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
+			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
 
 			if (true == found_collision)
 				break;
@@ -3147,6 +3260,8 @@ void simulate()
 		applyVorticityForce();
 	}
 
+	applyTurbulence();
+
 	// Pressure projection
 	computeDivergence();
 	clearPressure();
@@ -3180,8 +3295,8 @@ void display()
 	double frameTime = newTime - currentTime;
 	currentTime = newTime;
 
-	if (frameTime > DT*10.0)
-		frameTime = DT*10.0;
+	if (frameTime > DT * 10.0)
+		frameTime = DT * 10.0;
 
 	accumulator += frameTime;
 
