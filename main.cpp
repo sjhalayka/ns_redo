@@ -144,6 +144,24 @@ glm::vec3 hsbToRgb(float hue, float saturation, float brightness) {
 	return { red, green, blue };
 }
 
+struct HashVec2
+{
+	size_t operator()(const glm::vec2& v) const
+	{
+		size_t h1 = std::hash<float>{}(v.x);
+		size_t h2 = std::hash<float>{}(v.y);
+		return h1 ^ (h2 << 1);
+	}
+};
+
+struct EqualVec2
+{
+	bool operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
+	{
+		return lhs.x == rhs.x && lhs.y == rhs.y;
+	}
+};
+
 
 
 class pre_sprite
@@ -161,6 +179,7 @@ public:
 	float vel_x = 0;
 	float vel_y = 0;
 
+	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
 
 	vector<unsigned char*> to_present_data_pointers;
@@ -294,8 +313,6 @@ class tri_sprite : public pre_sprite
 {
 public:
 
-	//bool local_textures = false;
-
 	std::vector<unsigned char> to_present_up_data;
 	std::vector<unsigned char> to_present_down_data;
 	std::vector<unsigned char> to_present_rest_data;
@@ -315,7 +332,7 @@ public:
 
 	}
 
-	void use_local_textures(
+	void manually_update_data(
 		const std::vector<unsigned char> &src_to_present_up_data,
 		const std::vector<unsigned char> &src_to_present_down_data,
 		const std::vector<unsigned char> &src_to_present_rest_data)
@@ -3245,17 +3262,18 @@ void simulate()
 				break;
 		}
 
-		for (size_t i = 0; i < enemy_ships.size(); i++)
+		if (false == found_collision)
 		{
-			if (false == enemy_ships[i]->isOnscreen())
-				continue;
+			for (size_t i = 0; i < enemy_ships.size(); i++)
+			{
+				if (false == enemy_ships[i]->isOnscreen())
+					continue;
 
+				found_collision = detectTriSpriteToSpriteOverlap(*enemy_ships[i], *(*it), 1);
 
-
-			found_collision = detectTriSpriteToSpriteOverlap(*enemy_ships[i], *(*it), 1);
-
-			if (true == found_collision)
-				break;
+				if (true == found_collision)
+					break;
+			}
 		}
 
 
@@ -3814,11 +3832,11 @@ int main(int argc, char** argv)
 
 	enemy_ships[0]->x = 300;
 	enemy_ships[0]->y = 200;
-	enemy_ships[0]->use_local_textures(enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data);
+	enemy_ships[0]->manually_update_data(enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data);
 
 	enemy_ships[1]->x = 400;
 	enemy_ships[1]->y = 300;
-	enemy_ships[1]->use_local_textures(enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data);
+	enemy_ships[1]->manually_update_data(enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data);
 
 	//    printControls();
 
