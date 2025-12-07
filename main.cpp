@@ -520,7 +520,7 @@ bullet bullet_template;
 
 
 const int foreground_chunk_size_width = 360;
-const int foreground_chunk_size_height = 360;
+const int foreground_chunk_size_height = 108;
 
 
 vector<foreground_tile> foreground_chunked;
