@@ -3279,67 +3279,144 @@ void simulate()
 	protagonist.integrate(DT);
 
 
-	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	//for (size_t i = 0; i < foreground_chunked.size(); i++)
+	//{
+	//	if (false == foreground_chunked[i].isOnscreen())
+	//		continue;
+
+	//	bool found_collision = detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1);
+
+	//	if (true == found_collision)
+	//	{
+	//		friendly_ship old_protagonist = protagonist;
+	//		old_protagonist.x = old_protagonist.old_x;
+	//		old_protagonist.y = old_protagonist.old_y;
+
+	//		//float x_move = (protagonist.x - protagonist.old_x);
+	//		//float y_move = (protagonist.y - protagonist.old_y);
+
+	//		friendly_ship old_protagonist_up = old_protagonist;
+	//		old_protagonist_up.y--;// -= y_move;
+
+	//		friendly_ship old_protagonist_down = old_protagonist;
+	//		old_protagonist_down.y++;// += y_move;
+
+	//		friendly_ship old_protagonist_left = old_protagonist;
+	//		old_protagonist_left.x--;// -= x_move;
+
+	//		friendly_ship old_protagonist_right = old_protagonist;
+	//		old_protagonist_right.x++;// += x_move;
+
+	//		bool found_collision_up = detectTriSpriteToSpriteOverlap(old_protagonist_up, foreground_chunked[i], 1);
+	//		bool found_collision_down = detectTriSpriteToSpriteOverlap(old_protagonist_down, foreground_chunked[i], 1);
+	//		bool found_collision_left = detectTriSpriteToSpriteOverlap(old_protagonist_left, foreground_chunked[i], 1);
+	//		bool found_collision_right = detectTriSpriteToSpriteOverlap(old_protagonist_right, foreground_chunked[i], 1);
+
+	//		if (/*found_collision_up ||*/ old_protagonist_up.vel_y < 0)
+	//		{
+	//			//protagonist.vel_y = 0;// -old_protagonist.vel_y * 0.01;
+
+	//			protagonist.y = protagonist.old_y;
+	//		}
+
+	//		if (/*found_collision_down || */old_protagonist_down.vel_y > 0)
+	//		{
+	//			//protagonist.vel_y = 0;// -old_protagonist.vel_y * 0.01;
+	//			protagonist.y = protagonist.old_y;
+	//		}
+
+	//		if (/*found_collision_left || */old_protagonist_left.vel_x < 0)
+	//		{
+	//			//protagonist.vel_x = 0;// -old_protagonist.vel_x * 0.01;
+	//			protagonist.x = protagonist.old_x;
+	//		}
+
+	//		if (/*found_collision_right || */old_protagonist_right.vel_x > 0)
+	//		{
+	//			//protagonist.vel_x = 0;// -old_protagonist.vel_x * 0.01;
+	//			protagonist.x = protagonist.old_x;
+	//		}
+
+	//		//protagonist.x = protagonist.old_x;
+	//		//protagonist.y = protagonist.old_y;
+	//		
+
+	//		break;
+	//	}
+	//}
+
+
+
+
+
+	bool resolved = false;
+
+	for (size_t i = 0; i < foreground_chunked.size() && !resolved; i++)
 	{
-		if (false == foreground_chunked[i].isOnscreen())
+		if (!foreground_chunked[i].isOnscreen())
 			continue;
 
-		bool found_collision = detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1);
-
-		if (true == found_collision)
+		if (detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1))
 		{
-			//friendly_ship old_protagonist = protagonist;
-			//old_protagonist.x = old_protagonist.old_x;
-			//old_protagonist.y = old_protagonist.old_y;
+			// Test X resolution
+			float tempX = protagonist.x;
+			protagonist.x = protagonist.old_x;
 
-			//friendly_ship old_protagonist_up = old_protagonist;
-			//old_protagonist_up.y++;
+			bool xResolves = true;
+			// Check if moving only X back resolves ALL collisions
+			for (size_t j = 0; j < foreground_chunked.size(); j++)
+			{
+				if (foreground_chunked[j].isOnscreen() &&
+					detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[j], 1))
+				{
+					xResolves = false;
+					break;
+				}
+			}
 
-			//friendly_ship old_protagonist_down = old_protagonist;
-			//old_protagonist_down.y--;
+			if (xResolves)
+			{
+				protagonist.vel_x = 0;  // Block horizontal movement
+				resolved = true;
+				continue;
+			}
 
-			//friendly_ship old_protagonist_left = old_protagonist;
-			//old_protagonist_left.x++;
+			// Test Y resolution
+			protagonist.x = tempX;  // restore X
+			protagonist.y = protagonist.old_y;
 
-			//friendly_ship old_protagonist_right = old_protagonist;
-			//old_protagonist_right.x--;
+			bool yResolves = true;
+			for (size_t j = 0; j < foreground_chunked.size(); j++)
+			{
+				if (foreground_chunked[j].isOnscreen() &&
+					detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[j], 1))
+				{
+					yResolves = false;
+					break;
+				}
+			}
 
-			//bool found_collision_up = detectTriSpriteToSpriteOverlap(old_protagonist_up, foreground_chunked[i], 1);
-			//bool found_collision_down = detectTriSpriteToSpriteOverlap(old_protagonist_down, foreground_chunked[i], 1);
-			//bool found_collision_left = detectTriSpriteToSpriteOverlap(old_protagonist_left, foreground_chunked[i], 1);
-			//bool found_collision_right = detectTriSpriteToSpriteOverlap(old_protagonist_right, foreground_chunked[i], 1);
+			if (yResolves)
+			{
+				protagonist.vel_y = 0;  // Block vertical movement
+				resolved = true;
+				continue;
+			}
 
-			//if (found_collision_up || old_protagonist_up.vel_y < 0)
-			//{
-			//	protagonist.vel_y =  -old_protagonist.vel_y * 0.1;
-			//	protagonist.y = protagonist.old_y;
-			//}
-
-			//if (found_collision_down || old_protagonist_down.vel_y > 0)
-			//{
-			//	protagonist.vel_y = -old_protagonist.vel_y * 0.1;
-			//	protagonist.y = protagonist.old_y;
-			//}
-
-			//if (found_collision_left || old_protagonist_up.vel_x < 0)
-			//{
-			//	protagonist.vel_x = -old_protagonist.vel_x * 0.1;
-			//	protagonist.x = protagonist.old_x;
-			//}
-
-			//if (found_collision_down || old_protagonist_down.vel_x > 0)
-			//{
-			//	protagonist.vel_x = -old_protagonist.vel_x * 0.1;
-			//	protagonist.x = protagonist.old_x;
-			//}
-
+			// Neither alone works → full revert (corner)
 			protagonist.x = protagonist.old_x;
 			protagonist.y = protagonist.old_y;
-			
-
-			break;
+			protagonist.vel_x = 0;
+			protagonist.vel_y = 0;
+			resolved = true;
 		}
 	}
+
+
+
+
+
+
 
 	for (auto it = ally_bullets.begin(); it != ally_bullets.end(); it++)
 	{
