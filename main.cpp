@@ -200,6 +200,9 @@ public:
 
 	void integrate(float dt)
 	{
+		old_x = x;
+		old_y = y;
+
 		x = x + vel_x * dt;
 		y = y + vel_y * dt;
 	}
@@ -207,6 +210,8 @@ public:
 	void animate_blackening(const vector<glm::vec2>& locations)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+//		blackening_age_map.clear();
 
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
@@ -230,7 +235,7 @@ public:
 
 				bool transparent = false;
 
-				if (rand() / static_cast<float>(RAND_MAX) > 0.99)
+				if (rand() / static_cast<float>(RAND_MAX) > 0.999)
 					transparent = true;
 
 				for (int y = minY; y <= maxY; ++y)
@@ -240,17 +245,9 @@ public:
 						glm::vec2 diff(x - point.x, y - point.y);
 						float distSq = diff.x * diff.x + diff.y * diff.y;
 
-
-
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
 							const size_t index = (y * width + x) * 4;
-
-							if (transparent)
-							{
-								to_present_data_pointers[i][index + 3] = 0;
-								continue;
-							}
 
 							const float duration = glut_curr_time - ci->second;
 
@@ -277,6 +274,12 @@ public:
 								to_present_data_pointers[i][index + 0] = static_cast<unsigned int>(r);
 								to_present_data_pointers[i][index + 1] = static_cast<unsigned int>(g);
 								to_present_data_pointers[i][index + 2] = static_cast<unsigned int>(b);
+
+								if (transparent && duration / animation_length < 0.001)
+								{
+									to_present_data_pointers[i][index + 3] = 0;
+									continue;
+								}
 							}
 						}
 					}
@@ -3274,6 +3277,25 @@ void simulate()
 
 	protagonist.integrate(DT);
 
+
+	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	{
+		if (false == foreground_chunked[i].isOnscreen())
+			continue;
+
+		bool found_collision = detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1);
+
+		if (true == found_collision)
+		{
+			//protagonist.vel_x = 0;// (protagonist.x - protagonist.old_x) / DT;
+			//protagonist.vel_y = 0;// (protagonist.y - protagonist.old_y) / DT;
+
+			protagonist.x = protagonist.old_x;
+			protagonist.y = protagonist.old_y;
+
+			break;
+		}
+	}
 
 	for (auto it = ally_bullets.begin(); it != ally_bullets.end(); it++)
 	{
