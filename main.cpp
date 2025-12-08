@@ -18,11 +18,12 @@
 #include <algorithm>
 #include <tuple>
 #include <chrono>
+#include <random>
 using namespace std;
 
 
-
-
+std::mt19937 generator_real(static_cast<unsigned>(0));
+std::uniform_real_distribution<double> dis_real(0, 1);
 
 
 
@@ -99,7 +100,7 @@ void RandomUnitVector(float& x_out, float& y_out)
 {
 	const static float pi = 4.0f * atanf(1.0f);
 
-	const float a = (rand() / float(RAND_MAX)) * 2.0f * pi;
+	const float a = dis_real(generator_real) * 2.0f * pi;
 
 	x_out = cos(a);
 	y_out = sin(a);
@@ -235,7 +236,7 @@ public:
 
 				bool transparent = false;
 
-				if (rand() / static_cast<float>(RAND_MAX) > 0.999)
+				if (dis_real(generator_real) > 0.999)
 					transparent = true;
 
 				for (int y = minY; y <= maxY; ++y)
@@ -257,7 +258,7 @@ public:
 							{
 								to_present_data_pointers[i][index + 0] = 0;
 								to_present_data_pointers[i][index + 1] = 0;
-								to_present_data_pointers[i][index + 2] = 0;
+								to_present_data_pointers[i][index + 2] = 0;	
 							}
 							else
 							{
@@ -275,7 +276,7 @@ public:
 								to_present_data_pointers[i][index + 1] = static_cast<unsigned int>(g);
 								to_present_data_pointers[i][index + 2] = static_cast<unsigned int>(b);
 
-								if (transparent && duration / animation_length < 0.001)
+								if (transparent && duration / animation_length < 0.0001)
 								{
 									to_present_data_pointers[i][index + 3] = 0;
 									continue;
@@ -551,7 +552,7 @@ public:
 		x += perpX * sinValue * amplitude * dt;// *(120.0f / FPS);
 		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
 
-		//float path_randomization = 10;// (rand() / float(RAND_MAX)) * 0.01f;
+		//float path_randomization = 10;// dis_real(generator_real) * 0.01f;
 		//float rand_x = 0, rand_y = 0;
 		//RandomUnitVector(rand_x, rand_y);
 		//x += rand_x * path_randomization;
@@ -3289,6 +3290,9 @@ void simulate()
 		{
 			//protagonist.vel_x = 0;// (protagonist.x - protagonist.old_x) / DT;
 			//protagonist.vel_y = 0;// (protagonist.y - protagonist.old_y) / DT;
+
+
+
 
 			protagonist.x = protagonist.old_x;
 			protagonist.y = protagonist.old_y;
