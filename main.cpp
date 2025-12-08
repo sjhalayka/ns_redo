@@ -49,7 +49,7 @@ const float VORTICITY_SCALE = 0.1f;
 // Add these near your other simulation parameters (around line 60)
 float TURBULENCE_AMPLITUDE = 2.0f;      // Controls noise strength
 float TURBULENCE_FREQUENCY = 5.0f;      // Controls noise frequency (scale)
-float TURBULENCE_SCALE = 0.15f;          // Overall turbulence strength
+float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 bool TURBULENCE_ENABLED = true;         // Toggle turbulence on/off
 
 
