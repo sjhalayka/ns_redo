@@ -96,11 +96,11 @@ struct CompareVec2
 };
 
 
-void RandomUnitVector(float& x_out, float& y_out)
+void RandomUnitVector(double& x_out, double& y_out)
 {
-	const static float pi = 4.0f * atanf(1.0f);
+	const static double pi = 4.0 * atan(1.0);
 
-	const float a = dis_real(generator_real) * 2.0f * pi;
+	const double a = dis_real(generator_real) * 2.0f * pi;
 
 	x_out = cos(a);
 	y_out = sin(a);
@@ -236,7 +236,7 @@ public:
 
 				bool transparent = false;
 
-				if (dis_real(generator_real) > 0.999)
+				if (dis_real(generator_real) > 0.99999)
 					transparent = true;
 
 				for (int y = minY; y <= maxY; ++y)
@@ -276,7 +276,7 @@ public:
 								to_present_data_pointers[i][index + 1] = static_cast<unsigned int>(g);
 								to_present_data_pointers[i][index + 2] = static_cast<unsigned int>(b);
 
-								if (transparent && duration / animation_length < 0.0001)
+								if (transparent && duration / animation_length < 0.001)
 								{
 									to_present_data_pointers[i][index + 3] = 0;
 									continue;
@@ -3288,14 +3288,54 @@ void simulate()
 
 		if (true == found_collision)
 		{
-			//protagonist.vel_x = 0;// (protagonist.x - protagonist.old_x) / DT;
-			//protagonist.vel_y = 0;// (protagonist.y - protagonist.old_y) / DT;
+			//friendly_ship old_protagonist = protagonist;
+			//old_protagonist.x = old_protagonist.old_x;
+			//old_protagonist.y = old_protagonist.old_y;
 
+			//friendly_ship old_protagonist_up = old_protagonist;
+			//old_protagonist_up.y++;
 
+			//friendly_ship old_protagonist_down = old_protagonist;
+			//old_protagonist_down.y--;
 
+			//friendly_ship old_protagonist_left = old_protagonist;
+			//old_protagonist_left.x++;
+
+			//friendly_ship old_protagonist_right = old_protagonist;
+			//old_protagonist_right.x--;
+
+			//bool found_collision_up = detectTriSpriteToSpriteOverlap(old_protagonist_up, foreground_chunked[i], 1);
+			//bool found_collision_down = detectTriSpriteToSpriteOverlap(old_protagonist_down, foreground_chunked[i], 1);
+			//bool found_collision_left = detectTriSpriteToSpriteOverlap(old_protagonist_left, foreground_chunked[i], 1);
+			//bool found_collision_right = detectTriSpriteToSpriteOverlap(old_protagonist_right, foreground_chunked[i], 1);
+
+			//if (found_collision_up || old_protagonist_up.vel_y < 0)
+			//{
+			//	protagonist.vel_y =  -old_protagonist.vel_y * 0.1;
+			//	protagonist.y = protagonist.old_y;
+			//}
+
+			//if (found_collision_down || old_protagonist_down.vel_y > 0)
+			//{
+			//	protagonist.vel_y = -old_protagonist.vel_y * 0.1;
+			//	protagonist.y = protagonist.old_y;
+			//}
+
+			//if (found_collision_left || old_protagonist_up.vel_x < 0)
+			//{
+			//	protagonist.vel_x = -old_protagonist.vel_x * 0.1;
+			//	protagonist.x = protagonist.old_x;
+			//}
+
+			//if (found_collision_down || old_protagonist_down.vel_x > 0)
+			//{
+			//	protagonist.vel_x = -old_protagonist.vel_x * 0.1;
+			//	protagonist.x = protagonist.old_x;
+			//}
 
 			protagonist.x = protagonist.old_x;
 			protagonist.y = protagonist.old_y;
+			
 
 			break;
 		}
