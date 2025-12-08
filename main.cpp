@@ -42,114 +42,12 @@ const float DENSITY_DISSIPATION = 0.95f;
 const float VELOCITY_DISSIPATION = 0.95f;
 const float VORTICITY_SCALE = 0.1f;
 
-//float TURBULENCE_AMPLITUDE = 50.0f;
-//float TURBULENCE_FREQUENCY = 50.0f;
-//float TURBULENCE_SCALE = 0.01f;
-
-// Add these near your other simulation parameters (around line 60)
 float TURBULENCE_AMPLITUDE = 2.0f;      // Controls noise strength
-float TURBULENCE_FREQUENCY = 5.0f;      // Controls noise frequency (scale)
+float TURBULENCE_FREQUENCY = 10.0f;      // Controls noise frequency (scale)
 float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
-bool TURBULENCE_ENABLED = true;         // Toggle turbulence on/off
 
 
 
-const char* turbulenceForceFragmentSource = R"(
-#version 400 core
-in vec2 texCoord;
-out vec4 fragColor;
-
-uniform sampler2D velocity;
-uniform sampler2D obstacles;
-uniform vec2 texelSize;
-uniform float time;
-uniform float amplitude;     // Noise amplitude
-uniform float frequency;     // Noise frequency
-uniform float scale;         // Overall turbulence strength
-
-// 2D Simplex Noise function (better performance than classic Perlin)
-vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-
-float snoise(vec2 v){
-    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
-                       -0.577350269189626, 0.024390243902439);
-    vec2 i  = floor(v + dot(v, C.yy));
-    vec2 x0 = v - i + dot(i, C.xx);
-    
-    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-    vec4 x12 = x0.xyxy + C.xxzz;
-    x12.xy -= i1;
-    
-    i = mod(i, 289.0);
-    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
-                    + i.x + vec3(0.0, i1.x, 1.0));
-    
-    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
-                           dot(x12.zw, x12.zw)), 0.0);
-    m = m*m;
-    m = m*m;
-    
-    vec3 x = 2.0 * fract(p * C.www) - 1.0;
-    vec3 h = abs(x) - 0.5;
-    vec3 ox = floor(x + 0.5);
-    vec3 a0 = x - ox;
-    
-    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
-    
-    vec3 g;
-    g.x  = a0.x  * x0.x  + h.x  * x0.y;
-    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-    return 130.0 * dot(m, g);
-}
-
-// Generate curl noise from scalar noise field
-vec2 curlNoise(vec2 uv) {
-    float eps = 0.001;  // Smaller epsilon for better derivatives
-    
-    // Sample noise at four offset positions to compute curl
-    float n0 = snoise(uv);
-    float n1 = snoise(uv + vec2(eps, 0.0));
-    float n2 = snoise(uv + vec2(0.0, eps));
-    
-    // Compute gradient using central differences
-    float dx = (n1 - n0) / eps;
-    float dy = (n2 - n0) / eps;
-    
-    // Curl in 2D
-    return vec2(dy, -dx);
-}
-
-void main() {
-    if(texture(obstacles, texCoord).r > 0.5) {
-        fragColor = vec4(0.0);
-        return;
-    }
-    
-    // Get current velocity
-    vec2 vel = texture(velocity, texCoord).xy;
-    
-    // Calculate turbulence domain with time animation
-    vec2 uv = texCoord * frequency;
-    
-    // Add time-based scrolling for animated turbulence
-    uv += vec2(time * 0.1, time * 0.15);
-    
-    // Generate turbulence force using curl noise
-    vec2 turbulence = curlNoise(uv) * amplitude;
-    
-    // Add multiple octaves for richer turbulence (optional)
-    vec2 turbulence2 = curlNoise(uv * 1.8 + vec2(time * 0.05)) * amplitude * 0.5;
-    vec2 turbulence3 = curlNoise(uv * 3.2 - vec2(time * 0.08)) * amplitude * 0.25;
-    
-    // Combine octaves
-    turbulence += turbulence2 + turbulence3;
-    
-    // Apply turbulence to velocity (scaled by dt is handled in main code)
-    vel += turbulence * scale;
-    
-    fragColor = vec4(vel, 0.0, 1.0);
-}
-)";
 
 bool spacePressed = false;
 
@@ -330,6 +228,11 @@ public:
 				int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
 				int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
 
+				bool transparent = false;
+
+				if (rand() / static_cast<float>(RAND_MAX) > 0.99)
+					transparent = true;
+
 				for (int y = minY; y <= maxY; ++y)
 				{
 					for (int x = minX; x <= maxX; ++x)
@@ -337,9 +240,17 @@ public:
 						glm::vec2 diff(x - point.x, y - point.y);
 						float distSq = diff.x * diff.x + diff.y * diff.y;
 
+
+
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
 							const size_t index = (y * width + x) * 4;
+
+							if (transparent)
+							{
+								to_present_data_pointers[i][index + 3] = 0;
+								continue;
+							}
 
 							const float duration = glut_curr_time - ci->second;
 
@@ -1970,83 +1881,110 @@ void main() {
     }
 }
 )";
-//
-//const char* turbulenceForceFragmentSource = R"(
-//#version 400 core
-//in vec2 texCoord;
-//out vec4 fragColor;
-//
-//uniform sampler2D velocity;
-//uniform sampler2D obstacles;
-//
-//uniform vec2 texelSize;
-//uniform float time;
-//uniform float amplitude;     // e.g. 0.5–3.0
-//uniform float frequency;     // e.g. 2–10
-//uniform float scale;         // turbulence strength (multiply final force)
-//
-////
-//// Simple 2D procedural noise: sin + cos swirl
-////
-//float hash(vec2 p)
-//{
-//    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-//}
-//
-//float noise(vec2 p)
-//{
-//    vec2 i = floor(p);
-//    vec2 f = fract(p);
-//
-//    float a = hash(i);
-//    float b = hash(i + vec2(1.0, 0.0));
-//    float c = hash(i + vec2(0.0, 1.0));
-//    float d = hash(i + vec2(1.0, 1.0));
-//
-//    vec2 u = f*f*(3.0 - 2.0*f);
-//
-//    return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
-//}
-//
-////
-//// Convert noise into a curl (pseudo-vorticity) force
-////
-//vec2 curlNoise(vec2 uv)
-//{
-//    float eps = 0.01;
-//
-//    float nL = noise(uv - vec2(eps, 0.0));
-//    float nR = noise(uv + vec2(eps, 0.0));
-//    float nB = noise(uv - vec2(0.0, eps));
-//    float nT = noise(uv + vec2(0.0, eps));
-//
-//    // Numerical curl
-//    float curl = (nT - nB) - (nR - nL);
-//
-//    // Rotate curl scalar into 2D vector
-//    return vec2( curl, -curl );
-//}
-//
-//void main()
-//{
-//    if(texture(obstacles, texCoord).r > 0.5) {
-//        fragColor = vec4(0.0);
-//        return;
-//    }
-//
-//    // Build turbulence domain
-//    vec2 uv = texCoord * frequency + vec2(time * 0.15);
-//
-//    // Compute curl noise
-//    vec2 turb = curlNoise(uv) * amplitude;
-//
-//    // Add to velocity
-//    vec2 vel = texture(velocity, texCoord).xy;
-//    vel += turb * scale;
-//
-//    fragColor = vec4(vel, 0.0, 1.0);
-//}
-//)";
+
+
+
+
+
+const char* turbulenceForceFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D velocity;
+uniform sampler2D obstacles;
+uniform vec2 texelSize;
+uniform float time;
+uniform float amplitude;     // Noise amplitude
+uniform float frequency;     // Noise frequency
+uniform float scale;         // Overall turbulence strength
+
+// 2D Simplex Noise function (better performance than classic Perlin)
+vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+
+float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    
+    i = mod(i, 289.0);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                    + i.x + vec3(0.0, i1.x, 1.0));
+    
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
+                           dot(x12.zw, x12.zw)), 0.0);
+    m = m*m;
+    m = m*m;
+    
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+// Generate curl noise from scalar noise field
+vec2 curlNoise(vec2 uv) {
+    float eps = 0.001;  // Smaller epsilon for better derivatives
+    
+    // Sample noise at four offset positions to compute curl
+    float n0 = snoise(uv);
+    float n1 = snoise(uv + vec2(eps, 0.0));
+    float n2 = snoise(uv + vec2(0.0, eps));
+    
+    // Compute gradient using central differences
+    float dx = (n1 - n0) / eps;
+    float dy = (n2 - n0) / eps;
+    
+    // Curl in 2D
+    return vec2(dy, -dx);
+}
+
+void main() {
+    if(texture(obstacles, texCoord).r > 0.5) {
+        fragColor = vec4(0.0);
+        return;
+    }
+    
+    // Get current velocity
+    vec2 vel = texture(velocity, texCoord).xy;
+    
+    // Calculate turbulence domain with time animation
+    vec2 uv = texCoord * frequency;
+    
+    // Add time-based scrolling for animated turbulence
+    uv += vec2(time * 0.1, time * 0.15);
+    
+    // Generate turbulence force using curl noise
+    vec2 turbulence = curlNoise(uv) * amplitude;
+    
+    // Add multiple octaves for richer turbulence (optional)
+    vec2 turbulence2 = curlNoise(uv * 1.8 + vec2(time * 0.05)) * amplitude * 0.5;
+    vec2 turbulence3 = curlNoise(uv * 3.2 - vec2(time * 0.08)) * amplitude * 0.25;
+    
+    // Combine octaves
+    turbulence += turbulence2 + turbulence3;
+    
+    // Apply turbulence to velocity (scaled by dt is handled in main code)
+    vel += turbulence * scale;
+    
+    fragColor = vec4(vel, 0.0, 1.0);
+}
+)";
+
+
+
 
 
 GLuint createProgram(const char* vertexSource, const char* fragmentSource) {
@@ -2425,9 +2363,8 @@ bool isPixelInsideSpriteAndTransparent(
 }
 
 
-void applyTurbulence() {
-	if (!TURBULENCE_ENABLED) return;
-
+void applyTurbulence() 
+{
 	int dst = 1 - currentVelocity;
 	glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[dst]);
 	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
@@ -2800,40 +2737,7 @@ void addSource(GLuint* textures, GLuint* fbos, int& current, float x, float y, f
 //	setTextureUniform(copyProgram, "source", 0, tempTex);
 //	drawQuad();
 //}
-
-/**
- * Add or remove obstacles using a sprite texture as a stamp.
- *
- * @param stampTexture  OpenGL texture ID of the sprite to use as stamp
- * @param pixelX        X position of stamp's top-left corner in simulation pixels
- * @param pixelY        Y position of stamp's top-left corner in simulation pixels
- *                      (0,0) is the top-left corner of the simulation
- * @param pixelWidth    Width of the stamp in simulation pixels
- * @param pixelHeight   Height of the stamp in simulation pixels
- * @param add           true to add obstacles, false to remove them
- * @param threshold     Alpha/intensity threshold for considering a pixel solid (default 0.5)
- * @param useAlpha      true to use alpha channel, false to use luminance of RGB
- *
- * The coordinate system uses top-left as origin (0,0), with X increasing to the right
- * and Y increasing downward, matching typical image/screen coordinates.
- *
- * The stamp will appear with the correct aspect ratio regardless of the
- * simulation's aspect ratio. For example, a 100x100 pixel stamp will appear
- * as a square even on a non-square simulation grid.
- *
- * Example usage:
- *   // Load a sprite texture (e.g., a star shape with transparency)
- *   GLuint starTex = loadTexture("star.png");
- *
- *   // Stamp a 64x64 pixel star at position (100, 50) from top-left
- *   addObstacleStamp(starTex, 100, 50, 64, 64, true, 0.5f, true);
- *
- *   // Stamp a 100x50 pixel rectangle at the top-left corner
- *   addObstacleStamp(rectTex, 0, 0, 100, 50, true, 0.5f, true);
- *
- *   // Remove obstacles using a 32x32 pixel circular eraser at (200, 150)
- *   addObstacleStamp(circleTex, 200, 150, 32, 32, false, 0.5f, true);
- */
+ 
 void addObstacleStamp(GLuint stampTexture, int pixelX, int pixelY,
 	int pixelWidth, int pixelHeight, bool add,
 	float threshold = 0.5f, bool useAlpha = true) {
@@ -3414,10 +3318,7 @@ void simulate()
 	{
 		auto& bullet = ally_bullets[i];
 
-		int pathSamples = 10;// static_cast<int>((speed / FPS / 1000.0f));
-
-		if (pathSamples < 1)
-			pathSamples = 1;
+		int pathSamples = 10;
 
 		float prevX = bullet->old_x;
 		float prevY = bullet->old_y;
@@ -3440,8 +3341,8 @@ void simulate()
 			float actualVelX = (bullet->x - bullet->old_x) / DT;
 			float actualVelY = (bullet->y - bullet->old_y) / DT;
 
-			float normVelX = velPixelToNormX(actualVelX);
-			float normVelY = velPixelToNormY(actualVelY);
+			float normVelX = 0.1f * velPixelToNormX(actualVelX);
+			float normVelY = 0.1f * velPixelToNormY(actualVelY);
 			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00008f);
 		}
 	}
