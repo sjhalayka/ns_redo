@@ -1768,9 +1768,9 @@ void main()
     // toon shading:
     if (d < 0.5) {
         fragColor = color1;
-    } else if (d < 0.75) {
+    } else if (d < 0.7) {
         fragColor = color2;
-    } else if (d < 0.95) {
+    } else if (d < 0.9) {
         fragColor = color3;
     } else {
         fragColor = color4;
