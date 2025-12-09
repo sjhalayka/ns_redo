@@ -181,6 +181,8 @@ public:
 	float vel_x = 0;
 	float vel_y = 0;
 
+	bool under_fire = false;
+
 	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
 
@@ -1834,11 +1836,26 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 uniform sampler2D spriteTexture;
+uniform int under_fire;
+uniform float time;
 
 void main() {
     vec4 color = texture(spriteTexture, texCoord);
     // Discard fully transparent pixels
-    if (color.a < 0.01) discard;
+    //if (color.a < 0.01) discard;
+
+
+	// Do alternating colour / white blinking when under fire
+	if(under_fire == 1)
+	{
+		const float timeslice = 0.25;
+		float m = mod(time, timeslice);
+		
+		if(m < timeslice/2.0)
+		color.rgb = vec3(1.0, 1.0, 1.0);
+	}
+
+
     fragColor = color;
 }
 )";
@@ -2448,6 +2465,7 @@ void detectEdgeCollisions()
 	{
 		if (1)//collisionPoints.size() > 0)
 		{
+			protagonist.under_fire = false;
 			vector<glm::vec2> protagonist_blackening_points;
 
 			for (size_t i = 0; i < collisionPoints.size(); i++)
@@ -2478,6 +2496,7 @@ void detectEdgeCollisions()
 				{
 					if (inside && collisionPoints[i].w == 1)
 					{
+						protagonist.under_fire = true;
 						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
 					}
 				}
@@ -2531,6 +2550,7 @@ void detectEdgeCollisions()
 		for (size_t h = 0; h < enemy_ships.size(); h++)
 
 		{
+			enemy_ships[h]->under_fire = false;
 			vector<glm::vec2> blackening_points;
 
 			for (size_t i = 0; i < collisionPoints.size(); i++)
@@ -2561,6 +2581,7 @@ void detectEdgeCollisions()
 				{
 					if (inside && collisionPoints[i].z == 1)
 					{
+						enemy_ships[h]->under_fire = true;
 						blackening_points.push_back(glm::vec2(hit.x, hit.y));
 					}
 				}
@@ -3173,7 +3194,7 @@ bool chunkForegroundTexture(const char* sourceFilename)
  *   // Draw a sprite scaled to 2x its original size
  *   drawSprite(myTexture, 200, 100, originalWidth * 2, originalHeight * 2);
  */
-void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight) {
+void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight, bool under_fire) {
 	if (texture == 0) return;
 
 	// Enable blending for transparency
@@ -3208,6 +3229,10 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glUniform1i(glGetUniformLocation(spriteProgram, "spriteTexture"), 0);
+
+	glUniform1i(glGetUniformLocation(spriteProgram, "under_fire"), under_fire);
+	glUniform1f(glGetUniformLocation(spriteProgram, "time"), GLOBAL_TIME);
+
 
 	drawQuad();
 
@@ -3411,6 +3436,8 @@ void simulate()
 			protagonist.vel_x = 0;
 			protagonist.vel_y = 0;
 			resolved = true;
+
+			// to do: kill protagonist if still colliding
 		}
 	}
 
@@ -3613,7 +3640,7 @@ void display()
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height);
+			protagonist.width, protagonist.height, protagonist.under_fire);
 	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
@@ -3622,7 +3649,7 @@ void display()
 		{
 			drawSprite(foreground_chunked[i].tex,
 				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
-				foreground_chunked[i].width, foreground_chunked[i].height);
+				foreground_chunked[i].width, foreground_chunked[i].height, false);
 		}
 	}
 
@@ -3632,7 +3659,7 @@ void display()
 		{
 			drawSprite(enemy_ships[i]->tex,
 				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
-				enemy_ships[i]->width, enemy_ships[i]->height);
+				enemy_ships[i]->width, enemy_ships[i]->height, enemy_ships[i]->under_fire);
 		}
 	}
 
