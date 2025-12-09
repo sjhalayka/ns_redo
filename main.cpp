@@ -333,8 +333,7 @@ const int REST_STATE = 2;
 class tri_sprite : public pre_sprite
 {
 public:
-	
-	float last_time_collided_with_foreground = 0;
+
 
 	std::vector<unsigned char> to_present_up_data;
 	std::vector<unsigned char> to_present_down_data;
@@ -414,6 +413,8 @@ public:
 class friendly_ship : public ship
 {
 public:
+
+	float last_time_collided_with_foreground = 0;
 
 	void set_velocity(const float src_x, const float src_y)
 	{
