@@ -182,6 +182,7 @@ public:
 	float vel_y = 0;
 
 	bool under_fire = false;
+	float last_time_collided_with_foreground = 0;
 
 	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
@@ -1844,7 +1845,6 @@ void main() {
     // Discard fully transparent pixels
     //if (color.a < 0.01) discard;
 
-
 	// Do alternating colour / white blinking when under fire
 	if(under_fire == 1)
 	{
@@ -3385,6 +3385,9 @@ void simulate()
 		{
 			// to do: do damage to protagonist
 
+
+			protagonist.last_time_collided_with_foreground = GLOBAL_TIME;
+
 			// Test X resolution
 			float tempX = protagonist.x;
 			protagonist.x = protagonist.old_x;
@@ -3640,7 +3643,7 @@ void display()
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height, protagonist.under_fire);
+			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided_with_foreground > 0 && GLOBAL_TIME <= protagonist.last_time_collided_with_foreground + 0.5));
 	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
