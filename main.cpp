@@ -182,7 +182,7 @@ public:
 	float vel_y = 0;
 
 	bool under_fire = false;
-	float last_time_collided_with_foreground = 0;
+
 
 	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
@@ -333,6 +333,8 @@ const int REST_STATE = 2;
 class tri_sprite : public pre_sprite
 {
 public:
+	
+	float last_time_collided_with_foreground = 0;
 
 	std::vector<unsigned char> to_present_up_data;
 	std::vector<unsigned char> to_present_down_data;
