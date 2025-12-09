@@ -3358,6 +3358,8 @@ void simulate()
 
 		if (detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1))
 		{
+			// to do: do damage to protagonist
+
 			// Test X resolution
 			float tempX = protagonist.x;
 			protagonist.x = protagonist.old_x;
