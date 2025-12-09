@@ -3353,7 +3353,7 @@ void simulate()
 
 	for (size_t i = 0; i < foreground_chunked.size() && !resolved; i++)
 	{
-		if (!foreground_chunked[i].isOnscreen())
+		if (false == foreground_chunked[i].isOnscreen())
 			continue;
 
 		if (detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1))
@@ -3405,7 +3405,7 @@ void simulate()
 				continue;
 			}
 
-			// Neither alone works → full revert (corner)
+			// Neither alone works -> full revert (corner)
 			protagonist.x = protagonist.old_x;
 			protagonist.y = protagonist.old_y;
 			protagonist.vel_x = 0;
