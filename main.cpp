@@ -1869,7 +1869,7 @@ void main() {
 		float m = mod(time, timeslice);
 		
 		if(m < timeslice/2.0)
-		color.rgb = vec3(1.0, 1.0, 1.0);
+		color.rgb = vec3((color.r + 1.0) * 0.5 , (color.g + 1.0) * 0.5, (color.b + 1.0) * 0.5);
 	}
 
 
