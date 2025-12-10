@@ -588,6 +588,8 @@ inline float velPixelToNormX(float vx) { return vx / (float)SIM_WIDTH; }
 inline float velPixelToNormY(float vy) { return -vy / (float)SIM_HEIGHT; }
 
 vector<unique_ptr<bullet>> ally_bullets;
+vector<unique_ptr<bullet>> enemy_bullets;
+
 
 vector<unique_ptr<enemy_ship>> enemy_ships;
 
@@ -3515,10 +3517,10 @@ void fireBullet(void)
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
 
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		enemy_bullets.push_back(make_unique<sine_bullet>(newBullet));
 
 		newBullet.sinusoidal_shift = true;
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		enemy_bullets.push_back(make_unique<sine_bullet>(newBullet));
 	}
 }
 
@@ -3713,7 +3715,6 @@ void simulate()
 
 		if (false == (*it)->isOnscreen() || found_collision)
 		{
-			cout << "culling ally bullet" << endl;
 			(*it)->to_be_culled = true;
 		}
 	}
@@ -3737,9 +3738,84 @@ void simulate()
 			float normX = pixelToNormX(sampleX);
 			float normY = pixelToNormY(sampleY);
 
-			if (red_mode)
+//			if (red_mode)
 				addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
-			else
+			//else
+			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+
+			float actualVelX = (bullet->x - bullet->old_x) / DT;
+			float actualVelY = (bullet->y - bullet->old_y) / DT;
+
+			float normVelX = 0.1f * velPixelToNormX(actualVelX);
+			float normVelY = 0.1f * velPixelToNormY(actualVelY);
+			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00008f);
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+	for (auto it = enemy_bullets.begin(); it != enemy_bullets.end(); it++)
+	{
+		(*it)->integrate(DT);
+
+		bool found_collision = false;
+
+		for (size_t i = 0; i < foreground_chunked.size(); i++)
+		{
+			if (false == foreground_chunked[i].isOnscreen())
+				continue;
+
+			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
+
+			if (true == found_collision)
+				break;
+		}
+
+		if (false == found_collision)
+		{
+			found_collision = detectTriSpriteToSpriteOverlap(protagonist, *(*it), 1);
+
+			if (true == found_collision)
+				break;
+		}
+
+
+		if (false == (*it)->isOnscreen() || found_collision)
+		{
+			(*it)->to_be_culled = true;
+		}
+	}
+
+	for (size_t i = 0; i < enemy_bullets.size(); i++)
+	{
+		auto& bullet = enemy_bullets[i];
+
+		int pathSamples = 10;
+
+		float prevX = bullet->old_x;
+		float prevY = bullet->old_y;
+
+		for (int step = 0; step <= pathSamples; step++)
+		{
+			float t = static_cast<float>(step) / pathSamples;
+
+			float sampleX = prevX + (bullet->x - prevX) * t;
+			float sampleY = prevY + (bullet->y - prevY) * t;
+
+			float normX = pixelToNormX(sampleX);
+			float normY = pixelToNormY(sampleY);
+
+			//if (red_mode)
+			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
+			//else
 				addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
 			float actualVelX = (bullet->x - bullet->old_x) / DT;
@@ -3750,6 +3826,23 @@ void simulate()
 			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00008f);
 		}
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3988,6 +4081,16 @@ void display()
 			it++;
 	}
 
+	for (auto it = enemy_bullets.begin(); it != enemy_bullets.end();)
+	{
+		if ((*it)->to_be_culled)
+		{
+			cout << "culling enemy bullet" << endl;
+			it = enemy_bullets.erase(it);
+		}
+		else
+			it++;
+	}
 
 	glutSwapBuffers();
 	glutPostRedisplay();
