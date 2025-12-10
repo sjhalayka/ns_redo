@@ -407,7 +407,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(100.0f), max_health(100.0f) {}
+	ship() : health(10000.0f), max_health(10000.0f) {}
 };
 
 
@@ -419,11 +419,11 @@ public:
 
 	float last_time_collided_with_foreground = 0;
 
-	friendly_ship() : ship()
-	{
-		health = 100.0f;
-		max_health = 100.0f;
-	}
+	//friendly_ship() : ship()
+	//{
+	//	health = 100.0f;
+	//	max_health = 100.0f;
+	//}
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -453,11 +453,11 @@ class enemy_ship : public ship
 {
 public:
 
-	enemy_ship() : ship()
-	{
-		health = 50.0f;
-		max_health = 50.0f;
-	}
+	//enemy_ship() : ship()
+	//{
+	//	health = 50.0f;
+	//	max_health = 50.0f;
+	//}
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -3453,17 +3453,17 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 		drawQuad();
 	}
 
-	// Draw border (black outline)
-	{
-		auto [posX, posY, width, height] = pixelToNDC(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
-		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
-		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
-		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.0f, 0.0f, 0.0f, 0.8f);
+	//// Draw border (black outline)
+	//{
+	//	auto [posX, posY, width, height] = pixelToNDC(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+	//	glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
+	//	glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
+	//	glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.0f, 0.0f, 0.0f, 1.0f);
 
-		// Draw only the outline by drawing 4 thin rectangles
-		// This is a simple approach - for a proper outline you'd use a different technique
-		// For simplicity, we'll skip the outline and just use the filled bars above
-	}
+	//	// Draw only the outline by drawing 4 thin rectangles
+	//	// This is a simple approach - for a proper outline you'd use a different technique
+	//	// For simplicity, we'll skip the outline and just use the filled bars above
+	//}
 
 	glDisable(GL_BLEND);
 }
