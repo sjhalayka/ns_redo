@@ -623,12 +623,8 @@ GLuint obstacleStampProgram;
 GLuint copyProgram;
 GLuint spriteProgram;
 GLuint turbulenceForceProgram;
-GLuint healthBarProgram;
 
-// Health bar tracking
-enemy_ship* lastDamagedEnemy = nullptr;
-float lastDamagedEnemyTime = 0.0f;
-const float ENEMY_HEALTHBAR_DISPLAY_DURATION = 3.0f; // Show for 3 seconds after damage
+
 
 
 // Quad VAO
@@ -1867,32 +1863,6 @@ void main() {
 }
 )";
 
-// Health bar shader - simple colored quad
-const char* healthBarVertexSource = R"(
-#version 400 core
-layout(location = 0) in vec2 position;
-
-uniform vec2 barPos;      // Position in NDC [-1, 1]
-uniform vec2 barSize;     // Size in NDC
-
-void main() {
-    // position is in [-1, 1] range for the quad, map to [0, 1]
-    vec2 pos = barPos + (position * 0.5 + 0.5) * barSize;
-    gl_Position = vec4(pos, 0.0, 1.0);
-}
-)";
-
-const char* healthBarFragmentSource = R"(
-#version 400 core
-out vec4 fragColor;
-
-uniform vec4 barColor;
-
-void main() {
-    fragColor = barColor;
-}
-)";
-
 const char* boundaryFragmentSource = R"(
 #version 400 core
 in vec2 texCoord;
@@ -2101,7 +2071,6 @@ void initShaders() {
 	copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
 	spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
 	turbulenceForceProgram = createProgram(vertexShaderSource, turbulenceForceFragmentSource);
-	healthBarProgram = createProgram(healthBarVertexSource, healthBarFragmentSource);
 
 }
 
@@ -2532,9 +2501,6 @@ void detectEdgeCollisions()
 					{
 						protagonist.under_fire = true;
 						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
-
-						// Apply damage to protagonist health
-						protagonist.health -= 0.5f; // Adjust damage amount as needed
 					}
 				}
 			}
@@ -2620,13 +2586,6 @@ void detectEdgeCollisions()
 					{
 						enemy_ships[h]->under_fire = true;
 						blackening_points.push_back(glm::vec2(hit.x, hit.y));
-
-						// Track this enemy as the most recently damaged
-						lastDamagedEnemy = enemy_ships[h].get();
-						lastDamagedEnemyTime = GLOBAL_TIME;
-
-						// Apply damage to enemy health
-						enemy_ships[h]->health -= 0.5f; // Adjust damage amount as needed
 					}
 				}
 			}
@@ -3284,141 +3243,6 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 }
 
 
-/**
- * Draw a health bar at pixel coordinates.
- *
- * @param pixelX       X position of bar's left edge in window pixels
- * @param pixelY       Y position of bar's top edge in window pixels
- * @param pixelWidth   Total width of the health bar in pixels
- * @param pixelHeight  Height of the health bar in pixels
- * @param healthPercent Health percentage (0.0 to 1.0)
- * @param bgColor      Background color (empty portion)
- * @param fgColor      Foreground color (filled portion)
- * @param borderColor  Border color
- */
-void drawHealthBar(int pixelX, int pixelY, int pixelWidth, int pixelHeight,
-	float healthPercent,
-	glm::vec4 bgColor = glm::vec4(0.2f, 0.2f, 0.2f, 0.8f),
-	glm::vec4 fgColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
-	glm::vec4 borderColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)) {
-
-	// Clamp health percent
-	healthPercent = std::max(0.0f, std::min(1.0f, healthPercent));
-
-	// Change color based on health level
-	if (healthPercent < 0.25f) {
-		fgColor = glm::vec4(1.0f, 0.0f, 0.0f, fgColor.a); // Red when critical
-	}
-	else if (healthPercent < 0.5f) {
-		fgColor = glm::vec4(1.0f, 0.5f, 0.0f, fgColor.a); // Orange when low
-	}
-	else if (healthPercent < 0.75f) {
-		fgColor = glm::vec4(1.0f, 1.0f, 0.0f, fgColor.a); // Yellow when medium
-	}
-	// Otherwise stays green
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glUseProgram(healthBarProgram);
-
-	// Convert pixel coordinates to NDC
-	float ndcX = (2.0f * pixelX / SIM_WIDTH) - 1.0f;
-	float ndcY = 1.0f - (2.0f * pixelY / SIM_HEIGHT);
-	float ndcWidth = 2.0f * pixelWidth / SIM_WIDTH;
-	float ndcHeight = 2.0f * pixelHeight / SIM_HEIGHT;
-
-	// Adjust Y since we draw from bottom-left
-	float barPosY = ndcY - ndcHeight;
-
-	const int BORDER = 2; // Border thickness in pixels
-	float borderNdcX = 2.0f * BORDER / SIM_WIDTH;
-	float borderNdcY = 2.0f * BORDER / SIM_HEIGHT;
-
-	// Draw border (slightly larger rectangle behind)
-	glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"),
-		ndcX - borderNdcX, barPosY - borderNdcY);
-	glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"),
-		ndcWidth + 2 * borderNdcX, ndcHeight + 2 * borderNdcY);
-	glUniform4fv(glGetUniformLocation(healthBarProgram, "barColor"), 1, &borderColor[0]);
-	drawQuad();
-
-	// Draw background (empty health)
-	glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), ndcX, barPosY);
-	glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), ndcWidth, ndcHeight);
-	glUniform4fv(glGetUniformLocation(healthBarProgram, "barColor"), 1, &bgColor[0]);
-	drawQuad();
-
-	// Draw foreground (current health)
-	if (healthPercent > 0.0f) {
-		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), ndcX, barPosY);
-		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"),
-			ndcWidth * healthPercent, ndcHeight);
-		glUniform4fv(glGetUniformLocation(healthBarProgram, "barColor"), 1, &fgColor[0]);
-		drawQuad();
-	}
-
-	glDisable(GL_BLEND);
-}
-
-
-void drawHealthBars() {
-	const int HEALTH_BAR_WIDTH = 100;
-	const int HEALTH_BAR_HEIGHT = 10;
-	const int HEALTH_BAR_OFFSET_Y = 10; // Pixels above sprite
-
-	// --- PROTAGONIST HEALTH BAR (top-left corner, HUD style) ---
-	const int PROTAGONIST_BAR_X = 20;
-	const int PROTAGONIST_BAR_Y = 20;
-	const int PROTAGONIST_BAR_WIDTH = 200;
-	const int PROTAGONIST_BAR_HEIGHT = 20;
-
-	// Assuming max health of 100 for protagonist
-	const float PROTAGONIST_MAX_HEALTH = 100.0f;
-	float protagonistHealthPercent = protagonist.health / PROTAGONIST_MAX_HEALTH;
-
-	drawHealthBar(PROTAGONIST_BAR_X, PROTAGONIST_BAR_Y,
-		PROTAGONIST_BAR_WIDTH, PROTAGONIST_BAR_HEIGHT,
-		protagonistHealthPercent,
-		glm::vec4(0.3f, 0.0f, 0.0f, 0.8f),  // Dark red background
-		glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green fill
-		glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)); // White border
-
-	// --- MOST RECENTLY DAMAGED ENEMY HEALTH BAR ---
-	// Only show if an enemy was recently damaged
-	if (lastDamagedEnemy != nullptr &&
-		(GLOBAL_TIME - lastDamagedEnemyTime) < ENEMY_HEALTHBAR_DISPLAY_DURATION) {
-
-		// Check if enemy is still valid (on screen and not culled)
-		if (lastDamagedEnemy->isOnscreen() && !lastDamagedEnemy->to_be_culled) {
-
-			// Position health bar above the enemy sprite
-			int enemyBarX = static_cast<int>(lastDamagedEnemy->x +
-				lastDamagedEnemy->width / 2 - HEALTH_BAR_WIDTH / 2);
-			int enemyBarY = static_cast<int>(lastDamagedEnemy->y - HEALTH_BAR_OFFSET_Y - HEALTH_BAR_HEIGHT);
-
-			// Assuming max health of 100 for enemies
-			const float ENEMY_MAX_HEALTH = 100.0f;
-			float enemyHealthPercent = lastDamagedEnemy->health / ENEMY_MAX_HEALTH;
-
-			// Calculate fade-out alpha based on time remaining
-			float timeRemaining = ENEMY_HEALTHBAR_DISPLAY_DURATION - (GLOBAL_TIME - lastDamagedEnemyTime);
-			float alpha = 1.0f;
-			if (timeRemaining < 1.0f) {
-				alpha = timeRemaining; // Fade out over last second
-			}
-
-			drawHealthBar(enemyBarX, enemyBarY,
-				HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT,
-				enemyHealthPercent,
-				glm::vec4(0.2f, 0.2f, 0.2f, 0.8f * alpha),
-				glm::vec4(1.0f, 0.0f, 0.0f, 1.0f * alpha),  // Red for enemies
-				glm::vec4(1.0f, 1.0f, 1.0f, 1.0f * alpha));
-		}
-	}
-}
-
-
 void fireBullet(void)
 {
 	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
@@ -3847,9 +3671,6 @@ void display()
 
 
 
-	// Draw health bars
-	drawHealthBars();
-
 	displayFPS();
 
 
@@ -4178,7 +3999,6 @@ int main(int argc, char** argv)
 
 	protagonist.x = 200;
 	protagonist.y = 300;
-	protagonist.health = 100.0f;
 
 	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.to_present_data);
 	if (background.tex == 0)
@@ -4219,15 +4039,15 @@ int main(int argc, char** argv)
 
 	enemy_ships[0]->x = 300;
 	enemy_ships[0]->y = 200;
-	enemy_ships[0]->health = 100.0f;
 	enemy_ships[0]->manually_update_data(enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data);
 
 	enemy_ships[1]->x = 400;
 	enemy_ships[1]->y = 300;
-	enemy_ships[1]->health = 100.0f;
 	enemy_ships[1]->manually_update_data(enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data);
 
 	//    printControls();
+
+
 
 		// Register callbacks
 	glutDisplayFunc(display);
@@ -4250,4 +4070,3 @@ int main(int argc, char** argv)
 
 	return 0;
 }
-	
