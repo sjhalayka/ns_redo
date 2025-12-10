@@ -2334,7 +2334,8 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
  * NOTE: This reads the entire sprite texture into CPU memory ONCE per call.
  * If needed often, cache the pixel buffer and width/height externally.
  */
-bool isPixelInsideSpriteAndTransparent(
+bool isPixelInsideTriSpriteAndTransparent(
+	tri_sprite & spr,
 	GLuint sprTex,
 	int sprX, int sprY,
 	int sprW, int sprH,
@@ -2369,14 +2370,26 @@ bool isPixelInsideSpriteAndTransparent(
 
 	// 3. Read texture pixel data from GPU
 	//    (4 bytes per pixel: RGBA8)
-	std::vector<unsigned char> texData(sprW * sprH * 4);
+	//std::vector<unsigned char> texData(sprW * sprH * 4);
 
-	glBindTexture(GL_TEXTURE_2D, sprTex);
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
+	//glBindTexture(GL_TEXTURE_2D, sprTex);
+	//glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
+
+
+	unsigned char* data_ptr = 0;
+
+	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+		data_ptr = spr.to_present_up_data.data();
+	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
+		data_ptr = spr.to_present_down_data.data();
+	else if (!spr.to_present_rest_data.empty())
+		data_ptr = spr.to_present_rest_data.data();
+
+
 
 	// 4. Index into pixel buffer
 	int idx = (texY * sprW + texX) * 4;
-	unsigned char a = texData[idx + 3];  // ALPHA
+	unsigned char a = data_ptr[idx + 3];  // ALPHA
 
 	// 5. Transparent?
 	outTransparent = (a < alphaThreshold);
@@ -2385,6 +2398,68 @@ bool isPixelInsideSpriteAndTransparent(
 
 	return true;
 }
+
+
+
+
+bool isPixelInsideSpriteAndTransparent(
+	sprite& spr,
+	GLuint sprTex,
+	int sprX, int sprY,
+	int sprW, int sprH,
+	int pixelX, int pixelY,
+	bool& outInside,
+	bool& outTransparent,
+	unsigned char alphaThreshold,
+	glm::vec2& hit)
+{
+	outInside = false;
+	outTransparent = false;
+	hit = glm::vec2(0, 0);
+
+	// 1. Bounding box test (fast)
+	if (pixelX < sprX || pixelX >= sprX + sprW ||
+		pixelY < sprY || pixelY >= sprY + sprH)
+	{
+		return false; // definitely not inside
+	}
+
+	outInside = true;
+
+	// 2. Compute sprite-relative pixel coordinates
+	int localX = pixelX - sprX;
+	int localY = pixelY - sprY;
+
+	// Sprite textures use bottom-left origin by default.
+	// Screen pixels use top-left origin.
+	// Convert Y accordingly.
+	int texY = (sprH - 1) - localY;
+	int texX = localX;
+
+	// 3. Read texture pixel data from GPU
+	//    (4 bytes per pixel: RGBA8)
+	//std::vector<unsigned char> texData(sprW * sprH * 4);
+
+	//glBindTexture(GL_TEXTURE_2D, sprTex);
+	//glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texData.data());
+
+
+	unsigned char* data_ptr = spr.to_present_data.data();
+
+	// 4. Index into pixel buffer
+	int idx = (texY * sprW + texX) * 4;
+	unsigned char a = data_ptr[idx + 3];  // ALPHA
+
+	// 5. Transparent?
+	outTransparent = (a < alphaThreshold);
+
+	hit = glm::vec2(localX, localY);
+
+	return true;
+}
+
+
+
 
 
 void applyTurbulence()
@@ -2436,6 +2511,9 @@ void detectEdgeCollisions()
 	glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
 	glReadPixels(0, 0, SIM_WIDTH, SIM_HEIGHT, GL_RG, GL_FLOAT, pixelData.data());
 
+
+	float target = 1.0;
+
 	// Step 3: Collect all non-zero collision points
 	for (int y = 0; y < SIM_HEIGHT; ++y)
 	{
@@ -2445,13 +2523,13 @@ void detectEdgeCollisions()
 			glm::vec2 dens = pixelData[idx];
 
 			// If either red or green density is present -> collision
-			if (dens.r > 0.1 || dens.g > 0.1)
+			if (dens.r >= target || dens.g >= target)
 			{
-				if (dens.r > 1)
-					dens.r = 1;
+				if (dens.r > target)
+					dens.r = target;
 
-				if (dens.g > 1)
-					dens.g = 1;
+				if (dens.g > target)
+					dens.g = target;
 
 				collisionPoints.push_back(glm::vec4(
 					static_cast<float>(x),
@@ -2484,7 +2562,8 @@ void detectEdgeCollisions()
 
 				glm::vec2 hit;
 
-				if (isPixelInsideSpriteAndTransparent(
+				if (isPixelInsideTriSpriteAndTransparent(
+					protagonist,
 					protagonist.tex,
 					static_cast<int>(protagonist.x),
 					static_cast<int>(protagonist.y),
@@ -2497,7 +2576,7 @@ void detectEdgeCollisions()
 					127,
 					hit))
 				{
-					if (inside && collisionPoints[i].w == 1)
+					if (inside&& collisionPoints[i].w >= target)
 					{
 						protagonist.under_fire = true;
 						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
@@ -2527,6 +2606,7 @@ void detectEdgeCollisions()
 				glm::vec2 hit;
 
 				if (isPixelInsideSpriteAndTransparent(
+					foreground_chunked[h],
 					foreground_chunked[h].tex,
 					static_cast<int>(foreground_chunked[h].x),
 					static_cast<int>(foreground_chunked[h].y),
@@ -2569,7 +2649,8 @@ void detectEdgeCollisions()
 
 				glm::vec2 hit;
 
-				if (isPixelInsideSpriteAndTransparent(
+				if (isPixelInsideTriSpriteAndTransparent(
+					*enemy_ships[i],
 					enemy_ships[h]->tex,
 					static_cast<int>(enemy_ships[h]->x),
 					static_cast<int>(enemy_ships[h]->y),
@@ -2582,7 +2663,7 @@ void detectEdgeCollisions()
 					127,
 					hit))
 				{
-					if (inside && collisionPoints[i].z == 1)
+					if (inside&& collisionPoints[i].z >= target)
 					{
 						enemy_ships[h]->under_fire = true;
 						blackening_points.push_back(glm::vec2(hit.x, hit.y));
