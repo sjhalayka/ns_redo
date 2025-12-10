@@ -3517,10 +3517,10 @@ void fireBullet(void)
 		newBullet.birth_time = GLOBAL_TIME;
 		newBullet.death_time = -1;
 
-		enemy_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
 
 		newBullet.sinusoidal_shift = true;
-		enemy_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
 	}
 }
 
