@@ -405,6 +405,9 @@ class ship : public tri_sprite
 public:
 
 	float health;
+	float max_health;
+
+	ship() : health(100.0f), max_health(100.0f) {}
 };
 
 
@@ -415,6 +418,12 @@ class friendly_ship : public ship
 public:
 
 	float last_time_collided_with_foreground = 0;
+
+	friendly_ship() : ship()
+	{
+		health = 100.0f;
+		max_health = 100.0f;
+	}
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -444,11 +453,15 @@ class enemy_ship : public ship
 {
 public:
 
+	enemy_ship() : ship()
+	{
+		health = 50.0f;
+		max_health = 50.0f;
+	}
+
 	void set_velocity(const float src_x, const float src_y)
 	{
 	}
-
-	float health;
 };
 
 
@@ -623,6 +636,7 @@ GLuint obstacleStampProgram;
 GLuint copyProgram;
 GLuint spriteProgram;
 GLuint turbulenceForceProgram;
+GLuint healthBarProgram;
 
 
 
@@ -1863,6 +1877,33 @@ void main() {
 }
 )";
 
+// Health bar shaders - simple colored quad rendering
+const char* healthBarVertexSource = R"(
+#version 400 core
+layout(location = 0) in vec2 position;
+
+uniform vec2 barPos;       // Position in normalized device coords [-1, 1]
+uniform vec2 barSize;      // Size in normalized device coords
+
+void main() {
+    // position is in [-1, 1] range for the quad
+    // Map to bar position and size
+    vec2 pos = barPos + (position * 0.5 + 0.5) * barSize;
+    gl_Position = vec4(pos, 0.0, 1.0);
+}
+)";
+
+const char* healthBarFragmentSource = R"(
+#version 400 core
+out vec4 fragColor;
+
+uniform vec4 barColor;     // RGBA color of the bar
+
+void main() {
+    fragColor = barColor;
+}
+)";
+
 const char* boundaryFragmentSource = R"(
 #version 400 core
 in vec2 texCoord;
@@ -2071,6 +2112,7 @@ void initShaders() {
 	copyProgram = createProgram(vertexShaderSource, copyFragmentSource);
 	spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
 	turbulenceForceProgram = createProgram(vertexShaderSource, turbulenceForceFragmentSource);
+	healthBarProgram = createProgram(healthBarVertexSource, healthBarFragmentSource);
 
 }
 
@@ -2335,7 +2377,7 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
  * If needed often, cache the pixel buffer and width/height externally.
  */
 bool isPixelInsideTriSpriteAndTransparent(
-	tri_sprite & spr,
+	tri_sprite& spr,
 	GLuint sprTex,
 	int sprX, int sprY,
 	int sprW, int sprH,
@@ -2576,8 +2618,9 @@ void detectEdgeCollisions()
 					127,
 					hit))
 				{
-					if (inside&& collisionPoints[i].w >= target)
+					if (inside && collisionPoints[i].w >= target)
 					{
+						protagonist.health -= collisionPoints[i].w;
 						protagonist.under_fire = true;
 						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
 					}
@@ -2663,8 +2706,9 @@ void detectEdgeCollisions()
 					127,
 					hit))
 				{
-					if (inside&& collisionPoints[i].z >= target)
+					if (inside && collisionPoints[i].z >= target)
 					{
+						enemy_ships[h]->health -= collisionPoints[i].z;
 						enemy_ships[h]->under_fire = true;
 						blackening_points.push_back(glm::vec2(hit.x, hit.y));
 					}
@@ -3324,6 +3368,107 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 }
 
 
+/**
+ * Draw a health bar above a sprite.
+ *
+ * @param pixelX        X position of the sprite's top-left corner in window pixels
+ * @param pixelY        Y position of the sprite's top-left corner in window pixels
+ * @param spriteWidth   Width of the sprite in pixels
+ * @param health        Current health value
+ * @param maxHealth     Maximum health value
+ * @param barWidth      Width of the health bar in pixels (default: sprite width)
+ * @param barHeight     Height of the health bar in pixels (default: 8)
+ * @param yOffset       Vertical offset above the sprite in pixels (default: 10)
+ */
+void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float maxHealth,
+	int barWidth = -1, int barHeight = 8, int yOffset = 10)
+{
+	if (maxHealth <= 0) return;
+
+	// Use sprite width as default bar width
+	if (barWidth < 0) barWidth = spriteWidth;
+
+	// Calculate health percentage (clamped to 0-1)
+	float healthPercent = std::max(0.0f, std::min(1.0f, health / maxHealth));
+
+	// Position the bar above the sprite
+	int barX = pixelX + (spriteWidth - barWidth) / 2;  // Center the bar over sprite
+	int barY = pixelY - yOffset - barHeight;           // Position above sprite
+
+	// Enable blending for transparency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glUseProgram(healthBarProgram);
+
+	// Convert pixel coordinates to normalized device coordinates [-1, 1]
+	auto pixelToNDC = [](int px, int py, int pw, int ph) {
+		float ndcX = (2.0f * px / SIM_WIDTH) - 1.0f;
+		float ndcY = 1.0f - (2.0f * py / SIM_HEIGHT);  // Flip Y
+		float ndcWidth = 2.0f * pw / SIM_WIDTH;
+		float ndcHeight = 2.0f * ph / SIM_HEIGHT;
+
+		// Adjust Y position since we draw from bottom-left
+		float barPosX = ndcX;
+		float barPosY = ndcY - ndcHeight;
+
+		return std::make_tuple(barPosX, barPosY, ndcWidth, ndcHeight);
+		};
+
+	// Draw background bar (dark gray)
+	{
+		auto [posX, posY, width, height] = pixelToNDC(barX, barY, barWidth, barHeight);
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
+		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.2f, 0.2f, 0.2f, 0.8f);
+		drawQuad();
+	}
+
+	// Draw foreground bar (colored based on health)
+	if (healthPercent > 0.0f)
+	{
+		int fillWidth = static_cast<int>(barWidth * healthPercent);
+		auto [posX, posY, width, height] = pixelToNDC(barX, barY, fillWidth, barHeight);
+
+		// Color gradient: green -> yellow -> red based on health
+		float r, g, b;
+		if (healthPercent > 0.5f) {
+			// Green to yellow (health 100% to 50%)
+			float t = (healthPercent - 0.5f) * 2.0f;
+			r = 1.0f - t;
+			g = 1.0f;
+			b = 0.0f;
+		}
+		else {
+			// Yellow to red (health 50% to 0%)
+			float t = healthPercent * 2.0f;
+			r = 1.0f;
+			g = t;
+			b = 0.0f;
+		}
+
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
+		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), r, g, b, 1.0f);
+		drawQuad();
+	}
+
+	// Draw border (black outline)
+	{
+		auto [posX, posY, width, height] = pixelToNDC(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
+		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
+		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.0f, 0.0f, 0.0f, 0.8f);
+
+		// Draw only the outline by drawing 4 thin rectangles
+		// This is a simple approach - for a proper outline you'd use a different technique
+		// For simplicity, we'll skip the outline and just use the filled bars above
+	}
+
+	glDisable(GL_BLEND);
+}
+
+
 void fireBullet(void)
 {
 	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
@@ -3750,6 +3895,31 @@ void display()
 		}
 	}
 
+	// Draw health bars
+	// Protagonist health bar
+	if (protagonist.tex != 0)
+	{
+		drawHealthBar(
+			static_cast<int>(protagonist.x),
+			static_cast<int>(protagonist.y),
+			protagonist.width,
+			protagonist.health,
+			protagonist.max_health);
+	}
+
+	// Enemy health bars
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		{
+			drawHealthBar(
+				static_cast<int>(enemy_ships[i]->x),
+				static_cast<int>(enemy_ships[i]->y),
+				enemy_ships[i]->width,
+				enemy_ships[i]->health,
+				enemy_ships[i]->max_health);
+		}
+	}
 
 
 	displayFPS();
