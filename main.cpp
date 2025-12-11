@@ -52,7 +52,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.5f;
+const float MIN_BULLET_INTERVAL = 1.0f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -100,7 +100,7 @@ void RandomUnitVector(float& x_out, float& y_out)
 {
 	const static float pi = 4.0f * atanf(1.0f);
 
-	const float a =  dis_real(generator_real)  * 2.0f * pi;
+	const float a = dis_real(generator_real) * 2.0f * pi;
 
 	x_out = cos(a);
 	y_out = sin(a);
@@ -505,8 +505,8 @@ public:
 
 class bullet : public sprite
 {
-public:	
-	
+public:
+
 	float birth_time = 0;
 	float death_time = -1;
 
@@ -675,7 +675,7 @@ enemy_ship enemy1_template;
 boss_ship boss_template;
 
 const int foreground_chunk_size_width = 360;
-const int foreground_chunk_size_height = 108;
+const int foreground_chunk_size_height = 360;
 
 
 vector<foreground_tile> foreground_chunked;
@@ -3621,22 +3621,22 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	newCentralStamp.birth_time = GLOBAL_TIME;
 	newCentralStamp.death_time = GLOBAL_TIME + 0.1f;
 
-//	newCentralStamp.is_dying_bullet = true;
+	//	newCentralStamp.is_dying_bullet = true;
 
 	if (enemy)
 		enemy_bullets.push_back(make_unique<straight_bullet>(newCentralStamp));
 	else
 		ally_bullets.push_back(make_unique<straight_bullet>(newCentralStamp));
 
-	for (size_t j = 0; j < 3; j++)
+	for (size_t j = 0; j < 5; j++)
 	{
 		bullet newStamp = newCentralStamp;
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x = 160*(rand() / float(RAND_MAX));
-		newStamp.vel_y = 160*(rand() / float(RAND_MAX));
-//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+		newStamp.vel_x = 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_y = 100 * (rand() / float(RAND_MAX));
+		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
 
@@ -3646,7 +3646,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
 	}
 
-	for (size_t j = 0; j < 5; j++)
+	for (size_t j = 0; j < 10; j++)
 	{
 		bullet newStamp = newCentralStamp;
 
@@ -3655,8 +3655,8 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x = 320 * (rand() / float(RAND_MAX));
-		newStamp.vel_y = 320 * (rand() / float(RAND_MAX));
+		newStamp.vel_x = 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_y = 100 * (rand() / float(RAND_MAX));
 		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
@@ -3883,8 +3883,8 @@ void simulate()
 			float normX = pixelToNormX(sampleX);
 			float normY = pixelToNormY(sampleY);
 
-//			if (red_mode)
-				addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
+			//			if (red_mode)
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
 			//else
 			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
@@ -3962,7 +3962,7 @@ void simulate()
 			//if (red_mode)
 			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
 			//else
-				addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
 
 			float actualVelX = (bullet->x - bullet->old_x) / DT;
 			float actualVelY = (bullet->y - bullet->old_y) / DT;
