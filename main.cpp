@@ -2256,7 +2256,7 @@ GLuint addSourcesBatchProgram = 0;
 GLuint splatsTex = 0;    // RGBA32F texture storing packed splats for the current batch
 
 // Choose a reasonable batch size; you can chain batches to support unlimited bullets.
-const int MAX_SPLATS_PER_PASS = 1024;
+const int MAX_SPLATS_PER_PASS = 32768;
 
 // NEW: Initialize batching resources
 void initSplatBatchResources() {
