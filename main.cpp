@@ -1870,6 +1870,7 @@ void main()
     vec4 color3 = combinedColor;
     vec4 color4 = vec4(0.0, 0.0, 0.0, 1.0);
 
+// to do: render white on top of black always
     if(length(redFluidColor.r) > 0.5)
         color4 = vec4(0.0, 0.0, 0.0, 0.0);
     else
