@@ -23,7 +23,7 @@ using namespace std;
 
 
 std::mt19937 generator_real(static_cast<unsigned>(0));
-std::uniform_real_distribution<double> dis_real(0, 1);
+std::uniform_real_distribution<float> dis_real(0, 1);
 
 
 
@@ -100,7 +100,7 @@ void RandomUnitVector(float& x_out, float& y_out)
 {
 	const static float pi = 4.0f * atanf(1.0f);
 
-	const float a = static_cast<float>(dis_real(generator_real)) * 2.0f * pi;
+	const float a =  dis_real(generator_real)  * 2.0f * pi;
 
 	x_out = cos(a);
 	y_out = sin(a);
@@ -3634,8 +3634,8 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x /= 250.0f / (rand() / float(RAND_MAX));
-		newStamp.vel_y /= 250.0f / (rand() / float(RAND_MAX));
+		newStamp.vel_x = 160*(rand() / float(RAND_MAX));
+		newStamp.vel_y = 160*(rand() / float(RAND_MAX));
 //		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
@@ -3655,8 +3655,8 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x /= 100.0f / (rand() / float(RAND_MAX));
-		newStamp.vel_y /= 100.0f / (rand() / float(RAND_MAX));
+		newStamp.vel_x = 320 * (rand() / float(RAND_MAX));
+		newStamp.vel_y = 320 * (rand() / float(RAND_MAX));
 		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
