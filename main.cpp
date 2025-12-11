@@ -745,6 +745,21 @@ int glowBlurPasses = 3;              // Number of blur iterations (more = softer
 bool glowEnabled = true;             // Toggle glow on/off
 // ============== END GLOW ADDITIONS ==============
 
+// ============== CHROMATIC ABERRATION ADDITIONS ==============
+// Chromatic aberration shader program
+GLuint chromaticAberrationProgram;
+
+// Chromatic aberration parameters
+float aberrationIntensity = 0.015f;      // RGB channel separation amount
+float aberrationDuration = 0.5f;         // How long effect lasts after damage (seconds)
+float vignetteStrength = 0.8f;           // Vignette darkness intensity
+float vignetteRadius = 0.6f;             // Vignette inner radius (0-1)
+bool chromaticAberrationEnabled = true;  // Toggle effect on/off
+
+// Damage tracking for chromatic aberration
+float lastDamageTime = -1;         // When protagonist last took damage
+// ============== END CHROMATIC ABERRATION ADDITIONS ==============
+
 
 
 
@@ -2128,6 +2143,70 @@ void main() {
 
 // ============== END GLOW SHADER SOURCES ==============
 
+// ============== CHROMATIC ABERRATION SHADER SOURCE ==============
+const char* chromaticAberrationFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D scene;
+uniform vec2 protagonistPos;     // Protagonist position in UV coords (0-1)
+uniform float intensity;         // Aberration strength (0-1)
+uniform float effectStrength;    // Overall effect strength (fades over time)
+uniform float vignetteStrength;  // Vignette darkness
+uniform float vignetteRadius;    // Vignette inner radius
+uniform float time;              // For subtle animation
+
+void main() {
+    // Direction from protagonist to current pixel
+    vec2 toCenter = texCoord - protagonistPos;
+    float dist = length(toCenter);
+    
+    // Normalize direction (avoid division by zero)
+    vec2 dir = dist > 0.001 ? normalize(toCenter) : vec2(0.0);
+    
+    // Calculate aberration offset based on distance from protagonist
+    // Closer to protagonist = less aberration, further = more
+    float aberrationAmount = intensity * effectStrength * dist;
+    
+    // Add subtle pulsing animation
+    float pulse = 1.0 + 0.2 * sin(time * 15.0) * effectStrength;
+    aberrationAmount *= pulse;
+    
+    // Sample RGB channels with different offsets (radial aberration)
+    vec2 redOffset = dir * aberrationAmount * 1.0;
+    vec2 greenOffset = vec2(0.0);  // Green stays centered
+    vec2 blueOffset = -dir * aberrationAmount * 1.0;
+    
+    float r = texture(scene, texCoord + redOffset).r;
+    float g = texture(scene, texCoord + greenOffset).g;
+    float b = texture(scene, texCoord + blueOffset).b;
+    
+    vec3 color = vec3(r, g, b);
+    
+    // Vignette effect centered on protagonist
+    float vignetteDist = length(toCenter);
+    
+    // Smooth vignette falloff
+    float vignette = 1.0 - smoothstep(vignetteRadius, vignetteRadius + 0.4, vignetteDist);
+    vignette = mix(1.0, vignette, vignetteStrength * effectStrength);
+    
+    // Apply vignette (darken edges relative to protagonist)
+    color *= vignette;
+    
+    // Add slight red tint during damage for "hurt" effect
+    float redTint = 0.1 * effectStrength;
+    color.r = min(1.0, color.r + redTint);
+    
+    // Slight desaturation during damage
+    float gray = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(color, vec3(gray), 0.2 * effectStrength);
+    
+    fragColor = vec4(color, 1.0);
+}
+)";
+// ============== END CHROMATIC ABERRATION SHADER SOURCE ==============
+
 
 
 
@@ -2479,6 +2558,10 @@ void initShaders() {
 	blurProgram = createProgram(vertexShaderSource, blurFragmentSource);
 	compositeProgram = createProgram(vertexShaderSource, compositeFragmentSource);
 	// ============== END GLOW INITIALIZATION ==============
+
+	// ============== CHROMATIC ABERRATION SHADER INITIALIZATION ==============
+	chromaticAberrationProgram = createProgram(vertexShaderSource, chromaticAberrationFragmentSource);
+	// ============== END CHROMATIC ABERRATION INITIALIZATION ==============
 }
 
 void initTextures() {
@@ -2662,7 +2745,19 @@ void applyBlur() {
 
 // Composite the glow with the original scene
 void compositeGlow() {
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// Check if chromatic aberration will be applied
+	float timeSinceDamage = GLOBAL_TIME - lastDamageTime;
+	bool willApplyAberration = chromaticAberrationEnabled &&
+		(timeSinceDamage <= aberrationDuration);
+
+	if (willApplyAberration) {
+		// Render to sceneFBO so chromatic aberration can read it
+		glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
+	}
+	else {
+		// Render directly to screen
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	glUseProgram(compositeProgram);
@@ -2687,6 +2782,58 @@ void applyGlowEffect() {
 	compositeGlow();
 }
 // ============== END GLOW RENDERING FUNCTIONS ==============
+
+// ============== CHROMATIC ABERRATION RENDERING FUNCTION ==============
+void applyChromaticAberration() {
+	if (!chromaticAberrationEnabled) return;
+
+	// Calculate how long since last damage
+	float timeSinceDamage = GLOBAL_TIME - lastDamageTime;
+
+	// Effect fades out over aberrationDuration seconds
+	if (timeSinceDamage > aberrationDuration) return;
+
+	// Calculate fade-out effect strength (1.0 at damage, 0.0 at end)
+	float effectStrength = 1.0f - (timeSinceDamage / aberrationDuration);
+
+	// Apply easing for smoother fade (ease-out)
+	effectStrength = effectStrength * effectStrength;
+
+	// Skip if effect is negligible
+	if (effectStrength < 0.01f) return;
+
+	// Calculate protagonist position in UV coordinates (0-1)
+	// Note: Protagonist position is in screen pixels, need to convert to UV
+	float protaUVx = (protagonist.x + protagonist.width * 0.5f) / windowWidth;
+	float protaUVy = 1.0f - (protagonist.y + protagonist.height * 0.5f) / windowHeight; // Flip Y
+
+	// Clamp to valid UV range
+	protaUVx = std::max(0.0f, std::min(1.0f, protaUVx));
+	protaUVy = std::max(0.0f, std::min(1.0f, protaUVy));
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, windowWidth, windowHeight);
+
+	// Read from sceneTex (after glow composite) and write directly to screen
+	glUseProgram(chromaticAberrationProgram);
+	setTextureUniform(chromaticAberrationProgram, "scene", 0, sceneTex);
+
+	glUniform2f(glGetUniformLocation(chromaticAberrationProgram, "protagonistPos"),
+		protaUVx, protaUVy);
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "intensity"),
+		aberrationIntensity);
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "effectStrength"),
+		effectStrength);
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "vignetteStrength"),
+		vignetteStrength);
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "vignetteRadius"),
+		vignetteRadius);
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "time"),
+		GLOBAL_TIME);
+
+	drawQuad();
+}
+// ============== END CHROMATIC ABERRATION RENDERING FUNCTION ==============
 
 
 
@@ -4188,6 +4335,9 @@ void simulate()
 
 			protagonist.last_time_collided_with_foreground = GLOBAL_TIME;
 
+			// Trigger chromatic aberration effect on collision damage
+			lastDamageTime = GLOBAL_TIME;
+
 			// Test X resolution
 			float tempX = protagonist.x;
 			protagonist.x = protagonist.old_x;
@@ -4319,7 +4469,12 @@ void simulate()
 			found_collision = detectTriSpriteToSpriteOverlap(protagonist, *(*it), 1);
 
 			if (true == found_collision)
+			{
+				// Trigger chromatic aberration when hit by enemy bullet
+				lastDamageTime = GLOBAL_TIME;
+				(*it)->to_be_culled = true;  // Mark bullet for removal so it doesn't keep triggering
 				break;
+			}
 		}
 
 
@@ -4404,6 +4559,9 @@ void simulate()
 
 	if (protagonist.health <= 0)
 	{
+		// Trigger final damage effect
+		lastDamageTime = GLOBAL_TIME;
+
 		make_dying_bullets(protagonist, false);
 		protagonist.to_be_culled = true;
 	}
@@ -4636,6 +4794,10 @@ void display()
 	}
 	// ============== END GLOW POST-PROCESSING ==============
 
+	// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
+	applyChromaticAberration();
+	// ============== END CHROMATIC ABERRATION ==============
+
 	displayFPS();
 
 
@@ -4818,6 +4980,40 @@ void keyboard(unsigned char key, int x, int y)
 		std::cout << "Glow blur passes: " << glowBlurPasses << std::endl;
 		break;
 		// ============== END GLOW CONTROLS ==============
+
+	// ============== CHROMATIC ABERRATION CONTROLS ==============
+	case 'c':
+	case 'C':
+		chromaticAberrationEnabled = !chromaticAberrationEnabled;
+		std::cout << "Chromatic Aberration: " << (chromaticAberrationEnabled ? "ON" : "OFF") << std::endl;
+		break;
+
+	case '1':
+		aberrationIntensity = std::max(0.0f, aberrationIntensity - 0.005f);
+		std::cout << "Aberration intensity: " << aberrationIntensity << std::endl;
+		break;
+
+	case '2':
+		aberrationIntensity = std::min(0.1f, aberrationIntensity + 0.005f);
+		std::cout << "Aberration intensity: " << aberrationIntensity << std::endl;
+		break;
+
+	case '3':
+		vignetteStrength = std::max(0.0f, vignetteStrength - 0.1f);
+		std::cout << "Vignette strength: " << vignetteStrength << std::endl;
+		break;
+
+	case '4':
+		vignetteStrength = std::min(1.0f, vignetteStrength + 0.1f);
+		std::cout << "Vignette strength: " << vignetteStrength << std::endl;
+		break;
+
+	case '5':
+		// Test trigger - manually activate the effect
+		lastDamageTime = GLOBAL_TIME;
+		std::cout << "Chromatic aberration triggered manually!" << std::endl;
+		break;
+		// ============== END CHROMATIC ABERRATION CONTROLS ==============
 	}
 }
 
