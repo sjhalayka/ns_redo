@@ -3880,7 +3880,7 @@ void simulate()
 	{
 		auto& bullet = ally_bullets[i];
 
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
 
 		if (pathSamples == 0)
 			pathSamples = 1;
@@ -3957,7 +3957,7 @@ void simulate()
 	{
 		auto& bullet = enemy_bullets[i];
 
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
 
 		if (pathSamples == 0)
 			pathSamples = 1;
