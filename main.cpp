@@ -4054,40 +4054,6 @@ void simulate()
 		}
 	}
 
-	//for (size_t i = 0; i < ally_bullets.size(); i++)
-	//{
-	//	auto& bullet = ally_bullets[i];
-
-	//	int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
-
-	//	if (pathSamples == 0)
-	//		pathSamples = 1;
-
-
-	//	float prevX = bullet->old_x;
-	//	float prevY = bullet->old_y;
-
-	//	for (int step = 0; step <= pathSamples; step++)
-	//	{
-	//		float t = static_cast<float>(step) / pathSamples;
-
-	//		float sampleX = prevX + (bullet->x - prevX) * t;
-	//		float sampleY = prevY + (bullet->y - prevY) * t;
-
-	//		float normX = pixelToNormX(sampleX);
-	//		float normY = pixelToNormY(sampleY);
-
-	//		addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, bullet->density_add);
-
-	//		float actualVelX = (bullet->x - bullet->old_x) / DT;
-	//		float actualVelY = (bullet->y - bullet->old_y) / DT;
-
-	//		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-	//		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-	//		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-	//	}
-	//}
-
 
 
 
@@ -4131,42 +4097,6 @@ void simulate()
 
 	}
 
-	//for (size_t i = 0; i < enemy_bullets.size(); i++)
-	//{
-	//	auto& bullet = enemy_bullets[i];
-
-	//	int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
-
-	//	if (pathSamples == 0)
-	//		pathSamples = 1;
-
-	//	float prevX = bullet->old_x;
-	//	float prevY = bullet->old_y;
-
-	//	for (int step = 0; step <= pathSamples; step++)
-	//	{
-	//		float t = static_cast<float>(step) / pathSamples;
-
-	//		float sampleX = prevX + (bullet->x - prevX) * t;
-	//		float sampleY = prevY + (bullet->y - prevY) * t;
-
-	//		float normX = pixelToNormX(sampleX);
-	//		float normY = pixelToNormY(sampleY);
-
-	//		//if (red_mode)
-	//		//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
-	//		//else
-	//		addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, bullet->density_add);
-
-	//		float actualVelX = (bullet->x - bullet->old_x) / DT;
-	//		float actualVelY = (bullet->y - bullet->old_y) / DT;
-
-	//		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-	//		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-	//		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-	//	}
-	//}
-
 
 
 
@@ -4178,16 +4108,6 @@ void simulate()
 	auto accumulateBulletSplats = [&](const std::vector<std::unique_ptr<bullet>>& bullets, bool isRedChannel) {
 		for (size_t i = 0; i < bullets.size(); ++i) {
 			auto& b = bullets[i];
-
-
-			if (b->to_be_culled && b->old_x == b->x && b->old_y == b->y) {
-				// Already culled last frame and not moving -> skip
-				continue;
-			}
-
-
-
-
 
 			int pathSamples = 10; // keep your sampling density
 			float prevX = b->old_x;
@@ -4378,7 +4298,7 @@ void display()
 	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
 	const float d = 1.0f / FPS;
-	
+
 	DT = currentTime - lastTime;
 
 	if (DT > d)
