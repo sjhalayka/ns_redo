@@ -52,7 +52,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.01f;
+const float MIN_BULLET_INTERVAL = 0.5f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
