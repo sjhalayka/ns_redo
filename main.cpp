@@ -1870,11 +1870,11 @@ void main()
     vec4 color3 = combinedColor;
     vec4 color4 = vec4(0.0, 0.0, 0.0, 1.0);
 
-// to do: render white on top of black always
-    if(length(redFluidColor.r) > 0.5)
-        color4 = vec4(0.0, 0.0, 0.0, 0.0);
+	// render white on top of black always
+    if(length(blueFluidColor.b) > 0.5)
+        color4 = vec4(1.0, 1.0, 1.0, 0.0);        
     else
-        color4 = vec4(1.0, 1.0, 1.0, 0.0);
+		color4 = vec4(0.0, 0.0, 0.0, 0.0);
 
     // toon shading:
     if (d < 0.5) {
@@ -4251,6 +4251,18 @@ void display()
 		else
 			it++;
 	}
+
+	for (auto it = enemy_ships.begin(); it != enemy_ships.end();)
+	{
+		if ((*it)->to_be_culled)
+		{
+			cout << "culling enemy enemy_ship" << endl;
+			it = enemy_ships.erase(it);
+		}
+		else
+			it++;
+	}
+
 
 	glutSwapBuffers();
 	glutPostRedisplay();
