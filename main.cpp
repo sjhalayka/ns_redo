@@ -409,7 +409,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(10000.0f), max_health(10000.0f) {}
+	ship() : health(1000.0f), max_health(1000.0f) {}
 };
 
 
@@ -3857,8 +3857,7 @@ void simulate()
 			}
 		}
 
-
-		if (false == (*it)->isOnscreen() || found_collision)
+		if (false == (*it)->isOnscreen() || found_collision || ((*it)->death_time != -1 && (*it)->death_time <= GLOBAL_TIME))
 		{
 			(*it)->to_be_culled = true;
 		}
@@ -3933,10 +3932,11 @@ void simulate()
 		}
 
 
-		if (false == (*it)->isOnscreen() || found_collision)
+		if (false == (*it)->isOnscreen() || found_collision || ((*it)->death_time != -1 && (*it)->death_time <= GLOBAL_TIME))
 		{
 			(*it)->to_be_culled = true;
 		}
+
 	}
 
 	for (size_t i = 0; i < enemy_bullets.size(); i++)
@@ -3976,8 +3976,6 @@ void simulate()
 
 	if (protagonist.health <= 0)
 	{
-		cout << "mark_dying_ships" << endl;
-
 		make_dying_bullets(protagonist, false);
 		protagonist.to_be_culled = true;
 	}
