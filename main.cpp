@@ -52,7 +52,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 1.0f;
+const float MIN_BULLET_INTERVAL = 0.5f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -3880,7 +3880,11 @@ void simulate()
 	{
 		auto& bullet = ally_bullets[i];
 
-		int pathSamples = 10;
+		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+
+		if (pathSamples == 0)
+			pathSamples = 1;
+
 
 		float prevX = bullet->old_x;
 		float prevY = bullet->old_y;
@@ -3953,7 +3957,10 @@ void simulate()
 	{
 		auto& bullet = enemy_bullets[i];
 
-		int pathSamples = 10;
+		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+
+		if (pathSamples == 0)
+			pathSamples = 1;
 
 		float prevX = bullet->old_x;
 		float prevY = bullet->old_y;
