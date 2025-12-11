@@ -183,8 +183,7 @@ public:
 
 	bool under_fire = false;
 
-	float birth_time = 0;
-	float death_time = -1;
+
 
 	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
@@ -506,8 +505,10 @@ public:
 
 class bullet : public sprite
 {
-public:
-
+public:	
+	
+	float birth_time = 0;
+	float death_time = -1;
 
 	virtual void integrate(float dt)
 	{
