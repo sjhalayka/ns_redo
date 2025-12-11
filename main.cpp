@@ -52,7 +52,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.5f;
+const float MIN_BULLET_INTERVAL = 0.01f;
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -2254,9 +2254,13 @@ void main() {
 // NEW: Globals
 GLuint addSourcesBatchProgram = 0;
 GLuint splatsTex = 0;    // RGBA32F texture storing packed splats for the current batch
-
-// Choose a reasonable batch size; you can chain batches to support unlimited bullets.
 const int MAX_SPLATS_PER_PASS = 32768;
+
+
+
+
+
+
 
 // NEW: Initialize batching resources
 void initSplatBatchResources() {
@@ -3790,7 +3794,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	float x_rad = stamp.width / float(SIM_WIDTH);
 	float y_rad = stamp.height / float(SIM_HEIGHT);
 
-	float avg_rad = 0.001 * max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
+	float avg_rad = 0.001f * max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
 
 	newCentralStamp.x = stamp.x + stamp.width / 2.0f;
 	newCentralStamp.y = stamp.y + stamp.height / 2.0f;
@@ -4351,24 +4355,46 @@ void simulate()
 void display()
 {
 	// Fixed time step
-	static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	static double accumulator = 0.0;
+	//static double currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//static double accumulator = 0.0;
 
-	double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-	double frameTime = newTime - currentTime;
-	currentTime = newTime;
+	//double newTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+	//double frameTime = newTime - currentTime;
+	//currentTime = newTime;
 
-	if (frameTime > DT * 10.0)
-		frameTime = DT * 10.0;
+	//if (frameTime > DT * 10.0)
+	//	frameTime = DT * 10.0;
 
-	accumulator += frameTime;
+	//accumulator += frameTime;
 
-	while (accumulator >= DT)
+	//while (accumulator >= DT)
+	//{
+	//	simulate();
+	//	accumulator -= DT;
+	//	GLOBAL_TIME += DT;
+	//}
+
+	static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
+	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+	const float d = 1.0f / FPS;
+	
+	DT = currentTime - lastTime;
+
+	if (DT > d)
 	{
 		simulate();
-		accumulator -= DT;
 		GLOBAL_TIME += DT;
+		lastTime = currentTime;
 	}
+
+
+
+
+
+
+
+
 
 
 	// Render to screen
