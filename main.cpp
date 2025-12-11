@@ -752,7 +752,7 @@ GLuint chromaticAberrationProgram;
 // Chromatic aberration parameters
 float aberrationIntensity = 0.015f;      // RGB channel separation amount
 float aberrationDuration = 0.5f;         // How long effect lasts after damage (seconds)
-float vignetteStrength = 0.8f;           // Vignette darkness intensity
+float vignetteStrength = 0.5f;           // Vignette darkness intensity
 float vignetteRadius = 0.6f;             // Vignette inner radius (0-1)
 bool chromaticAberrationEnabled = true;  // Toggle effect on/off
 
@@ -2156,6 +2156,7 @@ uniform float effectStrength;    // Overall effect strength (fades over time)
 uniform float vignetteStrength;  // Vignette darkness
 uniform float vignetteRadius;    // Vignette inner radius
 uniform float time;              // For subtle animation
+uniform float aspectRatio;  // Add this uniform
 
 void main() {
     // Direction from protagonist to current pixel
@@ -2185,7 +2186,16 @@ void main() {
     vec3 color = vec3(r, g, b);
     
     // Vignette effect centered on protagonist
-    float vignetteDist = length(toCenter);
+//    float vignetteDist = length(toCenter);
+
+
+
+// Then in main():
+vec2 aspectCorrected = toCenter;
+aspectCorrected.x *= aspectRatio;
+float vignetteDist = length(aspectCorrected);
+
+
     
     // Smooth vignette falloff
     float vignette = 1.0 - smoothstep(vignetteRadius, vignetteRadius + 0.4, vignetteDist);
@@ -2830,6 +2840,10 @@ void applyChromaticAberration() {
 		vignetteRadius);
 	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "time"),
 		GLOBAL_TIME);
+
+	glUniform1f(glGetUniformLocation(chromaticAberrationProgram, "aspectRatio"),
+		(float)SIM_WIDTH / (float)SIM_HEIGHT);
+
 
 	drawQuad();
 }
