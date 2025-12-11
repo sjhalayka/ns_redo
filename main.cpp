@@ -96,11 +96,11 @@ struct CompareVec2
 };
 
 
-void RandomUnitVector(double& x_out, double& y_out)
+void RandomUnitVector(float& x_out, float& y_out)
 {
-	const static double pi = 4.0 * atan(1.0);
+	const static float pi = 4.0f * atanf(1.0f);
 
-	const double a = dis_real(generator_real) * 2.0f * pi;
+	const float a = static_cast<float>(dis_real(generator_real)) * 2.0f * pi;
 
 	x_out = cos(a);
 	y_out = sin(a);
@@ -183,6 +183,8 @@ public:
 
 	bool under_fire = false;
 
+	float birth_time = 0;
+	float death_time = -1;
 
 	// unordered_map<glm::vec2, float, HashVec2, EqualVec2> blackening_age_map;
 	map<glm::vec2, float, CompareVec2> blackening_age_map;
@@ -505,8 +507,7 @@ public:
 class bullet : public sprite
 {
 public:
-	float birth_time = 0;
-	float death_time = -1;
+
 
 	virtual void integrate(float dt)
 	{
@@ -518,6 +519,14 @@ public:
 class sine_bullet : public bullet
 {
 public:
+
+	sine_bullet(bullet& b) : bullet(b) {}
+
+	sine_bullet(void)
+	{
+
+	}
+
 	float sinusoidal_frequency;
 	float sinusoidal_amplitude;
 	bool sinusoidal_shift;
@@ -550,7 +559,7 @@ public:
 
 		// Calculate time-based sinusoidal amplitude
 		// Use the birth_time to ensure continuous motion
-		float timeSinceCreation = GLOBAL_TIME - birth_time;
+		float timeSinceCreation = GLOBAL_TIME - this->birth_time;
 		float frequency = sinusoidal_frequency; // Controls how many waves appear
 		float amplitude = sinusoidal_amplitude * dt; // Controls wave height
 
@@ -579,6 +588,67 @@ public:
 	}
 
 };
+
+
+
+
+
+
+
+
+
+
+class straight_bullet : public bullet
+{
+public:
+
+	straight_bullet(bullet& b) : bullet(b) {}
+
+	straight_bullet(void)
+	{
+
+	}
+
+	void integrate(float dt)
+	{
+		const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
+
+		old_x = x;
+		old_y = y;
+
+		//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
+		//std::chrono::duration<float, std::milli> elapsed;
+		//elapsed = global_time_end - app_start_time;
+
+		// Store the original direction vector
+		float dirX = vel_x * inv_aspect * dt;
+		float dirY = vel_y * dt;
+
+		// Normalize the direction vector
+		float dirLength = sqrt(dirX * dirX + dirY * dirY);
+		if (dirLength > 0) {
+			dirX /= dirLength;
+			dirY /= dirLength;
+		}
+
+		// Move forward along original path
+		float forwardSpeed = dirLength; // Original velocity magnitude
+		x += dirX * forwardSpeed;
+		y += dirY * forwardSpeed;
+	}
+
+};
+
+
+
+
+
+
+
+
+
+
+
 
 inline float pixelToNormX(float px) { return px / (float)SIM_WIDTH; }
 inline float pixelToNormY(float py) { return 1.0f - py / (float)SIM_HEIGHT; }  // Flip Y
@@ -3525,6 +3595,80 @@ void fireBullet(void)
 }
 
 
+
+
+void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
+{
+	if (stamp.to_be_culled)
+		return;
+
+	//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
+	//std::chrono::duration<float, std::milli> elapsed;
+	//elapsed = global_time_end - app_start_time;
+
+	bullet newCentralStamp = bullet_template;
+
+	float x_rad = stamp.width / float(SIM_WIDTH) / 2.0f;
+	float y_rad = stamp.height / float(SIM_HEIGHT) / 2.0f;
+
+	float avg_rad = max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
+
+	newCentralStamp.x = stamp.x + stamp.width / 2.0f;
+	newCentralStamp.y = stamp.y + stamp.height / 2.0f;
+
+	newCentralStamp.birth_time = GLOBAL_TIME;
+	newCentralStamp.death_time = GLOBAL_TIME + 0.1f;
+
+//	newCentralStamp.is_dying_bullet = true;
+
+	if (enemy)
+		enemy_bullets.push_back(make_unique<straight_bullet>(newCentralStamp));
+	else
+		ally_bullets.push_back(make_unique<straight_bullet>(newCentralStamp));
+
+	for (size_t j = 0; j < 3; j++)
+	{
+		bullet newStamp = newCentralStamp;
+
+		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
+
+		newStamp.vel_x /= 250.0f / (rand() / float(RAND_MAX));
+		newStamp.vel_y /= 250.0f / (rand() / float(RAND_MAX));
+//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+		newStamp.birth_time = GLOBAL_TIME;
+		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
+
+		if (enemy)
+			enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
+		else
+			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	}
+
+	for (size_t j = 0; j < 5; j++)
+	{
+		bullet newStamp = newCentralStamp;
+
+		//newStamp.colour_radius = avg_rad / 8;
+		//newStamp.force_radius = avg_rad / 8;
+
+		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
+
+		newStamp.vel_x /= 100.0f / (rand() / float(RAND_MAX));
+		newStamp.vel_y /= 100.0f / (rand() / float(RAND_MAX));
+		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+		newStamp.birth_time = GLOBAL_TIME;
+		newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
+
+		if (enemy)
+			enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
+		else
+			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	}
+}
+
+
+
+
 void simulate()
 {
 
@@ -3829,10 +3973,25 @@ void simulate()
 
 
 
+	if (protagonist.health <= 0)
+	{
+		cout << "mark_dying_ships" << endl;
 
+		make_dying_bullets(protagonist, false);
+		protagonist.to_be_culled = true;
+	}
 
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		if (enemy_ships[i]->to_be_culled)
+			continue;
 
-
+		if (enemy_ships[i]->health <= 0)
+		{
+			make_dying_bullets(*(enemy_ships[i]), true);
+			enemy_ships[i]->to_be_culled = true;
+		}
+	}
 
 
 
