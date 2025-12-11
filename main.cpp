@@ -727,6 +727,24 @@ GLuint spriteProgram;
 GLuint turbulenceForceProgram;
 GLuint healthBarProgram;
 
+// ============== GLOW SHADER ADDITIONS ==============
+// Glow effect shader programs
+GLuint brightnessProgram;
+GLuint blurProgram;
+GLuint compositeProgram;
+
+// Glow effect FBOs and textures
+GLuint sceneFBO, sceneTex;           // Full scene render target
+GLuint brightFBO, brightTex;         // Bright pixels extraction
+GLuint blurFBO[2], blurTex[2];       // Ping-pong blur buffers
+
+// Glow parameters (can be adjusted at runtime)
+float glowThreshold = 0.5f;          // Brightness threshold for glow
+float glowIntensity = 2.0f;          // Glow strength multiplier
+int glowBlurPasses = 3;              // Number of blur iterations (more = softer glow)
+bool glowEnabled = true;             // Toggle glow on/off
+// ============== END GLOW ADDITIONS ==============
+
 
 
 
@@ -2035,6 +2053,81 @@ void main() {
 }
 )";
 
+// ============== GLOW SHADER SOURCES ==============
+
+// Brightness extraction shader - extracts pixels above threshold
+const char* brightnessFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D scene;
+uniform float threshold;
+
+void main() {
+    vec4 color = texture(scene, texCoord);
+    
+    // Calculate luminance using standard weights
+    float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+    
+    // Extract bright pixels with smooth falloff
+    float brightness = max(0.0, luminance - threshold);
+    brightness = brightness / (brightness + 1.0); // Soft knee compression
+    
+    // Scale color by brightness factor
+    fragColor = vec4(color.rgb * brightness * 2.0, 1.0);
+}
+)";
+
+// Gaussian blur shader - single direction (horizontal or vertical)
+const char* blurFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D image;
+uniform vec2 direction;  // (1,0) for horizontal, (0,1) for vertical
+uniform vec2 texelSize;
+
+// 9-tap Gaussian weights (sigma ~= 2.5)
+const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+
+void main() {
+    vec3 result = texture(image, texCoord).rgb * weights[0];
+    
+    for (int i = 1; i < 5; i++) {
+        vec2 offset = direction * texelSize * float(i) * 2.0;
+        result += texture(image, texCoord + offset).rgb * weights[i];
+        result += texture(image, texCoord - offset).rgb * weights[i];
+    }
+    
+    fragColor = vec4(result, 1.0);
+}
+)";
+
+// Composite shader - combines original scene with glow
+const char* compositeFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D scene;
+uniform sampler2D glow;
+uniform float intensity;
+
+void main() {
+    vec3 sceneColor = texture(scene, texCoord).rgb;
+    vec3 glowColor = texture(glow, texCoord).rgb;
+    
+    // Additive blending with intensity control
+    vec3 result = sceneColor + glowColor * intensity;
+    
+    fragColor = vec4(result, 1.0);
+}
+)";
+
+// ============== END GLOW SHADER SOURCES ==============
+
 
 
 
@@ -2380,6 +2473,12 @@ void initShaders() {
 	turbulenceForceProgram = createProgram(vertexShaderSource, turbulenceForceFragmentSource);
 	healthBarProgram = createProgram(healthBarVertexSource, healthBarFragmentSource);
 	addSourcesBatchProgram = createProgram(vertexShaderSource, addSourcesBatchFragmentSource);
+
+	// ============== GLOW SHADER INITIALIZATION ==============
+	brightnessProgram = createProgram(vertexShaderSource, brightnessFragmentSource);
+	blurProgram = createProgram(vertexShaderSource, blurFragmentSource);
+	compositeProgram = createProgram(vertexShaderSource, compositeFragmentSource);
+	// ============== END GLOW INITIALIZATION ==============
 }
 
 void initTextures() {
@@ -2454,6 +2553,140 @@ void initQuad() {
 
 	glBindVertexArray(0);
 }
+
+// ============== GLOW RESOURCE INITIALIZATION ==============
+void initGlowResources() {
+	// Scene render target (full resolution)
+	createTexture(sceneTex, windowWidth, windowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+	createFBO(sceneFBO, sceneTex);
+
+	// Brightness extraction (half resolution for performance)
+	int glowWidth = windowWidth / 2;
+	int glowHeight = windowHeight / 2;
+
+	createTexture(brightTex, glowWidth, glowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+	createFBO(brightFBO, brightTex);
+
+	// Ping-pong blur buffers (half resolution)
+	for (int i = 0; i < 2; i++) {
+		createTexture(blurTex[i], glowWidth, glowHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		createFBO(blurFBO[i], blurTex[i]);
+	}
+
+	// Clear all glow textures
+	glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, brightFBO);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	for (int i = 0; i < 2; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, blurFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+// Call this if window is resized to recreate glow buffers
+void resizeGlowResources() {
+	// Delete old textures and FBOs
+	glDeleteTextures(1, &sceneTex);
+	glDeleteFramebuffers(1, &sceneFBO);
+	glDeleteTextures(1, &brightTex);
+	glDeleteFramebuffers(1, &brightFBO);
+	glDeleteTextures(2, blurTex);
+	glDeleteFramebuffers(2, blurFBO);
+
+	// Recreate with new dimensions
+	initGlowResources();
+}
+// ============== END GLOW RESOURCE INITIALIZATION ==============
+
+// ============== GLOW RENDERING FUNCTIONS ==============
+
+// Extract bright pixels from the scene
+void extractBrightPixels() {
+	int glowWidth = windowWidth / 2;
+	int glowHeight = windowHeight / 2;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, brightFBO);
+	glViewport(0, 0, glowWidth, glowHeight);
+
+	glUseProgram(brightnessProgram);
+	setTextureUniform(brightnessProgram, "scene", 0, sceneTex);
+	glUniform1f(glGetUniformLocation(brightnessProgram, "threshold"), glowThreshold);
+
+	drawQuad();
+}
+
+// Apply Gaussian blur (horizontal + vertical = one pass)
+void applyBlur() {
+	int glowWidth = windowWidth / 2;
+	int glowHeight = windowHeight / 2;
+
+	int currentBuffer = 0;
+	GLuint sourceTexture = brightTex;
+
+	for (int pass = 0; pass < glowBlurPasses; pass++) {
+		// Horizontal blur
+		glBindFramebuffer(GL_FRAMEBUFFER, blurFBO[currentBuffer]);
+		glViewport(0, 0, glowWidth, glowHeight);
+
+		glUseProgram(blurProgram);
+		setTextureUniform(blurProgram, "image", 0, sourceTexture);
+		glUniform2f(glGetUniformLocation(blurProgram, "direction"), 1.0f, 0.0f);
+		glUniform2f(glGetUniformLocation(blurProgram, "texelSize"),
+			1.0f / glowWidth, 1.0f / glowHeight);
+
+		drawQuad();
+
+		// Vertical blur
+		int nextBuffer = 1 - currentBuffer;
+		glBindFramebuffer(GL_FRAMEBUFFER, blurFBO[nextBuffer]);
+
+		glUseProgram(blurProgram);
+		setTextureUniform(blurProgram, "image", 0, blurTex[currentBuffer]);
+		glUniform2f(glGetUniformLocation(blurProgram, "direction"), 0.0f, 1.0f);
+		glUniform2f(glGetUniformLocation(blurProgram, "texelSize"),
+			1.0f / glowWidth, 1.0f / glowHeight);
+
+		drawQuad();
+
+		// Next pass reads from the result of this pass
+		sourceTexture = blurTex[nextBuffer];
+		currentBuffer = nextBuffer;
+	}
+}
+
+// Composite the glow with the original scene
+void compositeGlow() {
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, windowWidth, windowHeight);
+
+	glUseProgram(compositeProgram);
+	setTextureUniform(compositeProgram, "scene", 0, sceneTex);
+
+	// Use the last blur buffer (alternates based on number of passes)
+	GLuint glowTexture = blurTex[(glowBlurPasses % 2 == 0) ? 1 : 0];
+	if (glowBlurPasses == 0) glowTexture = brightTex;
+
+	setTextureUniform(compositeProgram, "glow", 1, glowTexture);
+	glUniform1f(glGetUniformLocation(compositeProgram, "intensity"), glowIntensity);
+
+	drawQuad();
+}
+
+// Main glow processing pipeline
+void applyGlowEffect() {
+	if (!glowEnabled) return;
+
+	extractBrightPixels();
+	applyBlur();
+	compositeGlow();
+}
+// ============== END GLOW RENDERING FUNCTIONS ==============
 
 
 
@@ -4101,7 +4334,7 @@ void simulate()
 
 
 
-		// NEW: Build batched splats
+	// NEW: Build batched splats
 	std::vector<Splat> densitySplats;
 	std::vector<Splat> velocitySplats;
 
@@ -4317,8 +4550,15 @@ void display()
 
 
 
-	// Render to screen
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// Render to screen (or scene FBO if glow enabled)
+	// ============== GLOW: RENDER SCENE TO OFFSCREEN BUFFER ==============
+	if (glowEnabled) {
+		glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
+	}
+	else {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+	// ============== END GLOW MODIFICATION ==============
 	glViewport(0, 0, windowWidth, windowHeight);
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -4389,6 +4629,12 @@ void display()
 		}
 	}
 
+
+	// ============== GLOW: APPLY POST-PROCESSING ==============
+	if (glowEnabled) {
+		applyGlowEffect();
+	}
+	// ============== END GLOW POST-PROCESSING ==============
 
 	displayFPS();
 
@@ -4486,6 +4732,11 @@ void display()
 void reshape(int w, int h) {
 	windowWidth = w;
 	windowHeight = h;
+
+	// ============== GLOW: RESIZE BUFFERS ==============
+	// Recreate glow buffers when window is resized
+	resizeGlowResources();
+	// ============== END GLOW RESIZE ==============
 }
 
 void keyboard(unsigned char key, int x, int y)
@@ -4527,6 +4778,46 @@ void keyboard(unsigned char key, int x, int y)
 		glClear(GL_COLOR_BUFFER_BIT);
 		std::cout << "Obstacles cleared" << std::endl;
 		break;
+
+		// ============== GLOW CONTROLS ==============
+	case 'g':
+	case 'G':
+		glowEnabled = !glowEnabled;
+		std::cout << "Glow: " << (glowEnabled ? "ON" : "OFF") << std::endl;
+		break;
+
+	case '+':
+	case '=':
+		glowIntensity += 0.1f;
+		std::cout << "Glow intensity: " << glowIntensity << std::endl;
+		break;
+
+	case '-':
+	case '_':
+		glowIntensity = std::max(0.0f, glowIntensity - 0.1f);
+		std::cout << "Glow intensity: " << glowIntensity << std::endl;
+		break;
+
+	case '[':
+		glowThreshold = std::max(0.0f, glowThreshold - 0.05f);
+		std::cout << "Glow threshold: " << glowThreshold << std::endl;
+		break;
+
+	case ']':
+		glowThreshold = std::min(1.0f, glowThreshold + 0.05f);
+		std::cout << "Glow threshold: " << glowThreshold << std::endl;
+		break;
+
+	case ',':
+		glowBlurPasses = std::max(1, glowBlurPasses - 1);
+		std::cout << "Glow blur passes: " << glowBlurPasses << std::endl;
+		break;
+
+	case '.':
+		glowBlurPasses = std::min(10, glowBlurPasses + 1);
+		std::cout << "Glow blur passes: " << glowBlurPasses << std::endl;
+		break;
+		// ============== END GLOW CONTROLS ==============
 	}
 }
 
@@ -4721,6 +5012,10 @@ int main(int argc, char** argv)
 	initShaders();
 	initTextures();
 	initQuad();
+
+	// ============== GLOW: INITIALIZE RESOURCES ==============
+	initGlowResources();  // Initialize glow effect resources
+	// ============== END GLOW INIT ==============
 
 	initSplatBatchResources();
 
