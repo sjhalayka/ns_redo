@@ -78,17 +78,22 @@ bool downKeyPressed = false;
 bool rightKeyPressed = false;
 bool leftKeyPressed = false;
 
+// Quad VAO
+GLuint quadVAO, quadVBO;
 
-GLuint addSourceBatchedProgram = 0;
-GLuint sourceDataTex = 0;
-const int SOURCE_TEX_WIDTH = 2048;  // Supports up to 1024 sources (2 texels each)
-std::vector<float> sourceDataBuffer;
 
-// For uniform array version (faster but limited capacity)
-GLuint addSourceBatchedUniformProgram = 0;
-std::vector<glm::vec4> batchedSourcePositions;
-std::vector<glm::vec4> batchedSourceValues;
 
+void drawQuad() {
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+}
+
+void setTextureUniform(GLuint program, const char* name, int unit, GLuint texture) {
+	glActiveTexture(GL_TEXTURE0 + unit);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1i(glGetUniformLocation(program, name), unit);
+}
 
 struct CompareVec2
 {
@@ -725,8 +730,6 @@ GLuint healthBarProgram;
 
 
 
-// Quad VAO
-GLuint quadVAO, quadVBO;
 
 
 
@@ -1450,119 +1453,7 @@ void displayFPS()
 
 
 
-const char* addSourceBatchedFragmentSource = R"(
-#version 400 core
-in vec2 texCoord;
-out vec4 fragColor;
 
-uniform sampler2D field;
-uniform sampler2D obstacles;
-uniform sampler2D sourceData;    // Texture containing source point data
-
-uniform vec2 texelSize;
-uniform vec2 aspectRatio;
-uniform int sourceCount;         // Number of active sources
-uniform int sourceTexWidth;      // Width of source data texture
-
-// Each source uses 2 texels:
-// Texel 0: xy = position, zw = unused
-// Texel 1: xyz = value (vx, vy, vz), w = radius
-
-void main() {
-    // Early out for obstacles
-    if (texture(obstacles, texCoord).x > 0.5) {
-        fragColor = texture(field, texCoord);
-        return;
-    }
-    
-    vec4 current = texture(field, texCoord);
-    vec3 accumulated = vec3(0.0);
-    
-    // Process all source points
-    for (int i = 0; i < sourceCount; i++) {
-        // Calculate texture coordinates for this source's data
-        // Each source uses 2 consecutive texels
-        int baseIndex = i * 2;
-        
-        // Read position (texel 0)
-        float u0 = (float(baseIndex) + 0.5) / float(sourceTexWidth);
-        vec4 posData = texture(sourceData, vec2(u0, 0.5));
-        vec2 point = posData.xy;
-        
-        // Read value and radius (texel 1)
-        float u1 = (float(baseIndex + 1) + 0.5) / float(sourceTexWidth);
-        vec4 valData = texture(sourceData, vec2(u1, 0.5));
-        vec3 value = valData.xyz;
-        float radius = valData.w;
-        
-        // Calculate distance with aspect ratio correction
-        vec2 diff = (texCoord - point) * aspectRatio;
-        float distSq = dot(diff, diff);
-        
-        // Gaussian splat - skip if too far (optimization)
-        // exp(-x) < 0.001 when x > 6.9, so skip if distSq/radius > 6.9
-        float radiusSq = radius * radius;
-        if (distSq < radiusSq * 7.0) {
-            float factor = exp(-distSq / radius);
-            accumulated += factor * value;
-        }
-    }
-    
-    fragColor = current + vec4(accumulated, 0.0);
-}
-)";
-
-// Alternative version using uniform array (faster for small numbers of sources)
-// Limited to ~256 sources due to uniform block size limits
-const char* addSourceBatchedUniformFragmentSource = R"(
-#version 400 core
-in vec2 texCoord;
-out vec4 fragColor;
-
-uniform sampler2D field;
-uniform sampler2D obstacles;
-
-uniform vec2 texelSize;
-uniform vec2 aspectRatio;
-uniform int sourceCount;
-
-// Maximum sources per batch - adjust based on GPU uniform limits
-// Each source needs 8 floats = 32 bytes
-// Typical UBO limit is 64KB = ~2000 sources, but array uniforms are more limited
-#define MAX_SOURCES 256
-
-// Packed source data: vec4(posX, posY, radius, unused), vec4(valX, valY, valZ, unused)
-uniform vec4 sourcePositions[MAX_SOURCES];  // xy = position, z = radius
-uniform vec4 sourceValues[MAX_SOURCES];     // xyz = value
-
-void main() {
-    if (texture(obstacles, texCoord).x > 0.5) {
-        fragColor = texture(field, texCoord);
-        return;
-    }
-    
-    vec4 current = texture(field, texCoord);
-    vec3 accumulated = vec3(0.0);
-    
-    // Unrolled loop hint for better performance on some GPUs
-    for (int i = 0; i < MAX_SOURCES && i < sourceCount; i++) {
-        vec2 point = sourcePositions[i].xy;
-        float radius = sourcePositions[i].z;
-        vec3 value = sourceValues[i].xyz;
-        
-        vec2 diff = (texCoord - point) * aspectRatio;
-        float distSq = dot(diff, diff);
-        
-        // Early skip for distant points
-        if (distSq < radius * 7.0) {
-            float factor = exp(-distSq / radius);
-            accumulated += factor * value;
-        }
-    }
-    
-    fragColor = current + vec4(accumulated, 0.0);
-}
-)";
 
 
 
@@ -2294,6 +2185,180 @@ void createFBO(GLuint& fbo, GLuint tex) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+
+
+
+
+
+
+
+// NEW: Batched splats (density or velocity) fragment shader
+const char* addSourcesBatchFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D field;         // current field (RG or RGBA)
+uniform sampler2D obstacles;     // obstacle mask
+uniform sampler2D splatsTex;     // batched splats data
+uniform int splatCount;          // number of splats in this pass
+uniform vec2 texelSize;
+uniform vec2 aspectRatio;
+
+// Accumulate Gaussian splats from bullets in one pass.
+// Splats are packed into a 2D RGBA32F texture, width=N, height=2:
+//  row0(i) = (point.x, point.y, value.x, value.y)
+//  row1(i) = (value.z, radius, _, _)
+
+void main() {
+    // Respect obstacles
+    if (texture(obstacles, texCoord).x > 0.5) {
+        fragColor = texture(field, texCoord);
+        return;
+    }
+
+    vec4 current = texture(field, texCoord);
+    vec3 accum = vec3(0.0);
+
+    // Loop over splats in this batch
+    // Note: splatCount may be up to a fixed batch size (e.g., 1024)
+    for (int i = 0; i < splatCount; ++i) {
+        float u = (float(i) + 0.5) / float(textureSize(splatsTex, 0).x);
+
+        // Fetch row 0 (point.xy, value.xy)
+        vec4 row0 = texture(splatsTex, vec2(u, 0.25));   // y ~ 0.25 -> first row
+        // Fetch row 1 (value.z, radius)
+        vec4 row1 = texture(splatsTex, vec2(u, 0.75));   // y ~ 0.75 -> second row
+
+        vec2 point = row0.xy;
+        vec3 value = vec3(row0.z, row0.w, row1.x);
+        float radius = row1.y;
+
+        // Aspect-correct distance
+        vec2 diff = (texCoord - point) * aspectRatio;
+        float dist2 = dot(diff, diff);
+
+        // Gaussian weight (matches your original kernel)
+        float factor = exp(-dist2 / radius);
+
+        accum += factor * value;
+    }
+
+    // Add to current field (density: accum.xy; velocity: accum.xy; third component ignored for velocity)
+    fragColor = current + vec4(accum, 0.0);
+}
+)";
+
+
+
+// NEW: Globals
+GLuint addSourcesBatchProgram = 0;
+GLuint splatsTex = 0;    // RGBA32F texture storing packed splats for the current batch
+
+// Choose a reasonable batch size; you can chain batches to support unlimited bullets.
+const int MAX_SPLATS_PER_PASS = 1024;
+
+// NEW: Initialize batching resources
+void initSplatBatchResources() {
+	// Compile program
+	addSourcesBatchProgram = createProgram(vertexShaderSource, addSourcesBatchFragmentSource);
+
+	// Create splats texture: width = MAX_SPLATS_PER_PASS, height = 2 rows, RGBA32F
+	glGenTextures(1, &splatsTex);
+	glBindTexture(GL_TEXTURE_2D, splatsTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, MAX_SPLATS_PER_PASS, 2, 0, GL_RGBA, GL_FLOAT, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // precise sampling
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
+
+// NEW: Splat struct (density or velocity splats)
+struct Splat {
+	// normalized [0,1] coords
+	float px;
+	float py;
+	// value: (vx, vy, vz). For density RG use vx,vy. For velocity RG use vx,vy; vz unused.
+	float vx;
+	float vy;
+	float vz;
+	// kernel radius (same semantic as your existing addSource)
+	float radius;
+};
+
+// NEW: Upload a batch and apply it in one pass
+// textures/fbos/current follow your existing double-buffer pattern
+void addSourcesBatch(GLuint* textures, GLuint* fbos, int& current,
+	const std::vector<Splat>& splats) {
+	if (splats.empty()) return;
+
+	// We may need multiple passes if splats.size() > MAX_SPLATS_PER_PASS
+	size_t offset = 0;
+	while (offset < splats.size()) {
+		size_t count = std::min((size_t)MAX_SPLATS_PER_PASS, splats.size() - offset);
+
+		// Prepare CPU buffer: two rows of width 'count'
+		// Row 0: (px, py, vx, vy)
+		// Row 1: (vz, radius, 0, 0)
+		std::vector<glm::vec4> row0(count);
+		std::vector<glm::vec4> row1(count);
+
+		for (size_t i = 0; i < count; ++i) {
+			const Splat& s = splats[offset + i];
+			row0[i] = glm::vec4(s.px, s.py, s.vx, s.vy);
+			row1[i] = glm::vec4(s.vz, s.radius, 0.0f, 0.0f);
+		}
+
+		// Upload rows into the 2D texture via glTexSubImage2D
+		glBindTexture(GL_TEXTURE_2D, splatsTex);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLsizei)count, 1, GL_RGBA, GL_FLOAT, row0.data());
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 1, (GLsizei)count, 1, GL_RGBA, GL_FLOAT, row1.data());
+
+		// Draw one fullscreen quad to apply this batch onto target field
+		int dst = 1 - current;
+		glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
+		glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
+
+		glUseProgram(addSourcesBatchProgram);
+
+		// Bind field and obstacles
+		setTextureUniform(addSourcesBatchProgram, "field", 0, textures[current]);
+		setTextureUniform(addSourcesBatchProgram, "obstacles", 1, obstacleTex);
+		setTextureUniform(addSourcesBatchProgram, "splatsTex", 2, splatsTex);
+
+		glUniform1i(glGetUniformLocation(addSourcesBatchProgram, "splatCount"), (GLint)count);
+		glUniform2f(glGetUniformLocation(addSourcesBatchProgram, "texelSize"),
+			1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
+		glUniform2f(glGetUniformLocation(addSourcesBatchProgram, "aspectRatio"),
+			(float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
+
+		drawQuad();
+		current = dst;
+
+		offset += count;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void initShaders() {
 	advectProgram = createProgram(vertexShaderSource, advectFragmentSource);
 	divergenceProgram = createProgram(vertexShaderSource, divergenceFragmentSource);
@@ -2310,7 +2375,7 @@ void initShaders() {
 	spriteProgram = createProgram(spriteVertexSource, spriteFragmentSource);
 	turbulenceForceProgram = createProgram(vertexShaderSource, turbulenceForceFragmentSource);
 	healthBarProgram = createProgram(healthBarVertexSource, healthBarFragmentSource);
-
+	addSourcesBatchProgram = createProgram(vertexShaderSource, addSourcesBatchFragmentSource);
 }
 
 void initTextures() {
@@ -2385,153 +2450,6 @@ void initQuad() {
 
 	glBindVertexArray(0);
 }
-
-
-// https://claude.ai/chat/7155f5b5-cfbc-42de-ad10-cfeac824d9b7
-void initBatchedSourceSystem() {
-	// Create the texture-based batched program
-	addSourceBatchedProgram = createProgram(vertexShaderSource, addSourceBatchedFragmentSource);
-
-	// Create the uniform-based batched program (faster for <256 sources)
-	addSourceBatchedUniformProgram = createProgram(vertexShaderSource, addSourceBatchedUniformFragmentSource);
-
-	// Create source data texture (1D texture stored as 2D with height=1)
-	glGenTextures(1, &sourceDataTex);
-	glBindTexture(GL_TEXTURE_2D, sourceDataTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SOURCE_TEX_WIDTH, 1, 0, GL_RGBA, GL_FLOAT, nullptr);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	// Pre-allocate buffers
-	sourceDataBuffer.reserve(SOURCE_TEX_WIDTH * 4);
-	batchedSourcePositions.reserve(256);
-	batchedSourceValues.reserve(256);
-}
-
-
-
-
-
-void clearSourceBatch() {
-	sourceDataBuffer.clear();
-	batchedSourcePositions.clear();
-	batchedSourceValues.clear();
-}
-
-// Add a source to the current batch
-void addSourceToBatch(float x, float y, float vx, float vy, float vz, float radius) {
-	// For texture-based approach
-	// Texel 0: position
-	sourceDataBuffer.push_back(x);
-	sourceDataBuffer.push_back(y);
-	sourceDataBuffer.push_back(0.0f);  // unused
-	sourceDataBuffer.push_back(0.0f);  // unused
-
-	// Texel 1: value and radius
-	sourceDataBuffer.push_back(vx);
-	sourceDataBuffer.push_back(vy);
-	sourceDataBuffer.push_back(vz);
-	sourceDataBuffer.push_back(radius);
-
-	// For uniform-based approach
-	batchedSourcePositions.push_back(glm::vec4(x, y, radius, 0.0f));
-	batchedSourceValues.push_back(glm::vec4(vx, vy, vz, 0.0f));
-}
-
-
-
-
-void drawQuad() {
-	glBindVertexArray(quadVAO);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glBindVertexArray(0);
-}
-
-void setTextureUniform(GLuint program, const char* name, int unit, GLuint texture) {
-	glActiveTexture(GL_TEXTURE0 + unit);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glUniform1i(glGetUniformLocation(program, name), unit);
-}
-
-
-
-// Apply all batched sources in a single draw call
-// Use this version for texture-based batching (unlimited sources)
-void applyBatchedSources_Texture(GLuint* textures, GLuint* fbos, int& current) {
-	int sourceCount = sourceDataBuffer.size() / 8;  // 8 floats per source
-	if (sourceCount == 0) return;
-
-	// Upload source data to texture
-	glBindTexture(GL_TEXTURE_2D, sourceDataTex);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sourceCount * 2, 1, GL_RGBA, GL_FLOAT, sourceDataBuffer.data());
-
-	// Render
-	int dst = 1 - current;
-	glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
-	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
-
-	glUseProgram(addSourceBatchedProgram);
-	setTextureUniform(addSourceBatchedProgram, "field", 0, textures[current]);
-	setTextureUniform(addSourceBatchedProgram, "obstacles", 1, obstacleTex);
-	setTextureUniform(addSourceBatchedProgram, "sourceData", 2, sourceDataTex);
-
-	glUniform2f(glGetUniformLocation(addSourceBatchedProgram, "texelSize"),
-		1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform2f(glGetUniformLocation(addSourceBatchedProgram, "aspectRatio"),
-		(float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
-	glUniform1i(glGetUniformLocation(addSourceBatchedProgram, "sourceCount"), sourceCount);
-	glUniform1i(glGetUniformLocation(addSourceBatchedProgram, "sourceTexWidth"), SOURCE_TEX_WIDTH);
-
-	drawQuad();
-	current = dst;
-}
-
-// Apply all batched sources using uniform arrays (faster for <256 sources)
-void applyBatchedSources_Uniform(GLuint* textures, GLuint* fbos, int& current) {
-	int sourceCount = batchedSourcePositions.size();
-	if (sourceCount == 0) return;
-
-	// Clamp to max supported
-	sourceCount = std::min(sourceCount, 256);
-
-	int dst = 1 - current;
-	glBindFramebuffer(GL_FRAMEBUFFER, fbos[dst]);
-	glViewport(0, 0, SIM_WIDTH, SIM_HEIGHT);
-
-	glUseProgram(addSourceBatchedUniformProgram);
-	setTextureUniform(addSourceBatchedUniformProgram, "field", 0, textures[current]);
-	setTextureUniform(addSourceBatchedUniformProgram, "obstacles", 1, obstacleTex);
-
-	glUniform2f(glGetUniformLocation(addSourceBatchedUniformProgram, "texelSize"),
-		1.0f / SIM_WIDTH, 1.0f / SIM_HEIGHT);
-	glUniform2f(glGetUniformLocation(addSourceBatchedUniformProgram, "aspectRatio"),
-		(float)SIM_WIDTH / SIM_HEIGHT, 1.0f);
-	glUniform1i(glGetUniformLocation(addSourceBatchedUniformProgram, "sourceCount"), sourceCount);
-
-	// Upload source arrays
-	glUniform4fv(glGetUniformLocation(addSourceBatchedUniformProgram, "sourcePositions"),
-		sourceCount, glm::value_ptr(batchedSourcePositions[0]));
-	glUniform4fv(glGetUniformLocation(addSourceBatchedUniformProgram, "sourceValues"),
-		sourceCount, glm::value_ptr(batchedSourceValues[0]));
-
-	drawQuad();
-	current = dst;
-}
-
-// Convenience function that picks the best method automatically
-void applyBatchedSources(GLuint* textures, GLuint* fbos, int& current) {
-	int sourceCount = batchedSourcePositions.size();
-	if (sourceCount <= 256) {
-		applyBatchedSources_Uniform(textures, fbos, current);
-	}
-	else {
-		applyBatchedSources_Texture(textures, fbos, current);
-	}
-}
-
-
 
 
 
@@ -2683,6 +2601,8 @@ void initCollisionResources()
 	// Compile shader
 	collisionProgram = createProgram(vertexShaderSource, collisionFragmentSource);
 }
+
+
 
 
 
@@ -3935,222 +3855,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 }
 
 
-void processAllyBullets_Batched() {
-	// First pass: collect all density sources
-	clearSourceBatch();
 
-	for (size_t i = 0; i < ally_bullets.size(); i++) {
-		auto& bullet = ally_bullets[i];
-
-		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
-		if (pathSamples == 0) pathSamples = 1;
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-
-			float sampleX = prevX + (bullet->x - prevX) * t;
-			float sampleY = prevY + (bullet->y - prevY) * t;
-
-			float normX = pixelToNormX(sampleX);
-			float normY = pixelToNormY(sampleY);
-
-			// Add density source
-			addSourceToBatch(normX, normY, 1.0f, 0.0f, 0.0f, bullet->density_add);
-		}
-	}
-
-	// Apply all density sources in ONE draw call
-	applyBatchedSources(densityTex, densityFBO, currentDensity);
-
-	// Second pass: collect all velocity sources
-	clearSourceBatch();
-
-	for (size_t i = 0; i < ally_bullets.size(); i++) {
-		auto& bullet = ally_bullets[i];
-
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
-		if (pathSamples == 0) pathSamples = 1;
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		float actualVelX = (bullet->x - bullet->old_x) / DT;
-		float actualVelY = (bullet->y - bullet->old_y) / DT;
-		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-
-			float sampleX = prevX + (bullet->x - prevX) * t;
-			float sampleY = prevY + (bullet->y - prevY) * t;
-
-			float normX = pixelToNormX(sampleX);
-			float normY = pixelToNormY(sampleY);
-
-			// Add velocity source
-			addSourceToBatch(normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-		}
-	}
-
-	// Apply all velocity sources in ONE draw call
-	applyBatchedSources(velocityTex, velocityFBO, currentVelocity);
-}
-
-// Similarly for enemy bullets
-void processEnemyBullets_Batched() {
-	// Density pass
-	clearSourceBatch();
-
-	for (size_t i = 0; i < enemy_bullets.size(); i++) {
-		auto& bullet = enemy_bullets[i];
-
-		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
-		if (pathSamples == 0) pathSamples = 1;
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-
-			float sampleX = prevX + (bullet->x - prevX) * t;
-			float sampleY = prevY + (bullet->y - prevY) * t;
-
-			float normX = pixelToNormX(sampleX);
-			float normY = pixelToNormY(sampleY);
-
-			addSourceToBatch(normX, normY, 0.0f, 1.0f, 0.0f, bullet->density_add);
-		}
-	}
-
-	applyBatchedSources(densityTex, densityFBO, currentDensity);
-
-	// Velocity pass
-	clearSourceBatch();
-
-	for (size_t i = 0; i < enemy_bullets.size(); i++) {
-		auto& bullet = enemy_bullets[i];
-
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
-		if (pathSamples == 0) pathSamples = 1;
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		float actualVelX = (bullet->x - bullet->old_x) / DT;
-		float actualVelY = (bullet->y - bullet->old_y) / DT;
-		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-
-			float sampleX = prevX + (bullet->x - prevX) * t;
-			float sampleY = prevY + (bullet->y - prevY) * t;
-
-			float normX = pixelToNormX(sampleX);
-			float normY = pixelToNormY(sampleY);
-
-			addSourceToBatch(normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-		}
-	}
-
-	applyBatchedSources(velocityTex, velocityFBO, currentVelocity);
-}
-
-// COMBINED VERSION: Process all bullets together for maximum efficiency
-// This does ONLY 2 draw calls total (1 for density, 1 for velocity)
-void processAllBullets_Batched() {
-	// ===== DENSITY PASS =====
-	clearSourceBatch();
-
-	// Ally bullets (red density)
-	for (size_t i = 0; i < ally_bullets.size(); i++) {
-		auto& bullet = ally_bullets[i];
-		int pathSamples = std::max(1, (int)(4.0 / MIN_BULLET_INTERVAL));
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-			float normX = pixelToNormX(prevX + (bullet->x - prevX) * t);
-			float normY = pixelToNormY(prevY + (bullet->y - prevY) * t);
-			addSourceToBatch(normX, normY, 1.0f, 0.0f, 0.0f, bullet->density_add);
-		}
-	}
-
-	// Enemy bullets (green density)
-	for (size_t i = 0; i < enemy_bullets.size(); i++) {
-		auto& bullet = enemy_bullets[i];
-		int pathSamples = std::max(1, (int)(4.0 / MIN_BULLET_INTERVAL));
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-			float normX = pixelToNormX(prevX + (bullet->x - prevX) * t);
-			float normY = pixelToNormY(prevY + (bullet->y - prevY) * t);
-			addSourceToBatch(normX, normY, 0.0f, 1.0f, 0.0f, bullet->density_add);
-		}
-	}
-
-	// ONE draw call for ALL density
-	applyBatchedSources(densityTex, densityFBO, currentDensity);
-
-	// ===== VELOCITY PASS =====
-	clearSourceBatch();
-
-	// Ally bullets
-	for (size_t i = 0; i < ally_bullets.size(); i++) {
-		auto& bullet = ally_bullets[i];
-		int pathSamples = std::max(1, (int)(4.0 / MIN_BULLET_INTERVAL));
-
-		float actualVelX = (bullet->x - bullet->old_x) / DT;
-		float actualVelY = (bullet->y - bullet->old_y) / DT;
-		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-			float normX = pixelToNormX(prevX + (bullet->x - prevX) * t);
-			float normY = pixelToNormY(prevY + (bullet->y - prevY) * t);
-			addSourceToBatch(normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-		}
-	}
-
-	// Enemy bullets
-	for (size_t i = 0; i < enemy_bullets.size(); i++) {
-		auto& bullet = enemy_bullets[i];
-		int pathSamples = std::max(1, (int)(4.0 / MIN_BULLET_INTERVAL));
-
-		float actualVelX = (bullet->x - bullet->old_x) / DT;
-		float actualVelY = (bullet->y - bullet->old_y) / DT;
-		float normVelX = 0.1f * velPixelToNormX(actualVelX);
-		float normVelY = 0.1f * velPixelToNormY(actualVelY);
-
-		float prevX = bullet->old_x;
-		float prevY = bullet->old_y;
-
-		for (int step = 0; step <= pathSamples; step++) {
-			float t = static_cast<float>(step) / pathSamples;
-			float normX = pixelToNormX(prevX + (bullet->x - prevX) * t);
-			float normY = pixelToNormY(prevY + (bullet->y - prevY) * t);
-			addSourceToBatch(normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
-		}
-	}
-
-	// ONE draw call for ALL velocity
-	applyBatchedSources(velocityTex, velocityFBO, currentVelocity);
-}
 
 void simulate()
 {
@@ -4345,7 +4050,6 @@ void simulate()
 		}
 	}
 
-	
 	//for (size_t i = 0; i < ally_bullets.size(); i++)
 	//{
 	//	auto& bullet = ally_bullets[i];
@@ -4379,6 +4083,7 @@ void simulate()
 	//		addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
 	//	}
 	//}
+
 
 
 
@@ -4458,7 +4163,87 @@ void simulate()
 	//	}
 	//}
 
-	processAllBullets_Batched();
+
+
+
+
+		// NEW: Build batched splats
+	std::vector<Splat> densitySplats;
+	std::vector<Splat> velocitySplats;
+
+	auto accumulateBulletSplats = [&](const std::vector<std::unique_ptr<bullet>>& bullets, bool isRedChannel) {
+		for (size_t i = 0; i < bullets.size(); ++i) {
+			auto& b = bullets[i];
+
+
+			if (b->to_be_culled && b->old_x == b->x && b->old_y == b->y) {
+				// Already culled last frame and not moving -> skip
+				continue;
+			}
+
+
+
+
+
+			int pathSamples = 10; // keep your sampling density
+			float prevX = b->old_x;
+			float prevY = b->old_y;
+
+			for (int step = 0; step <= pathSamples; ++step) {
+				float t = (float)step / pathSamples;
+				float sampleX = prevX + (b->x - prevX) * t;
+				float sampleY = prevY + (b->y - prevY) * t;
+
+				float normX = pixelToNormX(sampleX);
+				float normY = pixelToNormY(sampleY);
+
+				// Density splat: RG channels; put into vx,vy (vz used for third component which display shader ignores)
+				Splat ds;
+				ds.px = normX;
+				ds.py = normY;
+				if (isRedChannel) {
+					ds.vx = 1.0f; // red density -> .x
+					ds.vy = 0.0f; // green density -> .y
+				}
+				else {
+					ds.vx = 0.0f;
+					ds.vy = 1.0f;
+				}
+				ds.vz = 0.0f;
+				ds.radius = b->density_add;
+
+				densitySplats.push_back(ds);
+
+				// Velocity splat: add actual per-frame velocity (already normalized by your helpers)
+				float actualVelX = (b->x - b->old_x) / DT;
+				float actualVelY = (b->y - b->old_y) / DT;
+				float normVelX = 0.1f * velPixelToNormX(actualVelX);
+				float normVelY = 0.1f * velPixelToNormY(actualVelY);
+
+				Splat vs;
+				vs.px = normX;
+				vs.py = normY;
+				vs.vx = normVelX;
+				vs.vy = normVelY;
+				vs.vz = 0.0f;
+				vs.radius = b->velocity_add;
+
+				velocitySplats.push_back(vs);
+			}
+		}
+		};
+
+	// Ally bullets add red density
+	accumulateBulletSplats(ally_bullets, /*isRedChannel=*/true);
+	// Enemy bullets add green density
+	accumulateBulletSplats(enemy_bullets, /*isRedChannel=*/false);
+
+	// NEW: Submit batched splats (density and velocity separately)
+	addSourcesBatch(densityTex, densityFBO, currentDensity, densitySplats);
+	addSourcesBatch(velocityTex, velocityFBO, currentVelocity, velocitySplats);
+
+
+
 
 	if (protagonist.health <= 0)
 	{
@@ -4990,8 +4775,8 @@ int main(int argc, char** argv)
 	initShaders();
 	initTextures();
 	initQuad();
-	initBatchedSourceSystem();
 
+	initSplatBatchResources();
 
 	initLineRenderer();
 
