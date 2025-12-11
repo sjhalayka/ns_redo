@@ -4787,16 +4787,17 @@ void display()
 		}
 	}
 
-
+	// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
+	applyChromaticAberration();
+	// ============== END CHROMATIC ABERRATION ==============
+	// 
 	// ============== GLOW: APPLY POST-PROCESSING ==============
 	if (glowEnabled) {
 		applyGlowEffect();
 	}
 	// ============== END GLOW POST-PROCESSING ==============
 
-	// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
-	applyChromaticAberration();
-	// ============== END CHROMATIC ABERRATION ==============
+
 
 	displayFPS();
 
