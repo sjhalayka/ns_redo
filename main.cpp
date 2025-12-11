@@ -2386,6 +2386,8 @@ void initQuad() {
 	glBindVertexArray(0);
 }
 
+
+// https://claude.ai/chat/7155f5b5-cfbc-42de-ad10-cfeac824d9b7
 void initBatchedSourceSystem() {
 	// Create the texture-based batched program
 	addSourceBatchedProgram = createProgram(vertexShaderSource, addSourceBatchedFragmentSource);
@@ -3940,7 +3942,7 @@ void processAllyBullets_Batched() {
 	for (size_t i = 0; i < ally_bullets.size(); i++) {
 		auto& bullet = ally_bullets[i];
 
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
 		if (pathSamples == 0) pathSamples = 1;
 
 		float prevX = bullet->old_x;
@@ -4006,7 +4008,7 @@ void processEnemyBullets_Batched() {
 	for (size_t i = 0; i < enemy_bullets.size(); i++) {
 		auto& bullet = enemy_bullets[i];
 
-		int pathSamples = 4.0 / MIN_BULLET_INTERVAL;
+		int pathSamples = 10;// 4.0 / MIN_BULLET_INTERVAL;
 		if (pathSamples == 0) pathSamples = 1;
 
 		float prevX = bullet->old_x;
