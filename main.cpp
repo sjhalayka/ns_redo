@@ -510,6 +510,9 @@ public:
 	float birth_time = 0;
 	float death_time = -1;
 
+	float density_add = 0.00008f;
+	float velocity_add = 0.00008f;
+
 	virtual void integrate(float dt)
 	{
 
@@ -3610,16 +3613,21 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 	bullet newCentralStamp = bullet_template;
 
-	float x_rad = stamp.width / float(SIM_WIDTH) / 2.0f;
-	float y_rad = stamp.height / float(SIM_HEIGHT) / 2.0f;
+	float x_rad = stamp.width / float(SIM_WIDTH);
+	float y_rad = stamp.height / float(SIM_HEIGHT);
 
-	float avg_rad = max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
+	float avg_rad = 0.001 * max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
 
 	newCentralStamp.x = stamp.x + stamp.width / 2.0f;
 	newCentralStamp.y = stamp.y + stamp.height / 2.0f;
 
 	newCentralStamp.birth_time = GLOBAL_TIME;
 	newCentralStamp.death_time = GLOBAL_TIME + 0.1f;
+
+	newCentralStamp.density_add = avg_rad / 2.0f;
+	newCentralStamp.velocity_add = avg_rad / 2.0f;
+
+
 
 	//	newCentralStamp.is_dying_bullet = true;
 
@@ -3628,14 +3636,18 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	else
 		ally_bullets.push_back(make_unique<straight_bullet>(newCentralStamp));
 
-	for (size_t j = 0; j < 5; j++)
+	for (size_t j = 0; j < 3; j++)
 	{
 		bullet newStamp = newCentralStamp;
 
+		newStamp.density_add = avg_rad / 4;
+		newStamp.velocity_add = avg_rad / 4;
+
+
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x = 100 * (rand() / float(RAND_MAX));
-		newStamp.vel_y = 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_x *= 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
@@ -3646,17 +3658,17 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
 	}
 
-	for (size_t j = 0; j < 10; j++)
+	for (size_t j = 0; j < 5; j++)
 	{
 		bullet newStamp = newCentralStamp;
 
-		//newStamp.colour_radius = avg_rad / 8;
-		//newStamp.force_radius = avg_rad / 8;
+		newStamp.density_add = avg_rad / 8;
+		newStamp.velocity_add = avg_rad / 8;
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x = 100 * (rand() / float(RAND_MAX));
-		newStamp.vel_y = 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_x *= 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
@@ -3883,17 +3895,14 @@ void simulate()
 			float normX = pixelToNormX(sampleX);
 			float normY = pixelToNormY(sampleY);
 
-			//			if (red_mode)
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
-			//else
-			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, bullet->density_add);
 
 			float actualVelX = (bullet->x - bullet->old_x) / DT;
 			float actualVelY = (bullet->y - bullet->old_y) / DT;
 
 			float normVelX = 0.1f * velPixelToNormX(actualVelX);
 			float normVelY = 0.1f * velPixelToNormY(actualVelY);
-			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00008f);
+			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
 		}
 	}
 
@@ -3962,14 +3971,14 @@ void simulate()
 			//if (red_mode)
 			//	addSource(densityTex, densityFBO, currentDensity, normX, normY, 1, 0, 0, 0.00008f);
 			//else
-			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, 0.00008f);
+			addSource(densityTex, densityFBO, currentDensity, normX, normY, 0, 1, 0, bullet->density_add);
 
 			float actualVelX = (bullet->x - bullet->old_x) / DT;
 			float actualVelY = (bullet->y - bullet->old_y) / DT;
 
 			float normVelX = 0.1f * velPixelToNormX(actualVelX);
 			float normVelY = 0.1f * velPixelToNormY(actualVelY);
-			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, 0.00008f);
+			addSource(velocityTex, velocityFBO, currentVelocity, normX, normY, normVelX, normVelY, 0.0f, bullet->velocity_add);
 		}
 	}
 
