@@ -2205,7 +2205,7 @@ float vignetteDist = length(aspectCorrected);
     color *= vignette;
     
     // Add slight red tint during damage for "hurt" effect
-    float redTint = 0.1 * effectStrength;
+    float redTint = 0.5 * effectStrength;
     color.r = min(1.0, color.r + redTint);
     
     // Slight desaturation during damage
