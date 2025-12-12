@@ -4615,10 +4615,15 @@ void simulate()
 	GLuint clearColor[4] = { 0, 0, 0, 0 };
 	glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
 
-	addObstacleStamp(protagonist.tex,
-		static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-		protagonist.width, protagonist.height, true,
-		1, true);
+
+
+	if (protagonist.to_be_culled == false)
+	{
+		addObstacleStamp(protagonist.tex,
+			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
+			protagonist.width, protagonist.height, true,
+			1, true);
+	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
 	{
@@ -4756,7 +4761,7 @@ void display()
 
 
 
-	if (protagonist.tex != 0)
+	if (protagonist.to_be_culled == false && protagonist.tex != 0)
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
@@ -4796,7 +4801,7 @@ void display()
 
 		// Draw health bars
 	// Protagonist health bar
-	if (protagonist.tex != 0)
+	if (false == protagonist.to_be_culled && protagonist.tex != 0)
 	{
 		drawHealthBar(
 			static_cast<int>(protagonist.x),
