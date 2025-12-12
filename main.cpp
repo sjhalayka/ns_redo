@@ -4066,7 +4066,7 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 		auto [posX, posY, width, height] = pixelToNDC(barX, barY, barWidth, barHeight);
 		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
 		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
-		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.2f, 0.2f, 0.2f, 0.8f);
+		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), 0.2f, 0.2f, 0.2f, 0.25f);
 		drawQuad();
 	}
 
@@ -4095,7 +4095,7 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 
 		glUniform2f(glGetUniformLocation(healthBarProgram, "barPos"), posX, posY);
 		glUniform2f(glGetUniformLocation(healthBarProgram, "barSize"), width, height);
-		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), r, g, b, 1.0f);
+		glUniform4f(glGetUniformLocation(healthBarProgram, "barColor"), r, g, b, 0.75f);
 		drawQuad();
 	}
 
