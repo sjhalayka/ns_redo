@@ -218,6 +218,9 @@ public:
 
 	void integrate(float dt)
 	{
+		if (to_be_culled)
+			return;
+
 		old_x = x;
 		old_y = y;
 
@@ -4118,6 +4121,9 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 
 void fireBullet(void)
 {
+	if (protagonist.to_be_culled)
+		return;
+
 	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float> timeSinceLastBullet = currentTime - lastBulletTime;
 
