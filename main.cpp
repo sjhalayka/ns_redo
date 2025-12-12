@@ -752,7 +752,7 @@ GLuint chromaticAberrationProgram;
 
 // Chromatic aberration parameters
 float aberrationIntensity = 0.015f;      // RGB channel separation amount
-float aberrationDuration = 0.5f;         // How long effect lasts after damage (seconds)
+float aberrationDuration = 1.0f;         // How long effect lasts after damage (seconds)
 float vignetteStrength = 0.5f;           // Vignette darkness intensity
 float vignetteRadius = 0.6f;             // Vignette inner radius (0-1)
 bool chromaticAberrationEnabled = true;  // Toggle effect on/off
