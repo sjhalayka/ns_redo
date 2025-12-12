@@ -2188,9 +2188,6 @@ void main() {
     // Vignette effect centered on protagonist
 //    float vignetteDist = length(toCenter);
 
-
-
-// Then in main():
 vec2 aspectCorrected = toCenter;
 aspectCorrected.x *= aspectRatio;
 float vignetteDist = length(aspectCorrected);
@@ -2205,7 +2202,7 @@ float vignetteDist = length(aspectCorrected);
     color *= vignette;
     
     // Add slight red tint during damage for "hurt" effect
-    float redTint = 0.5 * effectStrength;
+    float redTint = 0.3 * effectStrength;
     color.r = min(1.0, color.r + redTint);
     
     // Slight desaturation during damage
@@ -4344,13 +4341,18 @@ void simulate()
 
 		if (detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1))
 		{
-			// to do: do damage to protagonist
+			const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
+			if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground >= DAMAGE_INTERVAL)
+			{
+				protagonist.health -= 100.0f;
 
-			protagonist.last_time_collided_with_foreground = GLOBAL_TIME;
+				protagonist.last_time_collided_with_foreground = GLOBAL_TIME;
 
-			// Trigger chromatic aberration effect on collision damage
-			lastDamageTime = GLOBAL_TIME;
+				// Trigger chromatic aberration effect on collision damage
+				lastDamageTime = GLOBAL_TIME;
+			}
+
 
 			// Test X resolution
 			float tempX = protagonist.x;
