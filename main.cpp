@@ -692,7 +692,7 @@ enemy_ship enemy1_template;
 boss_ship boss_template;
 
 const int foreground_chunk_size_width = 360;
-const int foreground_chunk_size_height = 360;
+const int foreground_chunk_size_height = 108;
 
 
 vector<foreground_tile> foreground_chunked;
@@ -4178,7 +4178,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 		return;
 
 
-	const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
+	const float aspect = SIM_WIDTH / float(SIM_HEIGHT);
 
 	//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
 	//std::chrono::duration<float, std::milli> elapsed;
@@ -4219,7 +4219,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x *= 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
 		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 
 		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
@@ -4242,7 +4242,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.vel_x *= 100 * (rand() / float(RAND_MAX));
+		newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
 		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 		newStamp.birth_time = GLOBAL_TIME;
