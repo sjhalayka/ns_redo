@@ -2171,8 +2171,8 @@ void main() {
     float aberrationAmount = intensity * effectStrength * dist;
     
     // Add subtle pulsing animation
-    float pulse = 1.0 + 0.2 * sin(time * 15.0) * effectStrength;
-    aberrationAmount *= pulse;
+    //float pulse = 1.0 + 0.2 * sin(time * 15.0) * effectStrength;
+    //aberrationAmount *= 0.1*pulse;
     
     // Sample RGB channels with different offsets (radial aberration)
     vec2 redOffset = dir * aberrationAmount * 1.0;
@@ -4777,7 +4777,18 @@ void display()
 		}
 	}
 
-	// Draw health bars
+
+
+
+	// 
+	// ============== GLOW: APPLY POST-PROCESSING ==============
+	if (glowEnabled) {
+		applyGlowEffect();
+	}
+	// ============== END GLOW POST-PROCESSING ==============
+
+
+		// Draw health bars
 	// Protagonist health bar
 	if (protagonist.tex != 0)
 	{
@@ -4803,13 +4814,6 @@ void display()
 		}
 	}
 
-
-	// 
-	// ============== GLOW: APPLY POST-PROCESSING ==============
-	if (glowEnabled) {
-		applyGlowEffect();
-	}
-	// ============== END GLOW POST-PROCESSING ==============
 
 		// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
 	applyChromaticAberration();
