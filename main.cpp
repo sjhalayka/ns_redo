@@ -253,7 +253,8 @@ public:
 
 				bool transparent = false;
 
-				if (dis_real(generator_real) > 0.99999)
+				// Do erosion
+				if (dis_real(generator_real) > 0.9999)
 					transparent = true;
 
 				for (int y = minY; y <= maxY; ++y)
@@ -4032,7 +4033,7 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 	if (maxHealth <= 0) return;
 
 	// Use sprite width as default bar width
-	if (barWidth < 0) barWidth = spriteWidth;
+	if (barWidth < 0) barWidth = spriteWidth; 
 
 	// Calculate health percentage (clamped to 0-1)
 	float healthPercent = std::max(0.0f, std::min(1.0f, health / maxHealth));
@@ -4176,6 +4177,9 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	if (stamp.to_be_culled)
 		return;
 
+
+	const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
+
 	//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
 	//std::chrono::duration<float, std::milli> elapsed;
 	//elapsed = global_time_end - app_start_time;
@@ -4217,7 +4221,9 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 		newStamp.vel_x *= 100 * (rand() / float(RAND_MAX));
 		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
+
 		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+		
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
 
