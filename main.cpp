@@ -19,7 +19,9 @@
 #include <tuple>
 #include <chrono>
 #include <random>
+#include <filesystem>
 using namespace std;
+namespace fs = std::filesystem;
 
 
 std::mt19937 generator_real(static_cast<unsigned>(0));
@@ -690,8 +692,7 @@ vector<unique_ptr<enemy_ship>> enemy_ships;
 friendly_ship protagonist;
 background_tile background;
 bullet bullet_template;
-enemy_ship enemy0_template;
-enemy_ship enemy1_template;
+vector<enemy_ship> enemy_templates;  // Automatically populated from media/enemy*_up.png files
 boss_ship boss_template;
 
 const int foreground_chunk_size_width = 360;
@@ -3700,7 +3701,7 @@ GLuint createRectangleStamp(int width, int height) {
  * @param outHeight   Output parameter for the image height in pixels
  * @return            OpenGL texture ID, or 0 if loading failed
  */
-GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
+GLuint loadTextureFromFile(const char *filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
 	int width, height, channels;
 
 	out_data.clear();
@@ -4036,7 +4037,7 @@ void drawHealthBar(int pixelX, int pixelY, int spriteWidth, float health, float 
 	if (maxHealth <= 0) return;
 
 	// Use sprite width as default bar width
-	if (barWidth < 0) barWidth = spriteWidth; 
+	if (barWidth < 0) barWidth = spriteWidth;
 
 	// Calculate health percentage (clamped to 0-1)
 	float healthPercent = std::max(0.0f, std::min(1.0f, health / maxHealth));
@@ -4229,7 +4230,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 
 		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
-		
+
 		newStamp.birth_time = GLOBAL_TIME;
 		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
 
@@ -4832,7 +4833,7 @@ void display()
 	}
 
 
-		// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
+	// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
 	applyChromaticAberration();
 	// ============== END CHROMATIC ABERRATION ==============
 
@@ -5210,8 +5211,140 @@ void keyboardup(unsigned char key, int x, int y) {
 
 
 
+void load_media(const char *level_string)
+{
+	// Load protagonist texture
+	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
+	if (protagonist.tex == 0)
+	{
+		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
+		return;
+	}
+
+	protagonist.x = 200;
+	protagonist.y = 300;
+
+	bullet_template.tex = loadTextureFromFile("media/bullet.png", &bullet_template.width, &bullet_template.height, bullet_template.to_present_data);
+	if (bullet_template.tex == 0)
+	{
+		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
+		return;
+	}
 
 
+
+	string affix = "media/";
+	affix += level_string;
+	affix += "/";
+	
+	string s = affix + "background.png";
+
+	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data);
+	if (background.tex == 0)
+	{
+		std::cout << "Warning: Could not load background sprite" << std::endl;
+		return;
+	}
+
+	s = affix + "foreground.png";
+	if (!chunkForegroundTexture(s.c_str()))
+	{
+		std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
+		return;
+	}
+
+
+
+	// Dynamically load all enemy templates from media directory
+	// Looks for files matching pattern: enemy<N>_up.png, enemy<N>_down.png, enemy<N>_rest.png
+	{
+		std::vector<std::string> enemy_prefixes;
+
+		// Scan media directory for enemy*_up.png files
+
+		string s = "media/";
+		s += level_string;
+
+		for (const auto& entry : fs::directory_iterator(s))
+		{
+			if (!entry.is_regular_file()) continue;
+
+			std::string filename = entry.path().filename().string();
+
+			// Check if file matches pattern enemy*_up.png
+			if (filename.rfind("enemy", 0) == 0 && filename.find("_up.png") != std::string::npos)
+			{
+				// Extract the prefix (e.g., "enemy0" from "enemy0_up.png")
+				std::string prefix = filename.substr(0, filename.find("_up.png"));
+				enemy_prefixes.push_back(prefix);
+			}
+		}
+
+		// Sort prefixes to ensure consistent ordering
+		std::sort(enemy_prefixes.begin(), enemy_prefixes.end());
+
+		// Load each enemy template
+		for (const auto& prefix : enemy_prefixes)
+		{
+			s = affix;
+
+			std::string up_path = s + prefix + "_up.png";
+			std::string down_path = s + prefix + "_down.png";
+			std::string rest_path = s + prefix + "_rest.png";
+
+			// Check that all three files exist
+			if (!fs::exists(up_path) || !fs::exists(down_path) || !fs::exists(rest_path))
+			{
+				std::cout << "Warning: Incomplete enemy template for " << prefix << " (missing _up, _down, or _rest)" << std::endl;
+				continue;
+			}
+
+			enemy_ship new_template;
+			new_template.tex = loadTextureFromFile_Triplet(
+				up_path.c_str(), down_path.c_str(), rest_path.c_str(),
+				&new_template.width, &new_template.height,
+				new_template.to_present_up_data, new_template.to_present_down_data, new_template.to_present_rest_data,
+				new_template);
+
+			if (new_template.tex == 0)
+			{
+				std::cout << "Warning: Could not load " << prefix << " sprite" << std::endl;
+				continue;
+			}
+
+			enemy_templates.push_back(std::move(new_template));
+			std::cout << "Loaded enemy template: " << prefix << std::endl;
+		}
+
+		if (enemy_templates.empty())
+		{
+			std::cout << "Warning: No enemy templates found in media directory" << std::endl;
+			return;
+		}
+
+		// Create initial enemy ships from templates
+		float start_x = 300;
+		float start_y = 200;
+		for (size_t i = 0; i < enemy_templates.size(); i++)
+		{
+			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[i]));
+			enemy_ships[i]->x = start_x + (i * 100);
+			enemy_ships[i]->y = start_y + (i * 100);
+			enemy_ships[i]->manually_update_data(
+				enemy_templates[i].to_present_up_data,
+				enemy_templates[i].to_present_down_data,
+				enemy_templates[i].to_present_rest_data);
+		}
+
+		enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_templates.size() - 1]));
+		enemy_ships[enemy_ships.size() - 1]->x = start_x + (2 * 100);
+		enemy_ships[enemy_ships.size() - 1]->y = start_y + (2 * 100);
+		enemy_ships[enemy_ships.size() - 1]->manually_update_data(
+			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
+			enemy_templates[enemy_templates.size() - 1].to_present_down_data,
+			enemy_templates[enemy_templates.size() - 1].to_present_rest_data);
+	}
+}
 
 
 
@@ -5259,61 +5392,9 @@ int main(int argc, char** argv)
 
 	initCollisionResources();
 
-	// Load protagonist texture
-	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
-	if (protagonist.tex == 0)
-	{
-		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
-		return 1;
-	}
 
-	protagonist.x = 200;
-	protagonist.y = 300;
+	load_media("level1");
 
-	background.tex = loadTextureFromFile("media/background.png", &background.width, &background.height, background.to_present_data);
-	if (background.tex == 0)
-	{
-		std::cout << "Warning: Could not load background sprite" << std::endl;
-		return 2;
-	}
-
-	if (!chunkForegroundTexture("media/foreground.png"))
-	{
-		std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
-		return 3;
-	}
-
-	bullet_template.tex = loadTextureFromFile("media/bullet.png", &bullet_template.width, &bullet_template.height, bullet_template.to_present_data);
-	if (bullet_template.tex == 0)
-	{
-		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
-		return 4;
-	}
-
-	enemy0_template.tex = loadTextureFromFile_Triplet("media/enemy0_up.png", "media/enemy0_down.png", "media/enemy0_rest.png", &enemy0_template.width, &enemy0_template.height, enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data, enemy0_template);
-	if (enemy0_template.tex == 0)
-	{
-		std::cout << "Warning: Could not load enemy0_template sprite" << std::endl;
-		return 5;
-	}
-
-	enemy1_template.tex = loadTextureFromFile_Triplet("media/enemy1_up.png", "media/enemy1_down.png", "media/enemy1_rest.png", &enemy1_template.width, &enemy1_template.height, enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data, enemy1_template);
-	if (enemy1_template.tex == 0)
-	{
-		std::cout << "Warning: Could not load enemy1_template sprite" << std::endl;
-		return 6;
-	}
-
-	enemy_ships.push_back(make_unique<enemy_ship>(enemy0_template));
-	enemy_ships.push_back(make_unique<enemy_ship>(enemy1_template));
-
-	enemy_ships[0]->x = 300;
-	enemy_ships[0]->y = 200;
-	enemy_ships[0]->manually_update_data(enemy0_template.to_present_up_data, enemy0_template.to_present_down_data, enemy0_template.to_present_rest_data);
-
-	enemy_ships[1]->x = 400;
-	enemy_ships[1]->y = 300;
-	enemy_ships[1]->manually_update_data(enemy1_template.to_present_up_data, enemy1_template.to_present_down_data, enemy1_template.to_present_rest_data);
 
 	//    printControls();
 
