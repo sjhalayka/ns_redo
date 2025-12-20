@@ -695,6 +695,10 @@ bullet bullet_template;
 vector<enemy_ship> enemy_templates;  // Automatically populated from media/enemy*_up.png files
 boss_ship boss_template;
 
+
+sprite game_over_banner;
+
+
 const int foreground_chunk_size_width = 360;
 const int foreground_chunk_size_height = 108;
 
@@ -3701,7 +3705,7 @@ GLuint createRectangleStamp(int width, int height) {
  * @param outHeight   Output parameter for the image height in pixels
  * @return            OpenGL texture ID, or 0 if loading failed
  */
-GLuint loadTextureFromFile(const char *filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
+GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
 	int width, height, channels;
 
 	out_data.clear();
@@ -4837,6 +4841,15 @@ void display()
 	applyChromaticAberration();
 	// ============== END CHROMATIC ABERRATION ==============
 
+
+	if (protagonist.to_be_culled == true && game_over_banner.tex != 0)
+	{
+		drawSprite(game_over_banner.tex,
+			0, 0,
+			game_over_banner.width, game_over_banner.height, false);
+	}
+
+
 	displayFPS();
 
 
@@ -5211,7 +5224,7 @@ void keyboardup(unsigned char key, int x, int y) {
 
 
 
-void load_media(const char *level_string)
+void load_media(const char* level_string)
 {
 	// Load protagonist texture
 	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
@@ -5231,12 +5244,17 @@ void load_media(const char *level_string)
 		return;
 	}
 
-
+	game_over_banner.tex = loadTextureFromFile("media/game_over.png", &game_over_banner.width, &game_over_banner.height, game_over_banner.to_present_data);
+	if (game_over_banner.tex == 0)
+	{
+		std::cout << "Warning: Could not load game_over_banner sprite" << std::endl;
+		return;
+	}
 
 	string affix = "media/";
 	affix += level_string;
 	affix += "/";
-	
+
 	string s = affix + "background.png";
 
 	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data);
