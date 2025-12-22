@@ -97,6 +97,27 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 }
 
 
+
+
+float get_curve_point(vector<float> points, float t)
+{
+	if (points.size() == 0)
+		return 0;
+
+	size_t i = points.size() - 1;
+
+	while (i > 0)
+	{
+		for (int k = 0; k < i; k++)
+			points[k] += t * (points[k + 1] - points[k]);
+
+		i--;
+	}
+
+	return points[0];
+}
+
+
 glm::vec2 get_curve_point(vector<glm::vec2> points, float t)
 {
 	if (points.size() == 0)
@@ -508,6 +529,12 @@ public:
 	//	health = 50.0f;
 	//	max_health = 50.0f;
 	//}
+
+	float appearance_time = 0;
+	float path_animation_length = 5.0f; // seconds
+	vector<glm::vec2> path_points = {glm::vec2(0, 0.5), glm::vec2(0.5, 0.5), glm::vec2(1, 0.5)};
+	vector<float> path_speeds = { 1, 1, 1 };
+
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -4309,6 +4336,33 @@ void simulate()
 	protagonist.integrate(DT);
 
 
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		enemy_ships[i]->integrate(DT);
+
+		if (enemy_ships[i]->isOnscreen())
+		{
+			if (enemy_ships[i]->appearance_time == 0)
+				enemy_ships[i]->appearance_time = GLOBAL_TIME;
+
+
+			
+
+
+		}
+		else
+		{
+			if (enemy_ships[i]->x < 0)
+				enemy_ships[i]->to_be_culled = true;
+			else
+			{
+				// To do: add foreground velocity here
+			}
+		}
+	}
+
+
+
 	//for (size_t i = 0; i < foreground_chunked.size(); i++)
 	//{
 	//	if (false == foreground_chunked[i].isOnscreen())
@@ -4882,23 +4936,44 @@ void display()
 
 	displayFPS();
 
+	lines.clear();
+
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		for (size_t j = 0; j < enemy_ships[i]->path_points.size() - 1; j++)
+		{
+			glm::vec2 p0 = enemy_ships[i]->path_points[j];
+
+			//p0.y = 1.0f - p0.y;
+			p0.x *= SIM_WIDTH;
+			p0.y *= SIM_HEIGHT;
+			//p0.x += enemy_ships[i]->x;
+			//p0.y += enemy_ships[i]->y;
+			//p0.y = 1080 - 1 - p0.y;
+
+			//p0.y = 1080 - 1 - p0.y;
+
+			glm::vec2 p1 = enemy_ships[i]->path_points[j + 1];
+
+			//p1.y = 1.0f - p1.y;
+			p1.x *= SIM_WIDTH;
+			p1.y *= SIM_HEIGHT;
+			//p1.x += enemy_ships[i]->x;
+			//p1.y += enemy_ships[i]->y;
+			//p1.y = 1080 - 1 - p1.y;
+
+			//p1.y = 1080 - 1 - enemy_ships[i]->y;
+
+			//p1.y = 1080 - 1 - p1.y;
+
+			lines.push_back(Line(p0, p1, glm::vec4(1, 1, 1, 1)));
+		}
+	}
+
+drawLinesWithWidth(lines, 1.0f);
 
 
-	//lines.clear();
-
-	//for (size_t i = 0; i < ally_bullets.size(); i++)
-	//{
-	//	float vel_x = (ally_bullets[i]->x - ally_bullets[i]->old_x) / DT;
-	//	float vel_y = (ally_bullets[i]->y - ally_bullets[i]->old_y) / DT;
-
-
-	//	lines.push_back(Line(glm::vec2(ally_bullets[i]->x, ally_bullets[i]->y), glm::vec2(ally_bullets[i]->x + vel_x, ally_bullets[i]->y + vel_y), glm::vec4(1, 0, 0, 1)));
-
-	//}
-
-
-	//drawLinesWithWidth(lines, 4.0f);
-
+	
 
 
 		//// Add continuous sources based on mouse input
