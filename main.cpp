@@ -1,6 +1,5 @@
 ﻿#include <GL/glew.h>
 #include <GL/freeglut.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -96,6 +95,37 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glUniform1i(glGetUniformLocation(program, name), unit);
 }
+
+
+glm::vec2 get_curve_point(vector<glm::vec2> points, float t)
+{
+	if (points.size() == 0)
+	{
+		glm::vec2 vd;
+		vd.x = vd.y = 0;
+		return vd;
+	}
+
+	size_t i = points.size() - 1;
+
+	while (i > 0)
+	{
+		for (int k = 0; k < i; k++)
+		{
+			points[k].x += t * (points[k + 1].x - points[k].x);
+			points[k].y += t * (points[k + 1].y - points[k].y);
+		}
+
+		i--;
+	}
+
+	return points[0];
+}
+
+
+
+
+
 
 struct CompareVec2
 {
