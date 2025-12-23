@@ -770,8 +770,16 @@ public:
 
 	float appearance_time = 0;
 	float path_animation_length = 5.0f; // seconds
-	vector<glm::vec2> path_points = { glm::vec2(0, 0.5), glm::vec2(0.5, 0.25), glm::vec2(1, 0.5) };
-	vector<float> path_speeds = { 1, 1, 1 };
+	vector<glm::vec2> path_points = { 
+		glm::vec2(0, 0.5), 
+		glm::vec2(0.1, 0.1), 
+		glm::vec2(0.125, 0.125), 
+		glm::vec2(0.25, 0.25), 
+		glm::vec2(0.25, 0.75), 
+		glm::vec2(1, 0.5) 
+	};
+
+	vector<float> path_speeds = { 1, 1, 1, 1, 1, 1};
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -3243,6 +3251,9 @@ GLuint lineVAO = 0;
 GLuint lineVBO = 0;
 std::vector<Line> lines;  // Your vector of lines
 
+vector<Line> tangent_lines;
+
+
 // ----- Point Data Structure -----
 
 struct PointVertex {
@@ -4739,19 +4750,27 @@ void simulate()
 			if (enemy_ships[i]->appearance_time == 0)
 				enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
+			float t = (GLOBAL_TIME - enemy_ships[i]->appearance_time) / enemy_ships[i]->path_animation_length;
+
+			glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
+			tangent.x *= SIM_WIDTH;
+			tangent.y *= SIM_HEIGHT;
+
+			enemy_ships[i]->vel_x = -tangent.x;
+			enemy_ships[i]->vel_y = -tangent.y;
+
+			float ds = get_spline_point(enemy_ships[i]->path_speeds, t);
+
+			enemy_ships[i]->vel_x *= ds;
+			enemy_ships[i]->vel_y *= ds;
 
 
-
-
+			//tangent_lines.push_back(Line(vd, (vd - tangent), glm::vec4(0, 1, 0, 1)));
 		}
 		else
 		{
 			if (enemy_ships[i]->x < 0)
 				enemy_ships[i]->to_be_culled = true;
-			else
-			{
-				// To do: add foreground velocity here
-			}
 		}
 	}
 
@@ -5337,15 +5356,21 @@ void display()
 		previous_pos.x *= SIM_WIDTH;
 		previous_pos.y *= SIM_HEIGHT;
 
-		for (size_t i = 1; i <= 100; i++)
+		for (size_t i = 1; i <= 20; i++)
 		{
-			float t = i / 100.0f;
+			float t = i / 20.0f;
 
 			glm::vec2 vd = get_spline_point(enemy_ships[e]->path_points, t);
 			vd.x *= SIM_WIDTH;
 			vd.y *= SIM_HEIGHT;
 
 			lines.push_back(Line(previous_pos, vd, glm::vec4(1, 1, 1, 1)));
+
+			glm::vec2 tangent = get_spline_tangent(enemy_ships[e]->path_points, t);
+			tangent.x *= SIM_WIDTH * 0.25;
+			tangent.y *= SIM_HEIGHT * 0.25;
+
+			tangent_lines.push_back(Line(vd, (vd - tangent), glm::vec4(0, 1, 0, 1)));
 
 			previous_pos = vd;
 		}
@@ -5355,6 +5380,10 @@ void display()
 
 
 	drawLinesWithWidth(lines, 4.0f);
+	drawLinesWithWidth(tangent_lines, 4.0f);
+
+
+
 	std::vector<Point> pv;
 
 	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
