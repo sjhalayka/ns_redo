@@ -532,9 +532,8 @@ public:
 
 	float appearance_time = 0;
 	float path_animation_length = 5.0f; // seconds
-	vector<glm::vec2> path_points = {glm::vec2(0, 0.5), glm::vec2(0.5, 0.5), glm::vec2(1, 0.5)};
+	vector<glm::vec2> path_points = { glm::vec2(0, 0.5), glm::vec2(0.5, 0.25), glm::vec2(1, 0.5) };
 	vector<float> path_speeds = { 1, 1, 1 };
-
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -2943,6 +2942,37 @@ void main() {
 }
 )";
 
+// ----- Point Shader Sources -----
+
+const char* pointVertexSource = R"(
+#version 400 core
+layout(location = 0) in vec2 aPosition;
+layout(location = 1) in vec4 aColor;
+
+out vec4 vColor;
+
+uniform vec2 resolution;  // Window dimensions
+
+void main() {
+    // Convert from pixel coordinates to NDC [-1, 1]
+    vec2 ndc = (aPosition / resolution) * 2.0 - 1.0;
+    ndc.y = -ndc.y;  // Flip Y (screen coords have Y down, OpenGL has Y up)
+    
+    gl_Position = vec4(ndc, 0.0, 1.0);
+    vColor = aColor;
+}
+)";
+
+const char* pointFragmentSource = R"(
+#version 400 core
+in vec4 vColor;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vColor;
+}
+)";
+
 // ----- Data Structures -----
 
 struct LineVertex {
@@ -2974,6 +3004,40 @@ GLuint lineProgram = 0;
 GLuint lineVAO = 0;
 GLuint lineVBO = 0;
 std::vector<Line> lines;  // Your vector of lines
+
+// ----- Point Data Structure -----
+
+struct PointVertex {
+	glm::vec2 position;
+	glm::vec4 color;
+};
+
+struct Point {
+	glm::vec2 position;
+	glm::vec4 color;  // RGBA, values 0.0-1.0
+
+	Point(glm::vec2 p, glm::vec4 c)
+		: position(p), color(c) {
+	}
+
+	Point(float x, float y, glm::vec4 c)
+		: position(x, y), color(c) {
+	}
+
+	// Convenience constructor with default white color
+	Point(glm::vec2 p)
+		: position(p), color(1.0f, 1.0f, 1.0f, 1.0f) {
+	}
+
+	Point(float x, float y)
+		: position(x, y), color(1.0f, 1.0f, 1.0f, 1.0f) {
+	}
+};
+
+GLuint pointProgram = 0;
+GLuint pointVAO = 0;
+GLuint pointVBO = 0;
+std::vector<Point> points;  // Your vector of points
 
 
 void initLineRenderer() {
@@ -3037,6 +3101,98 @@ void drawLinesWithWidth(const std::vector<Line>& linesToDraw, float width) {
 	drawLines(linesToDraw);
 	glLineWidth(1.0f);  // Reset to default
 }
+
+// ============== POINT RENDERER ==============
+
+void initPointRenderer() {
+	// Create shader program (uses same simple vertex/fragment shaders as lines)
+	pointProgram = createProgram(pointVertexSource, pointFragmentSource);
+
+	// Create VAO and VBO
+	glGenVertexArrays(1, &pointVAO);
+	glGenBuffers(1, &pointVBO);
+
+	glBindVertexArray(pointVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
+
+	// Position attribute (location 0)
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(PointVertex),
+		(void*)offsetof(PointVertex, position));
+
+	// Color attribute (location 1)
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(PointVertex),
+		(void*)offsetof(PointVertex, color));
+
+	glBindVertexArray(0);
+
+	// Enable point size control from vertex shader (optional, for gl_PointSize)
+	glEnable(GL_PROGRAM_POINT_SIZE);
+}
+
+// ----- Point Drawing -----
+
+void drawPoints(const std::vector<Point>& pointsToDraw) {
+	if (pointsToDraw.empty()) return;
+
+	// Build vertex data from points
+	std::vector<PointVertex> vertices;
+	vertices.reserve(pointsToDraw.size());
+
+	for (const auto& point : pointsToDraw) {
+		vertices.push_back({ point.position, point.color });
+	}
+
+	// Upload vertex data
+	glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
+	glBufferData(GL_ARRAY_BUFFER,
+		vertices.size() * sizeof(PointVertex),
+		vertices.data(),
+		GL_DYNAMIC_DRAW);
+
+	// Draw
+	glUseProgram(pointProgram);
+	glUniform2f(glGetUniformLocation(pointProgram, "resolution"),
+		(float)windowWidth, (float)windowHeight);
+
+	glBindVertexArray(pointVAO);
+	glDrawArrays(GL_POINTS, 0, (GLsizei)vertices.size());
+	glBindVertexArray(0);
+}
+
+// Draw with custom point size
+void drawPointsWithSize(const std::vector<Point>& pointsToDraw, float size) {
+	glPointSize(size);
+	drawPoints(pointsToDraw);
+	glPointSize(1.0f);  // Reset to default
+}
+
+// Draw a single point (convenience function)
+void drawPoint(const Point& point) {
+	std::vector<Point> singlePoint = { point };
+	drawPoints(singlePoint);
+}
+
+// Draw a single point with size (convenience function)
+void drawPointWithSize(const Point& point, float size) {
+	std::vector<Point> singlePoint = { point };
+	drawPointsWithSize(singlePoint, size);
+}
+
+// Draw a single point at x,y with color (convenience function)
+void drawPoint(float x, float y, glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)) {
+	std::vector<Point> singlePoint = { Point(x, y, color) };
+	drawPoints(singlePoint);
+}
+
+// Draw a single point at x,y with size and color (convenience function)
+void drawPointWithSize(float x, float y, float size, glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)) {
+	std::vector<Point> singlePoint = { Point(x, y, color) };
+	drawPointsWithSize(singlePoint, size);
+}
+
+// ============== END POINT RENDERER ==============
 
 
 void initCollisionResources()
@@ -4346,7 +4502,7 @@ void simulate()
 				enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
 
-			
+
 
 
 		}
@@ -4936,44 +5092,101 @@ void display()
 
 	displayFPS();
 
-	lines.clear();
 
-	for (size_t i = 0; i < enemy_ships.size(); i++)
+	for (size_t e = 0; e < enemy_ships.size(); e++)
 	{
-		for (size_t j = 0; j < enemy_ships[i]->path_points.size() - 1; j++)
+		glm::vec2 previous_pos = get_curve_point(enemy_ships[e]->path_points, 0.0f);
+		previous_pos.x *= SIM_WIDTH;
+		previous_pos.y *= SIM_HEIGHT;
+
+		for (size_t i = 1; i <= 100; i++)
 		{
-			glm::vec2 p0 = enemy_ships[i]->path_points[j];
+			float t = i / 100.0f;
 
-			//p0.y = 1.0f - p0.y;
-			p0.x *= SIM_WIDTH;
-			p0.y *= SIM_HEIGHT;
-			//p0.x += enemy_ships[i]->x;
-			//p0.y += enemy_ships[i]->y;
-			//p0.y = 1080 - 1 - p0.y;
+			glm::vec2 vd = get_curve_point(enemy_ships[e]->path_points, t);
+			vd.x *= SIM_WIDTH;
+			vd.y *= SIM_HEIGHT;
 
-			//p0.y = 1080 - 1 - p0.y;
+			lines.push_back(Line(previous_pos, vd, glm::vec4(1, 1, 1, 1)));
 
-			glm::vec2 p1 = enemy_ships[i]->path_points[j + 1];
-
-			//p1.y = 1.0f - p1.y;
-			p1.x *= SIM_WIDTH;
-			p1.y *= SIM_HEIGHT;
-			//p1.x += enemy_ships[i]->x;
-			//p1.y += enemy_ships[i]->y;
-			//p1.y = 1080 - 1 - p1.y;
-
-			//p1.y = 1080 - 1 - enemy_ships[i]->y;
-
-			//p1.y = 1080 - 1 - p1.y;
-
-			lines.push_back(Line(p0, p1, glm::vec4(1, 1, 1, 1)));
+			previous_pos = vd;
 		}
+
+	}
+	
+
+
+	drawLinesWithWidth(lines, 4.0f);
+	std::vector<Point> pv;
+
+	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
+	{
+		Point p(
+			enemy_ships[0]->path_points[i].x*SIM_WIDTH,
+			enemy_ships[0]->path_points[i].y*SIM_HEIGHT,
+			glm::vec4(1, 0, 0, 1));
+
+		//cout << p.position.x << " " << p.position.y << endl;
+
+		pv.push_back(p);
 	}
 
-drawLinesWithWidth(lines, 1.0f);
+	drawPointsWithSize(pv, 20.0f);
 
 
-	
+
+
+
+
+
+
+
+//	lines.clear();
+//
+//	for (size_t i = 0; i < enemy_ships.size(); i++)
+//	{
+//		for (size_t j = 0; j < enemy_ships[i]->path_points.size() - 1; j++)
+//		{
+//			glm::vec2 p0 = enemy_ships[i]->path_points[j];
+//
+//			//p0.y = 1.0f - p0.y;
+//			//p0.x *= SIM_WIDTH;
+//
+//			p0.x *= SIM_WIDTH;
+//			p0.y *= SIM_HEIGHT;
+//
+//
+//
+//			//p0.x += enemy_ships[i]->x;
+//			//p0.y += enemy_ships[i]->y;
+//			//p0.y = 1080 - 1 - p0.y;
+//
+//			//p0.y = 1080 - 1 - p0.y;
+//
+//			glm::vec2 p1 = enemy_ships[i]->path_points[j + 1];
+//
+//			//p1.y = 1.0f - p1.y;
+//			//p1.x *= SIM_WIDTH;
+//
+//		//	p1.x = -enemy_ships[i]->width;
+//			p1.x = -enemy_ships[i]->width;
+//			p1.y *= SIM_HEIGHT;
+//			//p1.x += enemy_ships[i]->x;
+//			//p1.y += enemy_ships[i]->y;
+//			//p1.y = 1080 - 1 - p1.y;
+//
+//			//p1.y = 1080 - 1 - enemy_ships[i]->y;
+//
+//			//p1.y = 1080 - 1 - p1.y;
+//
+//			lines.push_back(Line(p0, p1, glm::vec4(1, 1, 1, 1)));
+//		}
+//	}
+//
+//drawLinesWithWidth(lines, 1.0f);
+
+
+
 
 
 		//// Add continuous sources based on mouse input
@@ -5510,6 +5723,7 @@ int main(int argc, char** argv)
 	initSplatBatchResources();
 
 	initLineRenderer();
+	initPointRenderer();
 
 
 
