@@ -104,7 +104,7 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 
 
 
-
+float foreground_vel = -100.0f;
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
 float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
@@ -4410,6 +4410,12 @@ bool chunkForegroundTexture(const char* sourceFilename)
 		}
 	}
 
+	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	{
+		foreground_chunked[i].vel_x = foreground_vel;
+		foreground_chunked[i].vel_y = 0;
+	}
+
 	stbi_image_free(srcData);
 
 	std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
@@ -4771,6 +4777,12 @@ void simulate()
 		{
 			if (enemy_ships[i]->x < 0)
 				enemy_ships[i]->to_be_culled = true;
+			else
+			{
+				enemy_ships[i]->vel_x = foreground_vel;
+				enemy_ships[i]->vel_y = 0;
+
+			}
 		}
 	}
 
@@ -4850,6 +4862,8 @@ void simulate()
 
 	for (size_t i = 0; i < foreground_chunked.size() && !resolved; i++)
 	{
+		foreground_chunked[i].integrate(DT);
+
 		if (false == foreground_chunked[i].isOnscreen())
 			continue;
 
