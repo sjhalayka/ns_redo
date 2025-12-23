@@ -771,12 +771,12 @@ public:
 	float appearance_time = 0;
 	float path_animation_length = 5.0; // seconds
 	vector<glm::vec2> path_points = {
-		glm::vec2(0 - (width) / SIM_WIDTH, 0.5),
+		glm::vec2(0 - width / SIM_WIDTH, 0.5),
 		glm::vec2(0.1, 0.1),
 		glm::vec2(0.125, 0.125),
 		glm::vec2(0.25, 0.25),
 		glm::vec2(0.25, 0.75),
-		glm::vec2(1 + (width) / SIM_WIDTH, 0.5)
+		glm::vec2(1 + width / SIM_WIDTH, 0.5)
 	};
 
 	vector<float> path_speeds = { 1, 1, 1, 1, 1, 1 };
@@ -4933,6 +4933,13 @@ void simulate()
 			{
 				protagonist.vel_x = 0;  // Block horizontal movement
 				resolved = true;
+
+				// Kill protagonist if pushed offscreen by foreground
+				if (!protagonist.isOnscreen())
+				{
+					protagonist.health = 0;
+				}
+
 				continue;
 			}
 
@@ -4955,6 +4962,13 @@ void simulate()
 			{
 				protagonist.vel_y = 0;  // Block vertical movement
 				resolved = true;
+
+				// Kill protagonist if pushed offscreen by foreground
+				if (!protagonist.isOnscreen())
+				{
+					protagonist.health = 0;
+				}
+
 				continue;
 			}
 
@@ -4984,6 +4998,12 @@ void simulate()
 				// Protagonist is being crushed - push them along with foreground
 				// or apply continuous damage. Here we push them out.
 				protagonist.x += foreground_dx;
+
+				// Kill protagonist if pushed offscreen by foreground
+				if (!protagonist.isOnscreen())
+				{
+					protagonist.health = 0;
+				}
 			}
 		}
 	}
