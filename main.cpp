@@ -769,7 +769,7 @@ public:
 	//}
 
 	float appearance_time = 0;
-	float path_animation_length = 5.0f; // seconds
+	float path_animation_length = 20.0; // seconds
 	vector<glm::vec2> path_points = {
 		glm::vec2(0 - (width) / SIM_WIDTH, 0.5),
 		glm::vec2(0.1, 0.1),
@@ -4777,11 +4777,16 @@ void simulate()
 			// Clamp t to valid range
 			if (t <= 1.0f)
 			{
-				// Calculate velocity from tangent (for visual effects, animation state, etc.)
+
+
 				glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, 1.0f - t);
 				float ds = get_spline_point(enemy_ships[i]->path_speeds, 1.0f - t);
-				enemy_ships[i]->vel_x = -tangent.x * SIM_WIDTH * ds;
-				enemy_ships[i]->vel_y = -tangent.y * SIM_HEIGHT * ds;
+				float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
+				float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
+				enemy_ships[i]->vel_x = -tangent.x * SIM_WIDTH * ds * speed_scale;
+				enemy_ships[i]->vel_y = -tangent.y * SIM_HEIGHT * ds * speed_scale;
+
+
 			}
 			else
 			{
