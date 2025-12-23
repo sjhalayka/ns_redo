@@ -99,6 +99,244 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 
 
 
+
+
+
+
+
+
+
+// Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
+float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
+{
+	float t2 = t * t;
+	float t3 = t2 * t;
+
+	// Catmull-Rom basis matrix coefficients
+	return 0.5f * (
+		(2.0f * p1) +
+		(-p0 + p2) * t +
+		(2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+		(-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3
+		);
+}
+
+glm::vec2 catmull_rom_segment(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, float t)
+{
+	glm::vec2 result;
+	result.x = catmull_rom_segment(p0.x, p1.x, p2.x, p3.x, t);
+	result.y = catmull_rom_segment(p0.y, p1.y, p2.y, p3.y, t);
+	return result;
+}
+
+
+// Get a point on a Catmull-Rom spline
+// points: control points (minimum 2)
+// t: parameter in [0, 1] spanning the entire curve
+// The curve passes through all control points
+float get_spline_point(const vector<float>& points, float t)
+{
+	if (points.size() == 0)
+		return 0.0f;
+
+	if (points.size() == 1)
+		return points[0];
+
+	if (points.size() == 2)
+		return points[0] + t * (points[1] - points[0]); // Linear interpolation
+
+	// Clamp t to [0, 1]
+	if (t <= 0.0f) return points[0];
+	if (t >= 1.0f) return points[points.size() - 1];
+
+	// Number of segments is (n - 1) for n points
+	size_t num_segments = points.size() - 1;
+
+	// Find which segment we're in
+	float scaled_t = t * num_segments;
+	size_t segment = static_cast<size_t>(scaled_t);
+
+	// Handle edge case where t == 1.0
+	if (segment >= num_segments)
+		segment = num_segments - 1;
+
+	// Local t within the segment [0, 1]
+	float local_t = scaled_t - segment;
+
+	// Get the 4 control points for this segment
+	// For endpoints, we extrapolate phantom points
+	float p0, p1, p2, p3;
+
+	p1 = points[segment];
+	p2 = points[segment + 1];
+
+	// Handle p0 (point before p1)
+	if (segment == 0)
+		p0 = 2.0f * p1 - p2; // Extrapolate: reflect p2 across p1
+	else
+		p0 = points[segment - 1];
+
+	// Handle p3 (point after p2)
+	if (segment + 2 >= points.size())
+		p3 = 2.0f * p2 - p1; // Extrapolate: reflect p1 across p2
+	else
+		p3 = points[segment + 2];
+
+	return catmull_rom_segment(p0, p1, p2, p3, local_t);
+}
+
+
+glm::vec2 get_spline_point(const vector<glm::vec2>& points, float t)
+{
+	glm::vec2 result;
+	result.x = result.y = 0.0f;
+
+	if (points.size() == 0)
+		return result;
+
+	if (points.size() == 1)
+		return points[0];
+
+	if (points.size() == 2)
+	{
+		result.x = points[0].x + t * (points[1].x - points[0].x);
+		result.y = points[0].y + t * (points[1].y - points[0].y);
+		return result;
+	}
+
+	// Clamp t to [0, 1]
+	if (t <= 0.0f) return points[0];
+	if (t >= 1.0f) return points[points.size() - 1];
+
+	// Number of segments is (n - 1) for n points
+	size_t num_segments = points.size() - 1;
+
+	// Find which segment we're in
+	float scaled_t = t * num_segments;
+	size_t segment = static_cast<size_t>(scaled_t);
+
+	// Handle edge case where t == 1.0
+	if (segment >= num_segments)
+		segment = num_segments - 1;
+
+	// Local t within the segment [0, 1]
+	float local_t = scaled_t - segment;
+
+	// Get the 4 control points for this segment
+	glm::vec2 p0, p1, p2, p3;
+
+	p1 = points[segment];
+	p2 = points[segment + 1];
+
+	// Handle p0 (point before p1)
+	if (segment == 0)
+	{
+		p0.x = 2.0f * p1.x - p2.x;
+		p0.y = 2.0f * p1.y - p2.y;
+	}
+	else
+	{
+		p0 = points[segment - 1];
+	}
+
+	// Handle p3 (point after p2)
+	if (segment + 2 >= points.size())
+	{
+		p3.x = 2.0f * p2.x - p1.x;
+		p3.y = 2.0f * p2.y - p1.y;
+	}
+	else
+	{
+		p3 = points[segment + 2];
+	}
+
+	return catmull_rom_segment(p0, p1, p2, p3, local_t);
+}
+
+
+// Optional: Get the tangent (derivative) at a point on the spline
+// Useful for orienting objects along the path
+glm::vec2 get_spline_tangent(const vector<glm::vec2>& points, float t)
+{
+	glm::vec2 result;
+	result.x = result.y = 0.0f;
+
+	if (points.size() < 2)
+		return result;
+
+	if (points.size() == 2)
+	{
+		result.x = points[1].x - points[0].x;
+		result.y = points[1].y - points[0].y;
+		return result;
+	}
+
+	// Clamp t
+	t = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f : t;
+
+	size_t num_segments = points.size() - 1;
+	float scaled_t = t * num_segments;
+	size_t segment = static_cast<size_t>(scaled_t);
+
+	if (segment >= num_segments)
+		segment = num_segments - 1;
+
+	float local_t = scaled_t - segment;
+
+	glm::vec2 p0, p1, p2, p3;
+	p1 = points[segment];
+	p2 = points[segment + 1];
+
+	if (segment == 0)
+	{
+		p0.x = 2.0f * p1.x - p2.x;
+		p0.y = 2.0f * p1.y - p2.y;
+	}
+	else
+	{
+		p0 = points[segment - 1];
+	}
+
+	if (segment + 2 >= points.size())
+	{
+		p3.x = 2.0f * p2.x - p1.x;
+		p3.y = 2.0f * p2.y - p1.y;
+	}
+	else
+	{
+		p3 = points[segment + 2];
+	}
+
+	// Derivative of Catmull-Rom
+	float t2 = local_t * local_t;
+
+	result.x = 0.5f * (
+		(-p0.x + p2.x) +
+		2.0f * (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * local_t +
+		3.0f * (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t2
+		);
+
+	result.y = 0.5f * (
+		(-p0.y + p2.y) +
+		2.0f * (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * local_t +
+		3.0f * (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t2
+		);
+
+	return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 float get_curve_point(vector<float> points, float t)
 {
 	if (points.size() == 0)
@@ -5095,7 +5333,7 @@ void display()
 
 	for (size_t e = 0; e < enemy_ships.size(); e++)
 	{
-		glm::vec2 previous_pos = get_curve_point(enemy_ships[e]->path_points, 0.0f);
+		glm::vec2 previous_pos = get_spline_point(enemy_ships[e]->path_points, 0.0f);
 		previous_pos.x *= SIM_WIDTH;
 		previous_pos.y *= SIM_HEIGHT;
 
@@ -5103,7 +5341,7 @@ void display()
 		{
 			float t = i / 100.0f;
 
-			glm::vec2 vd = get_curve_point(enemy_ships[e]->path_points, t);
+			glm::vec2 vd = get_spline_point(enemy_ships[e]->path_points, t);
 			vd.x *= SIM_WIDTH;
 			vd.y *= SIM_HEIGHT;
 
