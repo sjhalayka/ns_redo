@@ -4884,6 +4884,10 @@ void simulate()
 		foreground_chunked[i].integrate(DT);
 	}
 
+	// Calculate how much the foreground moved this frame
+	// This is needed to properly resolve collisions with moving geometry
+	float foreground_dx = foreground_vel * DT;
+
 	// Then, check for collision with protagonist separately
 	bool resolved = false;
 
@@ -4907,12 +4911,14 @@ void simulate()
 			}
 
 
-			// Test X resolution
+			// Test X resolution - account for foreground movement
+			// The protagonist's old_x was valid when foreground was at ITS old position,
+			// so we must also shift by how much the foreground moved
 			float tempX = protagonist.x;
-			protagonist.x = protagonist.old_x;
+			protagonist.x = protagonist.old_x + foreground_dx;
 
 			bool xResolves = true;
-			// Check if moving only X back resolves ALL collisions
+			// Check if moving only X back (plus foreground offset) resolves ALL collisions
 			for (size_t j = 0; j < foreground_chunked.size(); j++)
 			{
 				if (foreground_chunked[j].isOnscreen() &&
@@ -4952,14 +4958,33 @@ void simulate()
 				continue;
 			}
 
-			// Neither alone works -> full revert (corner)
-			protagonist.x = protagonist.old_x;
+			// Neither alone works -> full revert (corner case)
+			// Apply foreground offset to X to maintain separation
+			protagonist.x = protagonist.old_x + foreground_dx;
 			protagonist.y = protagonist.old_y;
 			protagonist.vel_x = 0;
 			protagonist.vel_y = 0;
 			resolved = true;
 
-			// to do: kill protagonist if still colliding
+			// If still colliding after full revert, protagonist is being crushed
+			// Check and apply additional pushback or damage
+			bool stillColliding = false;
+			for (size_t j = 0; j < foreground_chunked.size(); j++)
+			{
+				if (foreground_chunked[j].isOnscreen() &&
+					detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[j], 1))
+				{
+					stillColliding = true;
+					break;
+				}
+			}
+
+			if (stillColliding)
+			{
+				// Protagonist is being crushed - push them along with foreground
+				// or apply continuous damage. Here we push them out.
+				protagonist.x += foreground_dx;
+			}
 		}
 	}
 
