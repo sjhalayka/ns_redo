@@ -769,7 +769,7 @@ public:
 	//}
 
 	float appearance_time = 0;
-	float path_animation_length = 20.0; // seconds
+	float path_animation_length = 5.0; // seconds
 	vector<glm::vec2> path_points = {
 		glm::vec2(0 - (width) / SIM_WIDTH, 0.5),
 		glm::vec2(0.1, 0.1),
