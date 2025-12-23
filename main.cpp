@@ -4878,12 +4878,17 @@ void simulate()
 
 
 
+	// First, integrate ALL foreground chunks (movement must happen regardless of collision)
+	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	{
+		foreground_chunked[i].integrate(DT);
+	}
+
+	// Then, check for collision with protagonist separately
 	bool resolved = false;
 
 	for (size_t i = 0; i < foreground_chunked.size() && !resolved; i++)
 	{
-		foreground_chunked[i].integrate(DT);
-
 		if (false == foreground_chunked[i].isOnscreen())
 			continue;
 
