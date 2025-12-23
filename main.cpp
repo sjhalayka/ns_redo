@@ -770,16 +770,32 @@ public:
 
 	float appearance_time = 0;
 	float path_animation_length = 5.0f; // seconds
-	vector<glm::vec2> path_points = { 
-		glm::vec2(0, 0.5), 
-		glm::vec2(0.1, 0.1), 
-		glm::vec2(0.125, 0.125), 
-		glm::vec2(0.25, 0.25), 
-		glm::vec2(0.25, 0.75), 
-		glm::vec2(1, 0.5) 
+	vector<glm::vec2> path_points = {
+		glm::vec2(0 - (width) / SIM_WIDTH, 0.5),
+		glm::vec2(0.1, 0.1),
+		glm::vec2(0.125, 0.125),
+		glm::vec2(0.25, 0.25),
+		glm::vec2(0.25, 0.75),
+		glm::vec2(1 + (width) / SIM_WIDTH, 0.5)
 	};
 
-	vector<float> path_speeds = { 1, 1, 1, 1, 1, 1};
+	vector<float> path_speeds = { 1, 1, 1, 1, 1, 1 };
+
+	void integrate(float dt)
+	{
+		if (to_be_culled)
+			return;
+
+		old_x = x;
+		old_y = y;
+
+		x = x + vel_x * dt;
+		y = y + vel_y * dt;
+	}
+
+
+
+
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -4758,20 +4774,19 @@ void simulate()
 
 			float t = (GLOBAL_TIME - enemy_ships[i]->appearance_time) / enemy_ships[i]->path_animation_length;
 
-			glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
-			tangent.x *= SIM_WIDTH;
-			tangent.y *= SIM_HEIGHT;
-
-			enemy_ships[i]->vel_x = -tangent.x;
-			enemy_ships[i]->vel_y = -tangent.y;
-
-			float ds = get_spline_point(enemy_ships[i]->path_speeds, t);
-
-			enemy_ships[i]->vel_x *= ds;
-			enemy_ships[i]->vel_y *= ds;
-
-
-			//tangent_lines.push_back(Line(vd, (vd - tangent), glm::vec4(0, 1, 0, 1)));
+			// Clamp t to valid range
+			if (t <= 1.0f)
+			{
+				// Calculate velocity from tangent (for visual effects, animation state, etc.)
+				glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, 1.0f - t);
+				float ds = get_spline_point(enemy_ships[i]->path_speeds, 1.0f - t);
+				enemy_ships[i]->vel_x = -tangent.x * SIM_WIDTH * ds;
+				enemy_ships[i]->vel_y = -tangent.y * SIM_HEIGHT * ds;
+			}
+			else
+			{
+				enemy_ships[i]->vel_x += foreground_vel;
+			}
 		}
 		else
 		{
@@ -5366,6 +5381,9 @@ void display()
 
 	for (size_t e = 0; e < enemy_ships.size(); e++)
 	{
+		if (false == enemy_ships[e]->isOnscreen())
+			continue;
+
 		glm::vec2 previous_pos = get_spline_point(enemy_ships[e]->path_points, 0.0f);
 		previous_pos.x *= SIM_WIDTH;
 		previous_pos.y *= SIM_HEIGHT;
@@ -5381,8 +5399,8 @@ void display()
 			lines.push_back(Line(previous_pos, vd, glm::vec4(1, 1, 1, 1)));
 
 			glm::vec2 tangent = get_spline_tangent(enemy_ships[e]->path_points, t);
-			tangent.x *= SIM_WIDTH * 0.25;
-			tangent.y *= SIM_HEIGHT * 0.25;
+			tangent.x *= SIM_WIDTH;
+			tangent.y *= SIM_HEIGHT;
 
 			tangent_lines.push_back(Line(vd, (vd - tangent), glm::vec4(0, 1, 0, 1)));
 
@@ -5390,7 +5408,7 @@ void display()
 		}
 
 	}
-	
+
 
 
 	drawLinesWithWidth(lines, 4.0f);
@@ -5403,8 +5421,8 @@ void display()
 	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
 	{
 		Point p(
-			enemy_ships[0]->path_points[i].x*SIM_WIDTH,
-			enemy_ships[0]->path_points[i].y*SIM_HEIGHT,
+			enemy_ships[0]->path_points[i].x * SIM_WIDTH,
+			enemy_ships[0]->path_points[i].y * SIM_HEIGHT,
 			glm::vec4(1, 0, 0, 1));
 
 		//cout << p.position.x << " " << p.position.y << endl;
@@ -5422,73 +5440,73 @@ void display()
 
 
 
-//	lines.clear();
-//
-//	for (size_t i = 0; i < enemy_ships.size(); i++)
-//	{
-//		for (size_t j = 0; j < enemy_ships[i]->path_points.size() - 1; j++)
-//		{
-//			glm::vec2 p0 = enemy_ships[i]->path_points[j];
-//
-//			//p0.y = 1.0f - p0.y;
-//			//p0.x *= SIM_WIDTH;
-//
-//			p0.x *= SIM_WIDTH;
-//			p0.y *= SIM_HEIGHT;
-//
-//
-//
-//			//p0.x += enemy_ships[i]->x;
-//			//p0.y += enemy_ships[i]->y;
-//			//p0.y = 1080 - 1 - p0.y;
-//
-//			//p0.y = 1080 - 1 - p0.y;
-//
-//			glm::vec2 p1 = enemy_ships[i]->path_points[j + 1];
-//
-//			//p1.y = 1.0f - p1.y;
-//			//p1.x *= SIM_WIDTH;
-//
-//		//	p1.x = -enemy_ships[i]->width;
-//			p1.x = -enemy_ships[i]->width;
-//			p1.y *= SIM_HEIGHT;
-//			//p1.x += enemy_ships[i]->x;
-//			//p1.y += enemy_ships[i]->y;
-//			//p1.y = 1080 - 1 - p1.y;
-//
-//			//p1.y = 1080 - 1 - enemy_ships[i]->y;
-//
-//			//p1.y = 1080 - 1 - p1.y;
-//
-//			lines.push_back(Line(p0, p1, glm::vec4(1, 1, 1, 1)));
-//		}
-//	}
-//
-//drawLinesWithWidth(lines, 1.0f);
+	//	lines.clear();
+	//
+	//	for (size_t i = 0; i < enemy_ships.size(); i++)
+	//	{
+	//		for (size_t j = 0; j < enemy_ships[i]->path_points.size() - 1; j++)
+	//		{
+	//			glm::vec2 p0 = enemy_ships[i]->path_points[j];
+	//
+	//			//p0.y = 1.0f - p0.y;
+	//			//p0.x *= SIM_WIDTH;
+	//
+	//			p0.x *= SIM_WIDTH;
+	//			p0.y *= SIM_HEIGHT;
+	//
+	//
+	//
+	//			//p0.x += enemy_ships[i]->x;
+	//			//p0.y += enemy_ships[i]->y;
+	//			//p0.y = 1080 - 1 - p0.y;
+	//
+	//			//p0.y = 1080 - 1 - p0.y;
+	//
+	//			glm::vec2 p1 = enemy_ships[i]->path_points[j + 1];
+	//
+	//			//p1.y = 1.0f - p1.y;
+	//			//p1.x *= SIM_WIDTH;
+	//
+	//		//	p1.x = -enemy_ships[i]->width;
+	//			p1.x = -enemy_ships[i]->width;
+	//			p1.y *= SIM_HEIGHT;
+	//			//p1.x += enemy_ships[i]->x;
+	//			//p1.y += enemy_ships[i]->y;
+	//			//p1.y = 1080 - 1 - p1.y;
+	//
+	//			//p1.y = 1080 - 1 - enemy_ships[i]->y;
+	//
+	//			//p1.y = 1080 - 1 - p1.y;
+	//
+	//			lines.push_back(Line(p0, p1, glm::vec4(1, 1, 1, 1)));
+	//		}
+	//	}
+	//
+	//drawLinesWithWidth(lines, 1.0f);
 
 
 
 
 
-		//// Add continuous sources based on mouse input
-		//if (leftMouseDown && !shiftDown) {
-		//	float x = (float)mouseX / windowWidth;
-		//	float y = 1.0f - (float)mouseY / windowHeight;
+			//// Add continuous sources based on mouse input
+			//if (leftMouseDown && !shiftDown) {
+			//	float x = (float)mouseX / windowWidth;
+			//	float y = 1.0f - (float)mouseY / windowHeight;
 
-		//	if (red_mode)
-		//		addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
-		//	else
-		//		addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
-		//}
+			//	if (red_mode)
+			//		addSource(densityTex, densityFBO, currentDensity, x, y, 1, 0, 0, 0.0008f);
+			//	else
+			//		addSource(densityTex, densityFBO, currentDensity, x, y, 0, 1, 0, 0.0008f);
+			//}
 
-		//if (rightMouseDown) {
-		//	float x = (float)mouseX / windowWidth;
-		//	float y = 1.0f - (float)mouseY / windowHeight;
-		//	float dx = (float)(mouseX - lastMouseX) * 2.0f;
-		//	float dy = (float)(lastMouseY - mouseY) * 2.0f;
+			//if (rightMouseDown) {
+			//	float x = (float)mouseX / windowWidth;
+			//	float y = 1.0f - (float)mouseY / windowHeight;
+			//	float dx = (float)(mouseX - lastMouseX) * 2.0f;
+			//	float dy = (float)(lastMouseY - mouseY) * 2.0f;
 
-		//	addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
-		//}
+			//	addSource(velocityTex, velocityFBO, currentVelocity, x, y, dx, dy, 0.0f, 0.00008f);
+			//}
 
 
 	lastMouseX = mouseX;
@@ -5939,23 +5957,27 @@ void load_media(const char* level_string)
 			return;
 		}
 
-		// Create initial enemy ships from templates
-		float start_x = 300;
-		float start_y = 200;
-		for (size_t i = 0; i < enemy_templates.size(); i++)
-		{
-			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[i]));
-			enemy_ships[i]->x = start_x + (i * 100);
-			enemy_ships[i]->y = start_y + (i * 100);
-			enemy_ships[i]->manually_update_data(
-				enemy_templates[i].to_present_up_data,
-				enemy_templates[i].to_present_down_data,
-				enemy_templates[i].to_present_rest_data);
-		}
 
 		enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_templates.size() - 1]));
-		enemy_ships[enemy_ships.size() - 1]->x = start_x + (2 * 100);
-		enemy_ships[enemy_ships.size() - 1]->y = start_y + (2 * 100);
+
+		//glm::vec2 start_pt = enemy_ships[enemy_ships.size() - 1]->path_points.back();
+		////enemy_ships[enemy_ships.size() - 1]->x = start_pt.x * SIM_WIDTH +  float(enemy_ships[enemy_ships.size() - 1]->width) * 0.5f;
+		////enemy_ships[enemy_ships.size() - 1]->y = start_pt.y * SIM_HEIGHT;// -float(enemy_ships[enemy_ships.size() - 1]->height) * 0.5f;
+
+		//enemy_ships[enemy_ships.size() - 1]->x = 2000 + float(enemy_ships[enemy_ships.size() - 1]->width) * 0.5f;
+		//enemy_ships[enemy_ships.size() - 1]->y = 0.5f*float(SIM_HEIGHT) - float(enemy_ships[enemy_ships.size() - 1]->height) * 0.5f;
+
+		glm::vec2 end_pos = get_spline_point(enemy_ships.back()->path_points, 1.0f);
+
+		// Convert normalized center position directly to pixels
+		// No extra +width/2 needed — the path already accounts for it
+		enemy_ships.back()->x = end_pos.x * SIM_WIDTH;
+		enemy_ships.back()->y = end_pos.y * SIM_HEIGHT - enemy_ships.back()->height * 0.5f;
+
+		float norm_half_w = enemy_ships.back()->width / 2.0f / SIM_WIDTH;
+		enemy_ships.back()->path_points.front().x = -norm_half_w;
+		enemy_ships.back()->path_points.back().x = 1.0f + norm_half_w;
+
 		enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
 			enemy_templates[enemy_templates.size() - 1].to_present_down_data,
