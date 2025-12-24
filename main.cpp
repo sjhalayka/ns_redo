@@ -5024,7 +5024,18 @@ void simulate()
 
 
 
+	for (size_t i = 0; i < enemy_ships.size() && !resolved; i++)
+	{
+		if (false == enemy_ships[i]->isOnscreen())
+			continue;
 
+		if (detectTriSpriteOverlap(protagonist, *enemy_ships[i], 1))
+		{
+			protagonist.health -= 10.0f;
+			enemy_ships[i]->health -= 10.0f;
+			lastDamageTime = GLOBAL_TIME;
+		}
+	}
 
 
 
@@ -6042,8 +6053,6 @@ void load_media(const char* level_string)
 
 		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
 
-		// Convert normalized center position directly to pixels
-		// No extra +width/2 needed — the path already accounts for it
 		enemy_ships.back()->x = start_pos.x * SIM_WIDTH - enemy_ships.back()->width * 0.5f;
 		enemy_ships.back()->y = start_pos.y * SIM_HEIGHT - enemy_ships.back()->height * 0.5f;
 
