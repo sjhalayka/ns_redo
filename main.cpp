@@ -3756,9 +3756,19 @@ void detectEdgeCollisions()
 				{
 					if (inside && collisionPoints[i].w >= target)
 					{
-						protagonist.health -= collisionPoints[i].w;
-						protagonist.under_fire = true;
-						protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
+						const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+
+						if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
+						{
+							protagonist.health -= 100.0;// collisionPoints[i].w;
+							protagonist.under_fire = true;
+							protagonist_blackening_points.push_back(glm::vec2(hit.x, hit.y));
+
+							protagonist.last_time_collided = GLOBAL_TIME;
+
+							// Trigger chromatic aberration effect on collision damage
+							lastDamageTime = GLOBAL_TIME;
+						}
 					}
 				}
 			}
@@ -5043,18 +5053,18 @@ void simulate()
 
 			if (true == found_collision)
 			{
-				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+				//const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-				if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
-				{
-					// damage is already applied by collision between the protagonist and the density field
-					// don't apply damage here too
+				//if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
+				//{
+				//	// damage is already applied by collision between the protagonist and the density field
+				//	// don't apply damage here too
 
-					protagonist.last_time_collided = GLOBAL_TIME;
+				//	protagonist.last_time_collided = GLOBAL_TIME;
 
-					// Trigger chromatic aberration effect on collision damage
-					lastDamageTime = GLOBAL_TIME;
-				}
+				//	// Trigger chromatic aberration effect on collision damage
+				//	lastDamageTime = GLOBAL_TIME;
+				//}
 
 
 
@@ -5069,18 +5079,18 @@ void simulate()
 			if (true == found_collision)
 			{
 				// Trigger chromatic aberration when hit by enemy bullet
-				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+				//const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-				if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
-				{
-					// damage is already applied by collision between the protagonist and the density field
-					// don't apply damage here too
+				//if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
+				//{
+				//	// damage is already applied by collision between the protagonist and the density field
+				//	// don't apply damage here too
 
-					protagonist.last_time_collided = GLOBAL_TIME;
+				//	protagonist.last_time_collided = GLOBAL_TIME;
 
-					// Trigger chromatic aberration effect on collision damage
-					lastDamageTime = GLOBAL_TIME;
-				}
+				//	// Trigger chromatic aberration effect on collision damage
+				//	lastDamageTime = GLOBAL_TIME;
+				//}
 
 				(*it)->to_be_culled = true;  // Mark bullet for removal so it doesn't keep triggering
 				break;
