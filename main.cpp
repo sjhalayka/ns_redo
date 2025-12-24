@@ -726,7 +726,7 @@ class friendly_ship : public ship
 {
 public:
 
-	float last_time_collided_with_foreground_or_enemy_ship = 0;
+	float last_time_collided = 0;
 
 	//friendly_ship() : ship()
 	//{
@@ -4852,11 +4852,11 @@ void simulate()
 		{
 			const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-			if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+			if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
 			{
 				protagonist.health -= 100.0f;
 
-				protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+				protagonist.last_time_collided = GLOBAL_TIME;
 
 				// Trigger chromatic aberration effect on collision damage
 				lastDamageTime = GLOBAL_TIME;
@@ -4970,13 +4970,13 @@ void simulate()
 		const float DAMAGE_INTERVAL = aberrationDuration;
 
 		if (detectTriSpriteOverlap(protagonist, *enemy_ships[i], 1) &&
-			GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+			GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
 		{
 			protagonist.health -= 100.0f;
 			enemy_ships[i]->health -= 100.0f;
 			lastDamageTime = GLOBAL_TIME;
 
-			protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+			protagonist.last_time_collided = GLOBAL_TIME;
 		}
 	}
 
@@ -5045,12 +5045,12 @@ void simulate()
 			{
 				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-				if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+				if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
 				{
 					// damage is already applied by collision between the protagonist and the density field
 					// don't apply damage here too
 
-					protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+					protagonist.last_time_collided = GLOBAL_TIME;
 
 					// Trigger chromatic aberration effect on collision damage
 					lastDamageTime = GLOBAL_TIME;
@@ -5071,12 +5071,12 @@ void simulate()
 				// Trigger chromatic aberration when hit by enemy bullet
 				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-				if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+				if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
 				{
 					// damage is already applied by collision between the protagonist and the density field
 					// don't apply damage here too
 
-					protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+					protagonist.last_time_collided = GLOBAL_TIME;
 
 					// Trigger chromatic aberration effect on collision damage
 					lastDamageTime = GLOBAL_TIME;
@@ -5353,7 +5353,7 @@ void display()
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided_with_foreground_or_enemy_ship > 0 && GLOBAL_TIME <= protagonist.last_time_collided_with_foreground_or_enemy_ship + 0.5));
+			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided > 0 && GLOBAL_TIME <= protagonist.last_time_collided + 0.5));
 	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
