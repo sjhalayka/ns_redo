@@ -4962,7 +4962,7 @@ void simulate()
 
 
 
-	for (size_t i = 0; i < enemy_ships.size() && !resolved; i++)
+	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
 		if (false == enemy_ships[i]->isOnscreen())
 			continue;
@@ -5028,7 +5028,6 @@ void simulate()
 
 
 
-
 	for (auto it = enemy_bullets.begin(); it != enemy_bullets.end(); it++)
 	{
 		(*it)->integrate(DT);
@@ -5043,7 +5042,23 @@ void simulate()
 			found_collision = detectSpriteOverlap(*(*it), foreground_chunked[i], 1);
 
 			if (true == found_collision)
+			{
+				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+
+				if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+				{
+					protagonist.health -= 100.0f;
+
+					protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+
+					// Trigger chromatic aberration effect on collision damage
+					lastDamageTime = GLOBAL_TIME;
+				}
+
+
+
 				break;
+			}
 		}
 
 		if (false == found_collision)
@@ -5053,7 +5068,18 @@ void simulate()
 			if (true == found_collision)
 			{
 				// Trigger chromatic aberration when hit by enemy bullet
-				lastDamageTime = GLOBAL_TIME;
+				const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+
+				if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
+				{
+					protagonist.health -= 100.0f;
+
+					protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
+
+					// Trigger chromatic aberration effect on collision damage
+					lastDamageTime = GLOBAL_TIME;
+				}
+
 				(*it)->to_be_culled = true;  // Mark bullet for removal so it doesn't keep triggering
 				break;
 			}
