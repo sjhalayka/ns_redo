@@ -726,7 +726,7 @@ class friendly_ship : public ship
 {
 public:
 
-	float last_time_collided_with_foreground = 0;
+	float last_time_collided_with_foreground_or_enemy_ship = 0;
 
 	//friendly_ship() : ship()
 	//{
@@ -4768,6 +4768,8 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		enemy_ships[i]->integrate(DT);
+
 		if (enemy_ships[i]->isOnscreen())
 		{
 			if (enemy_ships[i]->appearance_time == 0)
@@ -4798,13 +4800,15 @@ void simulate()
 				float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
 				enemy_ships[i]->vel_x = tangent.x * SIM_WIDTH * speed_mult * speed_scale;
 				enemy_ships[i]->vel_y = tangent.y * SIM_HEIGHT * speed_mult * speed_scale;
+
+				enemy_ships[i]->vel_x += foreground_vel;
 			}
 			else
 			{
 				// Path complete - switch to velocity-based movement
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
-				enemy_ships[i]->integrate(DT);
+				//enemy_ships[i]->integrate(DT);
 			}
 		}
 		else
@@ -4815,78 +4819,12 @@ void simulate()
 			{
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
-				enemy_ships[i]->integrate(DT);
 			}
 		}
 	}
 
 
 
-	//for (size_t i = 0; i < foreground_chunked.size(); i++)
-	//{
-	//	if (false == foreground_chunked[i].isOnscreen())
-	//		continue;
-
-	//	bool found_collision = detectTriSpriteToSpriteOverlap(protagonist, foreground_chunked[i], 1);
-
-	//	if (true == found_collision)
-	//	{
-	//		friendly_ship old_protagonist = protagonist;
-	//		old_protagonist.x = old_protagonist.old_x;
-	//		old_protagonist.y = old_protagonist.old_y;
-
-	//		//float x_move = (protagonist.x - protagonist.old_x);
-	//		//float y_move = (protagonist.y - protagonist.old_y);
-
-	//		friendly_ship old_protagonist_up = old_protagonist;
-	//		old_protagonist_up.y--;// -= y_move;
-
-	//		friendly_ship old_protagonist_down = old_protagonist;
-	//		old_protagonist_down.y++;// += y_move;
-
-	//		friendly_ship old_protagonist_left = old_protagonist;
-	//		old_protagonist_left.x--;// -= x_move;
-
-	//		friendly_ship old_protagonist_right = old_protagonist;
-	//		old_protagonist_right.x++;// += x_move;
-
-	//		bool found_collision_up = detectTriSpriteToSpriteOverlap(old_protagonist_up, foreground_chunked[i], 1);
-	//		bool found_collision_down = detectTriSpriteToSpriteOverlap(old_protagonist_down, foreground_chunked[i], 1);
-	//		bool found_collision_left = detectTriSpriteToSpriteOverlap(old_protagonist_left, foreground_chunked[i], 1);
-	//		bool found_collision_right = detectTriSpriteToSpriteOverlap(old_protagonist_right, foreground_chunked[i], 1);
-
-	//		if (/*found_collision_up ||*/ old_protagonist_up.vel_y < 0)
-	//		{
-	//			//protagonist.vel_y = 0;// -old_protagonist.vel_y * 0.01;
-
-	//			protagonist.y = protagonist.old_y;
-	//		}
-
-	//		if (/*found_collision_down || */old_protagonist_down.vel_y > 0)
-	//		{
-	//			//protagonist.vel_y = 0;// -old_protagonist.vel_y * 0.01;
-	//			protagonist.y = protagonist.old_y;
-	//		}
-
-	//		if (/*found_collision_left || */old_protagonist_left.vel_x < 0)
-	//		{
-	//			//protagonist.vel_x = 0;// -old_protagonist.vel_x * 0.01;
-	//			protagonist.x = protagonist.old_x;
-	//		}
-
-	//		if (/*found_collision_right || */old_protagonist_right.vel_x > 0)
-	//		{
-	//			//protagonist.vel_x = 0;// -old_protagonist.vel_x * 0.01;
-	//			protagonist.x = protagonist.old_x;
-	//		}
-
-	//		//protagonist.x = protagonist.old_x;
-	//		//protagonist.y = protagonist.old_y;
-	//		
-
-	//		break;
-	//	}
-	//}
 
 
 
@@ -4914,11 +4852,11 @@ void simulate()
 		{
 			const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
 
-			if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground >= DAMAGE_INTERVAL)
+			if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
 			{
 				protagonist.health -= 100.0f;
 
-				protagonist.last_time_collided_with_foreground = GLOBAL_TIME;
+				protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
 
 				// Trigger chromatic aberration effect on collision damage
 				lastDamageTime = GLOBAL_TIME;
@@ -5029,11 +4967,16 @@ void simulate()
 		if (false == enemy_ships[i]->isOnscreen())
 			continue;
 
-		if (detectTriSpriteOverlap(protagonist, *enemy_ships[i], 1))
+		const float DAMAGE_INTERVAL = aberrationDuration;
+
+		if (detectTriSpriteOverlap(protagonist, *enemy_ships[i], 1) &&
+			GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
 		{
-			protagonist.health -= 10.0f;
-			enemy_ships[i]->health -= 10.0f;
+			protagonist.health -= 100.0f;
+			enemy_ships[i]->health -= 100.0f;
 			lastDamageTime = GLOBAL_TIME;
+
+			protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
 		}
 	}
 
@@ -5382,7 +5325,7 @@ void display()
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided_with_foreground > 0 && GLOBAL_TIME <= protagonist.last_time_collided_with_foreground + 0.5));
+			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided_with_foreground_or_enemy_ship > 0 && GLOBAL_TIME <= protagonist.last_time_collided_with_foreground_or_enemy_ship + 0.5));
 	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
@@ -5468,9 +5411,9 @@ void display()
 		previous_pos.x *= SIM_WIDTH;
 		previous_pos.y *= SIM_HEIGHT;
 
-		for (size_t i = 1; i <= 20; i++)
+		for (size_t i = 1; i <= 100; i++)
 		{
-			float t = i / 20.0f;
+			float t = i / 100.0f;
 
 			glm::vec2 vd = get_spline_point(enemy_ships[e]->path_points, t);
 			vd.x *= SIM_WIDTH;
@@ -5492,12 +5435,13 @@ void display()
 
 
 	drawLinesWithWidth(lines, 4.0f);
-	drawLinesWithWidth(tangent_lines, 4.0f);
+	//drawLinesWithWidth(tangent_lines, 4.0f);
 
 
 
 	std::vector<Point> pv;
 
+	if(enemy_ships.size() > 0)
 	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
 	{
 		Point p(
