@@ -5463,7 +5463,7 @@ void display()
 			tangent.x *= SIM_WIDTH;
 			tangent.y *= SIM_HEIGHT;
 
-			tangent_lines.push_back(Line(vd, (vd - tangent), glm::vec4(0, 1, 0, 1)));
+			tangent_lines.push_back(Line(vd, (vd + tangent), glm::vec4(0, 1, 0, 1)));
 
 			previous_pos = vd;
 		}
@@ -5473,7 +5473,7 @@ void display()
 
 
 	drawLinesWithWidth(lines, 4.0f);
-	//drawLinesWithWidth(tangent_lines, 4.0f);
+	drawLinesWithWidth(tangent_lines, 4.0f);
 
 
 
