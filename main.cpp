@@ -4789,7 +4789,7 @@ void simulate()
 				glm::vec2 pos = get_spline_point(enemy_ships[i]->path_points, t);
 				enemy_ships[i]->old_x = enemy_ships[i]->x;
 				enemy_ships[i]->old_y = enemy_ships[i]->y;
-				enemy_ships[i]->x = pos.x * SIM_WIDTH;
+				enemy_ships[i]->x = pos.x * SIM_WIDTH - enemy_ships[i]->width * 0.5f;
 				enemy_ships[i]->y = pos.y * SIM_HEIGHT - enemy_ships[i]->height * 0.5f;
 
 				// Calculate velocity for visual effects/physics (optional)
@@ -6044,7 +6044,7 @@ void load_media(const char* level_string)
 
 		// Convert normalized center position directly to pixels
 		// No extra +width/2 needed — the path already accounts for it
-		enemy_ships.back()->x = start_pos.x * SIM_WIDTH;
+		enemy_ships.back()->x = start_pos.x * SIM_WIDTH - enemy_ships.back()->width * 0.5f;
 		enemy_ships.back()->y = start_pos.y * SIM_HEIGHT - enemy_ships.back()->height * 0.5f;
 
 		float norm_half_w = enemy_ships.back()->width / 2.0f / SIM_WIDTH;
