@@ -5047,7 +5047,8 @@ void simulate()
 
 				if (GLOBAL_TIME - protagonist.last_time_collided_with_foreground_or_enemy_ship >= DAMAGE_INTERVAL)
 				{
-					protagonist.health -= 100.0f;
+					// damage is already applied by collision between the protagonist and the density field
+					// don't apply damage here too
 
 					protagonist.last_time_collided_with_foreground_or_enemy_ship = GLOBAL_TIME;
 
