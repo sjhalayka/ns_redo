@@ -5463,6 +5463,11 @@ void display()
 			tangent.x *= SIM_WIDTH;
 			tangent.y *= SIM_HEIGHT;
 
+			float d = get_spline_point(enemy_ships[e]->path_speeds, t);
+
+			tangent.x *= d;
+			tangent.y *= d;
+
 			tangent_lines.push_back(Line(vd, (vd + tangent), glm::vec4(0, 1, 0, 1)));
 
 			previous_pos = vd;
