@@ -23,6 +23,13 @@ using namespace std;
 namespace fs = std::filesystem;
 
 
+// to do: Enemy cannon type can be straight ahead, sideways, random single, circular spread
+
+// to do: add in cannon locations and type for each enemy ship type
+
+
+
+
 std::mt19937 generator_real(static_cast<unsigned>(0));
 std::uniform_real_distribution<float> dis_real(0, 1);
 
@@ -54,6 +61,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 bool spacePressed = false;
 
 const float MIN_BULLET_INTERVAL = 0.5f;
+
 
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
@@ -5473,12 +5481,14 @@ void display()
 			previous_pos = vd;
 		}
 
+		drawLinesWithWidth(lines, 4.0f);
+		drawLinesWithWidth(tangent_lines, 4.0f);
+
 	}
 
 
 
-	drawLinesWithWidth(lines, 4.0f);
-	drawLinesWithWidth(tangent_lines, 4.0f);
+
 
 
 
