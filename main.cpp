@@ -112,7 +112,7 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 
 
 
-float foreground_vel = -100.0f;
+float foreground_vel = -50.0f;
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
 float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
@@ -805,11 +805,25 @@ public:
 	}
 
 
-
-
-
 	void set_velocity(const float src_x, const float src_y)
 	{
+		vel_x = src_x;
+		vel_y = src_y;
+
+		if (vel_y < -0.1 * SIM_HEIGHT)
+		{
+			state = UP_STATE;
+		}
+		else if (vel_y > 0.1 * SIM_HEIGHT)
+		{
+			state = DOWN_STATE;
+		}
+		else
+		{
+			state = REST_STATE;
+		}
+
+		update_tex();
 	}
 };
 
@@ -4790,6 +4804,9 @@ void simulate()
 
 		if (enemy_ships[i]->isOnscreen())
 		{
+			// Force update of texture
+			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+
 			if (enemy_ships[i]->appearance_time == 0)
 				enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
@@ -5481,8 +5498,8 @@ void display()
 			previous_pos = vd;
 		}
 
-		drawLinesWithWidth(lines, 4.0f);
-		drawLinesWithWidth(tangent_lines, 4.0f);
+		//drawLinesWithWidth(lines, 4.0f);
+		//drawLinesWithWidth(tangent_lines, 4.0f);
 
 	}
 
@@ -6061,6 +6078,8 @@ void load_media(const char* level_string)
 			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
 			enemy_templates[enemy_templates.size() - 1].to_present_down_data,
 			enemy_templates[enemy_templates.size() - 1].to_present_rest_data);
+
+		enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
 	}
 }
 
