@@ -1877,7 +1877,8 @@ uniform float dissipation;
 
 void main() {
     if (texture(obstacles, texCoord).x > 0.5) {
-        fragColor = vec4(0.0);
+        fragColor = dissipation * texture(quantity, texCoord);
+		//fragColor = vec4(0.0);
         return;
     }
     
