@@ -108,6 +108,164 @@ void setTextureUniform(GLuint program, const char* name, int unit, GLuint textur
 
 
 
+GLuint waveChromaticProgram;
+
+// Wave effect parameters
+const int MAX_WAVE_SOURCES = 16;          // Maximum simultaneous wave effects
+float waveSpeed = 0.8f;                   // How fast the wave expands (normalized units/sec)
+float waveDuration = 2.0f;                // How long each wave lasts (seconds)
+float waveAberrationIntensity = 0.03f;   // RGB separation strength
+float waveRingWidth = 0.15f;              // Width of the distortion ring
+float waveRingFalloff = 3.0f;             // How quickly the ring edges fade
+
+// Structure to track individual wave events
+struct WaveEvent {
+	float centerX;      // Normalized X position (0-1)
+	float centerY;      // Normalized Y position (0-1)
+	float startTime;    // When the wave started (GLOBAL_TIME)
+	bool active;        // Whether this slot is in use
+
+	WaveEvent() : centerX(0), centerY(0), startTime(-100), active(false) {}
+};
+
+// Array of wave events (circular buffer approach)
+WaveEvent waveEvents[MAX_WAVE_SOURCES];
+int nextWaveSlot = 0;
+
+// Toggle for the wave effect
+bool waveChromaticEnabled = true;
+
+
+
+
+
+const char* waveChromaticFragmentSource = R"(
+#version 400 core
+in vec2 texCoord;
+out vec4 fragColor;
+
+uniform sampler2D scene;
+uniform float time;
+uniform float waveSpeed;
+uniform float waveDuration;
+uniform float aberrationIntensity;
+uniform float ringWidth;
+uniform float ringFalloff;
+uniform float aspectRatio;
+
+// Wave source data: each source has (centerX, centerY, startTime, active)
+// Packed as vec4 for efficiency
+uniform vec4 waveSources[16];
+uniform int activeWaveCount;
+
+// Creates a ring-shaped wave distortion
+// Returns: distortion strength (0-1) based on distance from expanding ring front
+float calculateWaveStrength(vec2 uv, vec2 center, float radius, float ringW) {
+    // Aspect-correct the distance calculation
+    vec2 diff = uv - center;
+    diff.x *= aspectRatio;
+    float dist = length(diff);
+    
+    // Distance from the ring front (positive = inside ring, negative = outside)
+    float ringDist = abs(dist - radius);
+    
+    // Smooth ring falloff - strongest at the ring edge
+    float strength = 1.0 - smoothstep(0.0, ringW, ringDist);
+    
+    return strength;
+}
+
+// Calculate direction from wave center for radial aberration
+vec2 getAberrationDirection(vec2 uv, vec2 center) {
+    vec2 diff = uv - center;
+    diff.x *= aspectRatio;
+    float len = length(diff);
+    if (len < 0.001) return vec2(0.0);
+    return normalize(diff);
+}
+
+void main() {
+    vec3 totalOffset = vec3(0.0);
+    float totalWeight = 0.0;
+    
+    // Accumulate distortion from all active wave sources
+    for (int i = 0; i < activeWaveCount; i++) {
+        vec4 source = waveSources[i];
+        vec2 center = source.xy;
+        float startTime = source.z;
+        float isActive = source.w;
+        
+        if (isActive < 0.5) continue;
+        
+        float elapsed = time - startTime;
+        if (elapsed < 0.0 || elapsed > waveDuration) continue;
+        
+        // Current radius of the expanding wave
+        float radius = elapsed * waveSpeed;
+        
+        // Age-based fade out (wave weakens as it expands)
+        float ageFade = 1.0 - (elapsed / waveDuration);
+        ageFade = ageFade * ageFade; // Ease out
+        
+        // Distance-based fade (wave weakens as radius grows)
+        float distFade = 1.0 / (1.0 + radius * 2.0);
+        
+        // Combined fade factor
+        float fade = ageFade * distFade;
+        
+        // Ring distortion strength at this pixel
+        float waveStrength = calculateWaveStrength(texCoord, center, radius, ringWidth);
+        
+        // Direction for radial aberration (RGB separates radially from wave center)
+        vec2 aberrationDir = getAberrationDirection(texCoord, center);
+        
+        // Accumulate weighted distortion
+        float weight = waveStrength * fade;
+        
+        // Create oscillating wave pattern within the ring
+        float wave = sin(elapsed * 20.0 - radius * 30.0) * 0.5 + 0.5;
+        weight *= mix(0.7, 1.0, wave);
+        
+        totalOffset.x += aberrationDir.x * weight;
+        totalOffset.y += aberrationDir.y * weight;
+        totalWeight += weight;
+    }
+    
+    // If no active waves affect this pixel, just output the original
+    if (totalWeight < 0.001) {
+        fragColor = texture(scene, texCoord);
+        return;
+    }
+    
+    // Normalize and apply aberration intensity
+    vec2 avgDir = vec2(totalOffset.x, totalOffset.y) / max(totalWeight, 0.001);
+    float intensity = aberrationIntensity * min(totalWeight, 1.0);
+    
+    // Sample RGB channels with different offsets (radial separation)
+    vec2 redOffset = avgDir * intensity * 1.2;
+    vec2 greenOffset = vec2(0.0);  // Green channel stays centered
+    vec2 blueOffset = -avgDir * intensity * 1.2;
+    
+    float r = texture(scene, texCoord + redOffset).r;
+    float g = texture(scene, texCoord + greenOffset).g;
+    float b = texture(scene, texCoord + blueOffset).b;
+    
+    // Add subtle brightness boost at wave fronts
+    float brightness = 1.0 + totalWeight * 0.15;
+    
+    fragColor = vec4(vec3(r, g, b) * brightness, 1.0);
+}
+)";
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2922,6 +3080,10 @@ void initShaders() {
 	// ============== CHROMATIC ABERRATION SHADER INITIALIZATION ==============
 	chromaticAberrationProgram = createProgram(vertexShaderSource, chromaticAberrationFragmentSource);
 	// ============== END CHROMATIC ABERRATION INITIALIZATION ==============
+
+	waveChromaticProgram = createProgram(vertexShaderSource, waveChromaticFragmentSource);
+
+
 }
 
 void initTextures() {
@@ -2996,6 +3158,89 @@ void initQuad() {
 
 	glBindVertexArray(0);
 }
+
+
+
+
+void triggerWaveAtPosition(float screenX, float screenY, float spriteWidth, float spriteHeight) {
+	// Convert screen position to normalized UV coordinates (0-1)
+	// Center the wave on the sprite's center
+	float centerX = (screenX + spriteWidth * 0.5f) / windowWidth;
+	float centerY = 1.0f - (screenY + spriteHeight * 0.5f) / windowHeight; // Flip Y for UV
+
+	// Clamp to valid range
+	centerX = std::max(0.0f, std::min(1.0f, centerX));
+	centerY = std::max(0.0f, std::min(1.0f, centerY));
+
+	// Find the next available slot (circular buffer)
+	waveEvents[nextWaveSlot].centerX = centerX;
+	waveEvents[nextWaveSlot].centerY = centerY;
+	waveEvents[nextWaveSlot].startTime = GLOBAL_TIME;
+	waveEvents[nextWaveSlot].active = true;
+
+	// Advance to next slot
+	nextWaveSlot = (nextWaveSlot + 1) % MAX_WAVE_SOURCES;
+
+	std::cout << "Wave triggered at UV(" << centerX << ", " << centerY << ")" << std::endl;
+}
+
+// Apply the wave chromatic aberration effect
+void applyWaveChromaticAberration() {
+	if (!waveChromaticEnabled) return;
+
+	// Count active waves and prepare uniform data
+	int activeCount = 0;
+	float waveData[MAX_WAVE_SOURCES * 4]; // vec4 per source
+
+	for (int i = 0; i < MAX_WAVE_SOURCES; i++) {
+		if (waveEvents[i].active) {
+			float elapsed = GLOBAL_TIME - waveEvents[i].startTime;
+
+			// Check if wave has expired
+			if (elapsed > waveDuration) {
+				waveEvents[i].active = false;
+				continue;
+			}
+
+			// Pack data: centerX, centerY, startTime, active
+			int idx = activeCount * 4;
+			waveData[idx + 0] = waveEvents[i].centerX;
+			waveData[idx + 1] = waveEvents[i].centerY;
+			waveData[idx + 2] = waveEvents[i].startTime;
+			waveData[idx + 3] = 1.0f; // active flag
+			activeCount++;
+		}
+	}
+
+	// Skip rendering if no active waves
+	if (activeCount == 0) return;
+
+	// Render to screen, reading from sceneTex
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, windowWidth, windowHeight);
+
+	glUseProgram(waveChromaticProgram);
+	setTextureUniform(waveChromaticProgram, "scene", 0, sceneTex);
+
+	// Set uniforms
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "time"), GLOBAL_TIME);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "waveSpeed"), waveSpeed);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "waveDuration"), waveDuration);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "aberrationIntensity"), waveAberrationIntensity);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "ringWidth"), waveRingWidth);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "ringFalloff"), waveRingFalloff);
+	glUniform1f(glGetUniformLocation(waveChromaticProgram, "aspectRatio"),
+		(float)windowWidth / (float)windowHeight);
+
+	// Upload wave source data
+	glUniform4fv(glGetUniformLocation(waveChromaticProgram, "waveSources"),
+		activeCount, waveData);
+	glUniform1i(glGetUniformLocation(waveChromaticProgram, "activeWaveCount"), activeCount);
+
+	drawQuad();
+}
+
+
 
 // ============== GLOW RESOURCE INITIALIZATION ==============
 void initGlowResources() {
@@ -3171,7 +3416,28 @@ void applyChromaticAberration() {
 	protaUVx = std::max(0.0f, std::min(1.0f, protaUVx));
 	protaUVy = std::max(0.0f, std::min(1.0f, protaUVy));
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// Check if wave chromatic will run after this
+	bool waveWillRun = false;
+	if (waveChromaticEnabled) {
+		for (int i = 0; i < MAX_WAVE_SOURCES; i++) {
+			if (waveEvents[i].active && (GLOBAL_TIME - waveEvents[i].startTime) <= waveDuration) {
+				waveWillRun = true;
+				break;
+			}
+		}
+	}
+
+	if (waveWillRun) {
+		// Write to sceneFBO so wave effect can read it
+		glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
+	}
+	else {
+		// Write directly to screen
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
+
+
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Read from sceneTex (after glow composite) and write directly to screen
@@ -4962,7 +5228,7 @@ void simulate()
 
 			// Neither alone works -> full revert (corner case)
 			// Apply foreground offset to X to maintain separation
-			protagonist.x = protagonist.old_x + foreground_dx;
+			protagonist.x = protagonist.old_x;// +foreground_dx;
 			protagonist.y = protagonist.old_y;
 			protagonist.vel_x = 0;
 			protagonist.vel_y = 0;
@@ -5219,6 +5485,16 @@ void simulate()
 
 		if (enemy_ships[i]->health <= 0)
 		{
+			// ============== TRIGGER WAVE EFFECT ON ENEMY DEATH ==============
+			// Trigger wave chromatic aberration at enemy's death position
+			triggerWaveAtPosition(
+				enemy_ships[i]->x,
+				enemy_ships[i]->y,
+				static_cast<float>(enemy_ships[i]->width),
+				static_cast<float>(enemy_ships[i]->height)
+			);
+			// ============== END WAVE TRIGGER ==============
+
 			make_dying_bullets(*(enemy_ships[i]), true);
 			enemy_ships[i]->to_be_culled = true;
 		}
@@ -5453,6 +5729,9 @@ void display()
 	// ============== CHROMATIC ABERRATION: APPLY DAMAGE EFFECT ==============
 	applyChromaticAberration();
 	// ============== END CHROMATIC ABERRATION ==============
+
+
+	applyWaveChromaticAberration();
 
 
 	if (protagonist.to_be_culled == true && game_over_banner.tex != 0)
