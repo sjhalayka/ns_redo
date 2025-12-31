@@ -251,7 +251,7 @@ void main() {
     float b = texture(scene, texCoord + blueOffset).b;
     
     // Add subtle brightness boost at wave fronts
-    float brightness = 1.0 + totalWeight * 0.15;
+    float brightness = 1.0 + totalWeight * 0.5;
     
     fragColor = vec4(vec3(r, g, b) * brightness, 1.0);
 }
