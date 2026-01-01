@@ -4986,7 +4986,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	float x_rad = stamp.width / float(SIM_WIDTH);
 	float y_rad = stamp.height / float(SIM_HEIGHT);
 
-	float avg_rad = 0.001f * max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
+	float avg_rad = 0.01 * max(x_rad, y_rad);// 0.5 * (x_rad + y_rad);
 
 	newCentralStamp.x = stamp.x + stamp.width / 2.0f;
 	newCentralStamp.y = stamp.y + stamp.height / 2.0f;
