@@ -112,7 +112,7 @@ GLuint waveChromaticProgram;
 
 // Wave effect parameters
 const int MAX_WAVE_SOURCES = 16;          // Maximum simultaneous wave effects
-float waveSpeed = 0.8f;                   // How fast the wave expands (normalized units/sec)
+float waveSpeed = 2.0f;                   // How fast the wave expands (normalized units/sec)
 float waveDuration = 2.0f;                // How long each wave lasts (seconds)
 float waveAberrationIntensity = 0.03f;   // RGB separation strength
 float waveRingWidth = 0.15f;              // Width of the distortion ring
