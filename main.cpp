@@ -3355,8 +3355,19 @@ void compositeGlow() {
 	bool willApplyAberration = chromaticAberrationEnabled &&
 		(timeSinceDamage <= aberrationDuration);
 
-	if (willApplyAberration) {
-		// Render to sceneFBO so chromatic aberration can read it
+	// Check if wave chromatic aberration will be applied
+	bool willApplyWaveAberration = false;
+	if (waveChromaticEnabled) {
+		for (int i = 0; i < MAX_WAVE_SOURCES; i++) {
+			if (waveEvents[i].active && (GLOBAL_TIME - waveEvents[i].startTime) <= waveDuration) {
+				willApplyWaveAberration = true;
+				break;
+			}
+		}
+	}
+
+	if (willApplyAberration || willApplyWaveAberration) {
+		// Render to sceneFBO so subsequent effects can read it
 		glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
 	}
 	else {
@@ -5804,18 +5815,18 @@ void display()
 
 	std::vector<Point> pv;
 
-	if(enemy_ships.size() > 0)
-	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
-	{
-		Point p(
-			enemy_ships[0]->path_points[i].x * SIM_WIDTH,
-			enemy_ships[0]->path_points[i].y * SIM_HEIGHT,
-			glm::vec4(1, 0, 0, 1));
+	if (enemy_ships.size() > 0)
+		for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
+		{
+			Point p(
+				enemy_ships[0]->path_points[i].x * SIM_WIDTH,
+				enemy_ships[0]->path_points[i].y * SIM_HEIGHT,
+				glm::vec4(1, 0, 0, 1));
 
-		//cout << p.position.x << " " << p.position.y << endl;
+			//cout << p.position.x << " " << p.position.y << endl;
 
-		pv.push_back(p);
-	}
+			pv.push_back(p);
+		}
 
 	drawPointsWithSize(pv, 20.0f);
 
