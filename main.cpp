@@ -866,7 +866,7 @@ public:
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_down_data.data());
 
-		else if (state == REST_STATE)
+		else// if (state == REST_STATE)
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_rest_data.data());
@@ -882,7 +882,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(1000.0f), max_health(1000.0f) {}
+	ship() : health(100000.0f), max_health(100000.0f) {}
 };
 
 
@@ -939,14 +939,14 @@ public:
 	vector<glm::vec2> path_points =
 	{
 		glm::vec2(1 + width / SIM_WIDTH, 0.5),
-		glm::vec2(0.25, 0.75),
-		glm::vec2(0.25, 0.25),
-		glm::vec2(0.125, 0.125),
-		glm::vec2(0.1, 0.1),
+		glm::vec2(0.5, 0.75),
+		glm::vec2(0.5, 0.25),
+		glm::vec2(0.5, 0.125),
+		glm::vec2(0.5, 0.1),
 		glm::vec2(0 - width / SIM_WIDTH, 0.5)
 	};
 
-	vector<float> path_speeds = { 1, 1, 0.25, 0.5, 1, 1.0 };
+	vector<float> path_speeds = { 0.1, 0.1, 0.25, 0.25, 0.1, 0.1 };
 
 	float path_t = 0.0f;  // Current progress along path [0, 1]
 
@@ -968,11 +968,11 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		if (vel_y < -0.1 * SIM_HEIGHT)
+		if (vel_y < -0.01 * SIM_HEIGHT)
 		{
 			state = UP_STATE;
 		}
-		else if (vel_y > 0.1 * SIM_HEIGHT)
+		else if (vel_y > 0.01 * SIM_HEIGHT)
 		{
 			state = DOWN_STATE;
 		}
@@ -6358,16 +6358,8 @@ void load_media(const char* level_string)
 
 		enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_templates.size() - 1]));
 
-		// Reverse path points so they go right-to-left (allows using t directly instead of 1-t)
-		//std::reverse(enemy_ships.back()->path_points.begin(), enemy_ships.back()->path_points.end());
-		//std::reverse(enemy_ships.back()->path_speeds.begin(), enemy_ships.back()->path_speeds.end());
 
-		//glm::vec2 start_pt = enemy_ships[enemy_ships.size() - 1]->path_points.back();
-		////enemy_ships[enemy_ships.size() - 1]->x = start_pt.x * SIM_WIDTH +  float(enemy_ships[enemy_ships.size() - 1]->width) * 0.5f;
-		////enemy_ships[enemy_ships.size() - 1]->y = start_pt.y * SIM_HEIGHT;// -float(enemy_ships[enemy_ships.size() - 1]->height) * 0.5f;
 
-		//enemy_ships[enemy_ships.size() - 1]->x = 2000 + float(enemy_ships[enemy_ships.size() - 1]->width) * 0.5f;
-		//enemy_ships[enemy_ships.size() - 1]->y = 0.5f*float(SIM_HEIGHT) - float(enemy_ships[enemy_ships.size() - 1]->height) * 0.5f;
 
 		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
 
