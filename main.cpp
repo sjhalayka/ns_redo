@@ -867,9 +867,9 @@ public:
 		//		to_present_down_data.data());
 
 		//else// if (state == REST_STATE)
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-				GL_RGBA, GL_UNSIGNED_BYTE,
-				to_present_rest_data.data());
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+			GL_RGBA, GL_UNSIGNED_BYTE,
+			to_present_rest_data.data());
 	}
 };
 
@@ -915,7 +915,7 @@ public:
 		//}
 		//else
 		//{
-			state = REST_STATE;
+		state = REST_STATE;
 		//}
 
 		update_tex();
@@ -938,15 +938,15 @@ public:
 	float path_animation_length = 3.5; // seconds
 	vector<glm::vec2> path_points =
 	{
-		glm::vec2(1 + width / SIM_WIDTH, 0.9),
-		glm::vec2(1.0, 0.75),
-		glm::vec2(0.5, 0.5),
-		glm::vec2(0.3, 0.25),
-		glm::vec2(0.0, 0.125),
-		glm::vec2(-width / SIM_WIDTH, 0.1)
+		glm::vec2(SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
+		glm::vec2(1.0f * SIM_WIDTH,		0.75f * SIM_HEIGHT),
+		glm::vec2(0.5f * SIM_WIDTH,		0.5f * SIM_HEIGHT),
+		glm::vec2(0.3f * SIM_WIDTH,		0.25f * SIM_HEIGHT),
+		glm::vec2(0.0f,					0.125f * SIM_HEIGHT),
+		glm::vec2(-width,				0.1f * SIM_HEIGHT)
 	};
 
-	vector<float> path_speeds = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+	vector<float> path_speeds = { 1.0, 1.0, 0.1f, 1.0, 1.0, 1.0 };
 
 	float path_t = -1.0f;
 
@@ -978,7 +978,7 @@ public:
 		//}
 		//else
 		//{
-			state = REST_STATE;
+		state = REST_STATE;
 		//}
 
 		update_tex();
@@ -1365,13 +1365,13 @@ bool detectSpriteOverlap(const pre_sprite& sprA, const pre_sprite& sprB, unsigne
  */
 const unsigned char* getTriSpriteActiveData(const tri_sprite& spr)
 {
-/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
-		return spr.to_present_up_data.data();
-	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
-		return spr.to_present_down_data.data();
-	else */if (!spr.to_present_rest_data.empty())
-		return spr.to_present_rest_data.data();
-	return nullptr;
+	/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+			return spr.to_present_up_data.data();
+		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
+			return spr.to_present_down_data.data();
+		else */if (!spr.to_present_rest_data.empty())
+	return spr.to_present_rest_data.data();
+		return nullptr;
 }
 
 bool detectTriSpriteToSpriteOverlap(
@@ -3856,25 +3856,25 @@ bool isPixelInsideTriSpriteAndTransparent(
 
 	unsigned char* data_ptr = 0;
 
-/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
-		data_ptr = spr.to_present_up_data.data();
-	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
-		data_ptr = spr.to_present_down_data.data();
-	else */if (!spr.to_present_rest_data.empty())
-		data_ptr = spr.to_present_rest_data.data();
+	/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+			data_ptr = spr.to_present_up_data.data();
+		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
+			data_ptr = spr.to_present_down_data.data();
+		else */if (!spr.to_present_rest_data.empty())
+	data_ptr = spr.to_present_rest_data.data();
 
 
 
-	// 4. Index into pixel buffer
-	int idx = (texY * sprW + texX) * 4;
-	unsigned char a = data_ptr[idx + 3];  // ALPHA
+		// 4. Index into pixel buffer
+		int idx = (texY * sprW + texX) * 4;
+		unsigned char a = data_ptr[idx + 3];  // ALPHA
 
-	// 5. Transparent?
-	outTransparent = (a < alphaThreshold);
+		// 5. Transparent?
+		outTransparent = (a < alphaThreshold);
 
-	hit = glm::vec2(localX, localY);
+		hit = glm::vec2(localX, localY);
 
-	return true;
+		return true;
 }
 
 
@@ -5112,15 +5112,15 @@ void simulate()
 				glm::vec2 pos = get_spline_point(enemy_ships[i]->path_points, t);
 				enemy_ships[i]->old_x = enemy_ships[i]->x;
 				enemy_ships[i]->old_y = enemy_ships[i]->y;
-				enemy_ships[i]->x = pos.x * SIM_WIDTH - enemy_ships[i]->width * 0.5f;
-				enemy_ships[i]->y = pos.y * SIM_HEIGHT - enemy_ships[i]->height * 0.5f;
+				enemy_ships[i]->x = pos.x - enemy_ships[i]->width * 0.5f;
+				enemy_ships[i]->y = pos.y - enemy_ships[i]->height * 0.5f;
 
 				// Calculate velocity for visual effects/physics (optional)
 				glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
 				float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
 				float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
-				enemy_ships[i]->vel_x = tangent.x * SIM_WIDTH * speed_mult * speed_scale;
-				enemy_ships[i]->vel_y = tangent.y * SIM_HEIGHT * speed_mult * speed_scale;
+				enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
+				enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 
 				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
 				enemy_ships[i]->integrate(DT);
@@ -5146,7 +5146,7 @@ void simulate()
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
 			}
-			
+
 			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
 			enemy_ships[i]->integrate(DT);
 		}
@@ -5773,22 +5773,16 @@ void display()
 			continue;
 
 		glm::vec2 previous_pos = get_spline_point(enemy_ships[e]->path_points, 0.0f);
-		previous_pos.x *= SIM_WIDTH;
-		previous_pos.y *= SIM_HEIGHT;
 
 		for (size_t i = 1; i <= 100; i++)
 		{
 			float t = i / 100.0f;
 
 			glm::vec2 vd = get_spline_point(enemy_ships[e]->path_points, t);
-			vd.x *= SIM_WIDTH;
-			vd.y *= SIM_HEIGHT;
 
 			lines.push_back(Line(previous_pos, vd, glm::vec4(1, 1, 1, 1)));
 
 			glm::vec2 tangent = get_spline_tangent(enemy_ships[e]->path_points, t);
-			tangent.x *= SIM_WIDTH;
-			tangent.y *= SIM_HEIGHT;
 
 			float d = get_spline_point(enemy_ships[e]->path_speeds, t);
 
@@ -5817,8 +5811,8 @@ void display()
 		for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
 		{
 			Point p(
-				enemy_ships[0]->path_points[i].x * SIM_WIDTH,
-				enemy_ships[0]->path_points[i].y * SIM_HEIGHT,
+				enemy_ships[0]->path_points[i].x,
+				enemy_ships[0]->path_points[i].y,
 				glm::vec4(1, 0, 0, 1));
 
 			//cout << p.position.x << " " << p.position.y << endl;
@@ -6361,12 +6355,12 @@ void load_media(const char* level_string)
 
 		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
 
-		enemy_ships.back()->x = start_pos.x * SIM_WIDTH - enemy_ships.back()->width * 0.5f;
-		enemy_ships.back()->y = start_pos.y * SIM_HEIGHT - enemy_ships.back()->height * 0.5f;
+		enemy_ships.back()->x = start_pos.x - enemy_ships.back()->width * 0.5f;
+		enemy_ships.back()->y = start_pos.y - enemy_ships.back()->height * 0.5f;
 
-		float norm_half_w = enemy_ships.back()->width / 2.0f / SIM_WIDTH;
-		enemy_ships.back()->path_points.front().x = 1.0f + norm_half_w;  // Right side (start)
-		enemy_ships.back()->path_points.back().x = -norm_half_w;         // Left side (end)
+		float half_w = enemy_ships.back()->width / 2.0f;
+		enemy_ships.back()->path_points.front().x = SIM_WIDTH + half_w;  // Right side (start)
+		enemy_ships.back()->path_points.back().x = -half_w;              // Left side (end)
 
 		enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
