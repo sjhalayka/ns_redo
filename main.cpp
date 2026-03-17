@@ -935,20 +935,20 @@ public:
 	//}
 
 	float appearance_time = 0;
-	float path_animation_length = 5.0; // seconds
+	float path_animation_length = 3.5; // seconds
 	vector<glm::vec2> path_points =
 	{
 		glm::vec2(1 + width / SIM_WIDTH, 0.9),
 		glm::vec2(1.0, 0.75),
-		glm::vec2(0.5, 0.25),
-		glm::vec2(0.3, 0.125),
-		glm::vec2(0.0, 0.1),
+		glm::vec2(0.5, 0.5),
+		glm::vec2(0.3, 0.25),
+		glm::vec2(0.0, 0.125),
 		glm::vec2(-width / SIM_WIDTH, 0.1)
 	};
 
 	vector<float> path_speeds = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
 
-	float path_t = 0.0f;  // Current progress along path [0, 1]
+	float path_t = -1.0f;
 
 	void integrate(float dt)
 	{
@@ -5097,7 +5097,7 @@ void simulate()
 				enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
 			// Use path_t for proper speed-modulated progression
-			if (enemy_ships[i]->path_t <= 1.0f)
+			if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
 			{
 				float t = enemy_ships[i]->path_t;
 
@@ -5121,6 +5121,20 @@ void simulate()
 				float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
 				enemy_ships[i]->vel_x = tangent.x * SIM_WIDTH * speed_mult * speed_scale;
 				enemy_ships[i]->vel_y = tangent.y * SIM_HEIGHT * speed_mult * speed_scale;
+
+				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+				enemy_ships[i]->integrate(DT);
+			}
+			else
+			{
+				enemy_ships[i]->vel_x = foreground_vel;
+				enemy_ships[i]->vel_y = 0;
+
+				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+				enemy_ships[i]->integrate(DT);
+
+				if (enemy_ships[i]->isOnscreen())
+					enemy_ships[i]->path_t = 0.0;
 			}
 		}
 		else
@@ -5132,16 +5146,11 @@ void simulate()
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
 			}
+			
+			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+			enemy_ships[i]->integrate(DT);
 		}
-
-		enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-		enemy_ships[i]->integrate(DT);
 	}
-
-
-
-
-
 
 
 
