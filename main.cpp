@@ -801,8 +801,8 @@ public:
 
 
 
-const int UP_STATE = 0;
-const int DOWN_STATE = 1;
+//const int UP_STATE = 0;
+//const int DOWN_STATE = 1;
 const int REST_STATE = 2;
 
 class tri_sprite : public pre_sprite
@@ -856,17 +856,17 @@ public:
 	{
 		glBindTexture(GL_TEXTURE_2D, tex);
 
-		if (state == UP_STATE)
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-				GL_RGBA, GL_UNSIGNED_BYTE,
-				to_present_up_data.data());
+		//if (state == UP_STATE)
+		//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+		//		GL_RGBA, GL_UNSIGNED_BYTE,
+		//		to_present_up_data.data());
 
-		else if (state == DOWN_STATE)
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-				GL_RGBA, GL_UNSIGNED_BYTE,
-				to_present_down_data.data());
+		//else if (state == DOWN_STATE)
+		//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+		//		GL_RGBA, GL_UNSIGNED_BYTE,
+		//		to_present_down_data.data());
 
-		else// if (state == REST_STATE)
+		//else// if (state == REST_STATE)
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
 				GL_RGBA, GL_UNSIGNED_BYTE,
 				to_present_rest_data.data());
@@ -905,18 +905,18 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		if (vel_y < 0)
-		{
-			state = UP_STATE;
-		}
-		else if (vel_y > 0)
-		{
-			state = DOWN_STATE;
-		}
-		else
-		{
+		//if (vel_y < 0)
+		//{
+		//	state = UP_STATE;
+		//}
+		//else if (vel_y > 0)
+		//{
+		//	state = DOWN_STATE;
+		//}
+		//else
+		//{
 			state = REST_STATE;
-		}
+		//}
 
 		update_tex();
 	}
@@ -938,15 +938,15 @@ public:
 	float path_animation_length = 5.0; // seconds
 	vector<glm::vec2> path_points =
 	{
-		glm::vec2(1 + width / SIM_WIDTH, 0.5),
-		glm::vec2(0.5, 0.75),
+		glm::vec2(1 + width / SIM_WIDTH, 0.9),
+		glm::vec2(1.0, 0.75),
 		glm::vec2(0.5, 0.25),
-		glm::vec2(0.5, 0.125),
-		glm::vec2(0.5, 0.1),
-		glm::vec2(0 - width / SIM_WIDTH, 0.5)
+		glm::vec2(0.3, 0.125),
+		glm::vec2(0.0, 0.1),
+		glm::vec2(-width / SIM_WIDTH, 0.1)
 	};
 
-	vector<float> path_speeds = { 0.1, 0.1, 0.25, 0.25, 0.1, 0.1 };
+	vector<float> path_speeds = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
 
 	float path_t = 0.0f;  // Current progress along path [0, 1]
 
@@ -968,18 +968,18 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		if (vel_y < -0.01 * SIM_HEIGHT)
-		{
-			state = UP_STATE;
-		}
-		else if (vel_y > 0.01 * SIM_HEIGHT)
-		{
-			state = DOWN_STATE;
-		}
-		else
-		{
+		//if (vel_y < -0.01 * SIM_HEIGHT)
+		//{
+		//	state = UP_STATE;
+		//}
+		//else if (vel_y > 0.01 * SIM_HEIGHT)
+		//{
+		//	state = DOWN_STATE;
+		//}
+		//else
+		//{
 			state = REST_STATE;
-		}
+		//}
 
 		update_tex();
 	}
@@ -1365,11 +1365,11 @@ bool detectSpriteOverlap(const pre_sprite& sprA, const pre_sprite& sprB, unsigne
  */
 const unsigned char* getTriSpriteActiveData(const tri_sprite& spr)
 {
-	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
 		return spr.to_present_up_data.data();
 	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
 		return spr.to_present_down_data.data();
-	else if (!spr.to_present_rest_data.empty())
+	else */if (!spr.to_present_rest_data.empty())
 		return spr.to_present_rest_data.data();
 	return nullptr;
 }
@@ -3856,11 +3856,11 @@ bool isPixelInsideTriSpriteAndTransparent(
 
 	unsigned char* data_ptr = 0;
 
-	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
+/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
 		data_ptr = spr.to_present_up_data.data();
 	else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
 		data_ptr = spr.to_present_down_data.data();
-	else if (!spr.to_present_rest_data.empty())
+	else */if (!spr.to_present_rest_data.empty())
 		data_ptr = spr.to_present_rest_data.data();
 
 
@@ -5091,13 +5091,8 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		enemy_ships[i]->integrate(DT);
-
 		if (enemy_ships[i]->isOnscreen())
 		{
-			// Force update of texture
-			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-
 			if (enemy_ships[i]->appearance_time == 0)
 				enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
@@ -5126,15 +5121,6 @@ void simulate()
 				float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
 				enemy_ships[i]->vel_x = tangent.x * SIM_WIDTH * speed_mult * speed_scale;
 				enemy_ships[i]->vel_y = tangent.y * SIM_HEIGHT * speed_mult * speed_scale;
-
-				enemy_ships[i]->vel_x += foreground_vel;
-			}
-			else
-			{
-				// Path complete - switch to velocity-based movement
-				enemy_ships[i]->vel_x = foreground_vel;
-				enemy_ships[i]->vel_y = 0;
-				//enemy_ships[i]->integrate(DT);
 			}
 		}
 		else
@@ -5147,6 +5133,9 @@ void simulate()
 				enemy_ships[i]->vel_y = 0;
 			}
 		}
+
+		enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+		enemy_ships[i]->integrate(DT);
 	}
 
 
