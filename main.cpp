@@ -882,7 +882,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(100000.0f), max_health(100000.0f) {}
+	ship() : health(1.0), max_health(1.0) {}
 };
 
 
@@ -894,11 +894,11 @@ public:
 
 	float last_time_collided = 0;
 
-	//friendly_ship() : ship()
-	//{
-	//	health = 100.0f;
-	//	max_health = 100.0f;
-	//}
+	friendly_ship() : ship()
+	{
+		health = 1000.0f;
+		max_health = 1000.0f;
+	}
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -935,7 +935,7 @@ public:
 	//}
 
 	float appearance_time = 0;
-	float path_animation_length = 3.5; // seconds
+	float path_animation_length = 10; // seconds
 	vector<glm::vec2> path_points =
 	{
 		glm::vec2(SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
@@ -6355,6 +6355,8 @@ void load_media(const char* level_string)
 		// Compute start position from the (now-correct) path
 		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
 		enemy_ships.back()->y = start_pos.y - enemy_ships.back()->height * 0.5f;
+
+		enemy_ships.back()->health = enemy_ships.back()->max_health = 1000.0f;
 
 		// Push the enemy further offscreen by the desired distance.
 		// It will drift left at foreground_vel until it enters the screen,
