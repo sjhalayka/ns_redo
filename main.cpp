@@ -664,7 +664,7 @@ public:
 
 	bool to_be_culled = false;
 
-	bool isOnscreen(void)
+	bool isOnscreen(void) const
 	{
 		return
 			(x + width > 0) &&
@@ -882,7 +882,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(100000.0f), max_health(100000.0f) {}
+	ship() : health(1000.0f), max_health(1000.0f) {}
 };
 
 
@@ -938,15 +938,15 @@ public:
 	float path_animation_length = 3.5; // seconds
 	vector<glm::vec2> path_points =
 	{
-		glm::vec2(SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
-		glm::vec2(1.0f * SIM_WIDTH,		0.75f * SIM_HEIGHT),
-		glm::vec2(0.5f * SIM_WIDTH,		0.5f * SIM_HEIGHT),
-		glm::vec2(0.3f * SIM_WIDTH,		0.25f * SIM_HEIGHT),
-		glm::vec2(0.0f,					0.125f * SIM_HEIGHT),
-		glm::vec2(-width,				0.1f * SIM_HEIGHT)
+		glm::vec2(100.0 + SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
+		glm::vec2(100.0 + 1.0f * SIM_WIDTH,	0.75f * SIM_HEIGHT),
+		glm::vec2(100.0 + 0.5f * SIM_WIDTH,	0.5f * SIM_HEIGHT),
+		glm::vec2(100.0 + 0.3f * SIM_WIDTH,	0.25f * SIM_HEIGHT),
+		glm::vec2(100.0 + 0.0f,				0.125f * SIM_HEIGHT),
+		glm::vec2(100.0 + -width,				0.1f * SIM_HEIGHT)
 	};
 
-	vector<float> path_speeds = { 1.0, 1.0, 0.1f, 1.0, 1.0, 1.0 };
+	vector<float> path_speeds = { 1.0, 1.0, 1.0f, 1.0, 1.0, 1.0 };
 
 	float path_t = -1.0f;
 
@@ -5091,6 +5091,9 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
+			enemy_ships[i]->path_t = 0.0;
+
 		if (enemy_ships[i]->isOnscreen())
 		{
 			if (enemy_ships[i]->appearance_time == 0)
@@ -5122,19 +5125,13 @@ void simulate()
 				enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
 				enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 
-				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-				enemy_ships[i]->integrate(DT);
+				//enemy_ships[i]->vel_x += foreground_vel;
+				//enemy_ships[i]->vel_y = 0;
 			}
 			else
 			{
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
-
-				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-				enemy_ships[i]->integrate(DT);
-
-				if (enemy_ships[i]->isOnscreen())
-					enemy_ships[i]->path_t = 0.0;
 			}
 		}
 		else
@@ -5146,10 +5143,10 @@ void simulate()
 				enemy_ships[i]->vel_x = foreground_vel;
 				enemy_ships[i]->vel_y = 0;
 			}
-
-			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-			enemy_ships[i]->integrate(DT);
 		}
+
+		enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+		enemy_ships[i]->integrate(DT);
 	}
 
 
