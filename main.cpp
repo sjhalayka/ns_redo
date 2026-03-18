@@ -882,7 +882,7 @@ public:
 	float health;
 	float max_health;
 
-	ship() : health(1000.0f), max_health(1000.0f) {}
+	ship() : health(100000.0f), max_health(100000.0f) {}
 };
 
 
@@ -938,12 +938,12 @@ public:
 	float path_animation_length = 3.5; // seconds
 	vector<glm::vec2> path_points =
 	{
-		glm::vec2(100.0 + SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
-		glm::vec2(100.0 + 1.0f * SIM_WIDTH,	0.75f * SIM_HEIGHT),
-		glm::vec2(100.0 + 0.5f * SIM_WIDTH,	0.5f * SIM_HEIGHT),
-		glm::vec2(100.0 + 0.3f * SIM_WIDTH,	0.25f * SIM_HEIGHT),
-		glm::vec2(100.0 + 0.0f,				0.125f * SIM_HEIGHT),
-		glm::vec2(100.0 + -width,				0.1f * SIM_HEIGHT)
+		glm::vec2(SIM_WIDTH + width,	0.9f * SIM_HEIGHT),
+		glm::vec2(1.0f * SIM_WIDTH,	0.75f * SIM_HEIGHT),
+		glm::vec2(0.5f * SIM_WIDTH,	0.5f * SIM_HEIGHT),
+		glm::vec2(0.3f * SIM_WIDTH,	0.25f * SIM_HEIGHT),
+		glm::vec2(0.0f,				0.125f * SIM_HEIGHT),
+		glm::vec2(-width,				0.1f * SIM_HEIGHT)
 	};
 
 	vector<float> path_speeds = { 1.0, 1.0, 1.0f, 1.0, 1.0, 1.0 };
@@ -1370,7 +1370,7 @@ const unsigned char* getTriSpriteActiveData(const tri_sprite& spr)
 		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
 			return spr.to_present_down_data.data();
 		else */if (!spr.to_present_rest_data.empty())
-	return spr.to_present_rest_data.data();
+			return spr.to_present_rest_data.data();
 		return nullptr;
 }
 
@@ -3861,7 +3861,7 @@ bool isPixelInsideTriSpriteAndTransparent(
 		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
 			data_ptr = spr.to_present_down_data.data();
 		else */if (!spr.to_present_rest_data.empty())
-	data_ptr = spr.to_present_rest_data.data();
+			data_ptr = spr.to_present_rest_data.data();
 
 
 
@@ -6347,17 +6347,20 @@ void load_media(const char* level_string)
 
 		enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_templates.size() - 1]));
 
-
-
-
-		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
-
-		enemy_ships.back()->x = start_pos.x - enemy_ships.back()->width * 0.5f;
-		enemy_ships.back()->y = start_pos.y - enemy_ships.back()->height * 0.5f;
-
+		// Set path endpoints FIRST, before computing start position
 		float half_w = enemy_ships.back()->width / 2.0f;
 		enemy_ships.back()->path_points.front().x = SIM_WIDTH + half_w;  // Right side (start)
 		enemy_ships.back()->path_points.back().x = -half_w;              // Left side (end)
+
+		// Compute start position from the (now-correct) path
+		glm::vec2 start_pos = get_spline_point(enemy_ships.back()->path_points, 0.0f);
+		enemy_ships.back()->y = start_pos.y - enemy_ships.back()->height * 0.5f;
+
+		// Push the enemy further offscreen by the desired distance.
+		// It will drift left at foreground_vel until it enters the screen,
+		// at which point the spline path takes over.
+		float desired_foreground_distance = 100.0f;
+		enemy_ships.back()->x = start_pos.x - half_w + desired_foreground_distance;
 
 		enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
