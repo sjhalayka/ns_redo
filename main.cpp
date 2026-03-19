@@ -19,6 +19,7 @@
 #include <chrono>
 #include <random>
 #include <filesystem>
+#include <deque>
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -300,7 +301,7 @@ glm::vec2 catmull_rom_segment(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec
 // points: control points (minimum 2)
 // t: parameter in [0, 1] spanning the entire curve
 // The curve passes through all control points
-float get_spline_point(const vector<float>& points, float t)
+float get_spline_point(const deque<float>& points, float t)
 {
 	if (points.size() == 0)
 		return 0.0f;
@@ -352,7 +353,7 @@ float get_spline_point(const vector<float>& points, float t)
 }
 
 
-glm::vec2 get_spline_point(const vector<glm::vec2>& points, float t)
+glm::vec2 get_spline_point(const deque<glm::vec2>& points, float t)
 {
 	glm::vec2 result;
 	result.x = result.y = 0.0f;
@@ -422,7 +423,7 @@ glm::vec2 get_spline_point(const vector<glm::vec2>& points, float t)
 
 // Optional: Get the tangent (derivative) at a point on the spline
 // Useful for orienting objects along the path
-glm::vec2 get_spline_tangent(const vector<glm::vec2>& points, float t)
+glm::vec2 get_spline_tangent(const deque<glm::vec2>& points, float t)
 {
 	glm::vec2 result;
 	result.x = result.y = 0.0f;
@@ -935,16 +936,9 @@ public:
 	//}
 
 	float appearance_time = 0;
-	float path_animation_length = 5; // seconds
-	vector<glm::vec2> path_points;/* =
-	{
-		glm::vec2(1.0f * SIM_WIDTH,	0.75f  * SIM_HEIGHT),
-		glm::vec2(0.5f * SIM_WIDTH,	0.5f   * SIM_HEIGHT),
-		glm::vec2(0.3f * SIM_WIDTH,	0.25f  * SIM_HEIGHT),
-		glm::vec2(0.0f * SIM_WIDTH,	0.125f * SIM_HEIGHT),
-	};*/
-
-	vector<float> path_speeds;// = { 1.0, 1.0, 1.0f, 1.0 };
+	float path_animation_length = 0; // seconds
+	deque<glm::vec2> path_points;
+	deque<float> path_speeds;
 
 	float path_t = -1.0f;
 
@@ -6339,54 +6333,47 @@ void load_media(const char* level_string)
 		}
 
 
-		enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_templates.size() - 1]));
-
-
-
-
-
-
-		enemy_ships[enemy_ships.size() - 1]->path_points =
+		for (int i = 0; i < 3; i++)
 		{
-			glm::vec2(1.0f * SIM_WIDTH,	0.75f * SIM_HEIGHT),
-			glm::vec2(0.5f * SIM_WIDTH,	0.5f * SIM_HEIGHT),
-			glm::vec2(0.3f * SIM_WIDTH,	0.25f * SIM_HEIGHT),
-			glm::vec2(0.0f * SIM_WIDTH,	0.125f * SIM_HEIGHT)
-		};
+			size_t enemy_template_index = i;
 
+			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
 
-		enemy_ships[enemy_ships.size() - 1]->path_speeds = { 1.0, 1.0, 1.0f, 1.0 };
+			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
 
+			cout << half_w << endl;
 
+			enemy_ships.back()->path_points =
+			{
+				glm::vec2(SIM_WIDTH + half_w, 0.75f * SIM_HEIGHT),
+				glm::vec2(0.5f * SIM_WIDTH,   0.5f * SIM_HEIGHT),
+				glm::vec2(0.3f * SIM_WIDTH,   0.25f * SIM_HEIGHT),
+				glm::vec2(-half_w,            0.125f * SIM_HEIGHT)
+			};
 
+			enemy_ships.back()->path_speeds = { 1.0, 1.0, 1.0, 1.0 };
 
+			enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;
 
+			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
+			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships.back()->height * 0.5f;
 
+			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = 1000.0f;
 
-		// Set path endpoints FIRST, before computing start position
-		float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
-		enemy_ships[enemy_ships.size() - 1]->path_points.front().x = SIM_WIDTH + half_w;  // Right side (start)
-		enemy_ships[enemy_ships.size() - 1]->path_points.back().x = -half_w;              // Left side (end)
+			// Push the enemy further offscreen by the desired distance.
+			// It will drift left at foreground_vel until it enters the screen,
+			// at which point the spline path takes over.
+			float desired_foreground_distance = 100.0f + 50.0f * (i + 1);
 
-		// Compute start position from the (now-correct) path
-		glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
-		enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships.back()->height * 0.5f;
+			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
-		enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = 1000.0f;
+			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
+				enemy_templates[enemy_template_index].to_present_up_data,
+				enemy_templates[enemy_template_index].to_present_down_data,
+				enemy_templates[enemy_template_index].to_present_rest_data);
 
-		// Push the enemy further offscreen by the desired distance.
-		// It will drift left at foreground_vel until it enters the screen,
-		// at which point the spline path takes over.
-		float desired_foreground_distance = 100.0f;
-
-		enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
-
-		enemy_ships[enemy_ships.size() - 1]->manually_update_data(
-			enemy_templates[enemy_templates.size() - 1].to_present_up_data,
-			enemy_templates[enemy_templates.size() - 1].to_present_down_data,
-			enemy_templates[enemy_templates.size() - 1].to_present_rest_data);
-
-		enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
+			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
+		}
 	}
 }
 
