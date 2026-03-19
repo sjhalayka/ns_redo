@@ -6345,11 +6345,16 @@ void load_media(const char* level_string)
 
 			enemy_ships.back()->path_points =
 			{
-				glm::vec2(SIM_WIDTH + half_w, 0.75f * SIM_HEIGHT),
-				glm::vec2(0.5f * SIM_WIDTH,   0.5f * SIM_HEIGHT),
-				glm::vec2(0.3f * SIM_WIDTH,   0.25f * SIM_HEIGHT),
-				glm::vec2(-half_w,            0.125f * SIM_HEIGHT)
+				// for first and last path points, .x is overwritten
+				glm::vec2(0,				0.75f  * SIM_HEIGHT),
+				glm::vec2(0.5f * SIM_WIDTH, 0.5f   * SIM_HEIGHT),
+				glm::vec2(0.3f * SIM_WIDTH, 0.25f  * SIM_HEIGHT),
+				glm::vec2(0,				0.125f * SIM_HEIGHT)
 			};
+
+			// Overwrite .x for first and last path points
+			enemy_ships.back()->path_points[0].x = SIM_WIDTH + half_w;
+			enemy_ships.back()->path_points[enemy_ships.back()->path_points.size() - 1].x = -half_w;
 
 			enemy_ships.back()->path_speeds = { 1.0, 1.0, 1.0, 1.0 };
 
