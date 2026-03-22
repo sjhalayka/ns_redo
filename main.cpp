@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "sqlite3.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -6343,7 +6345,7 @@ void load_media(const char* level_string)
 
 			cout << half_w << endl;
 
-			enemy_ships.back()->path_points =
+			enemy_ships[enemy_ships.size() - 1]->path_points =
 			{
 				// for first and last path points, .x is overwritten
 				glm::vec2(0,				0.75f  * SIM_HEIGHT),
@@ -6353,22 +6355,22 @@ void load_media(const char* level_string)
 			};
 
 			// Overwrite .x for first and last path points
-			enemy_ships.back()->path_points[0].x = SIM_WIDTH + half_w;
-			enemy_ships.back()->path_points[enemy_ships.back()->path_points.size() - 1].x = -half_w;
+			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
+			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
 
-			enemy_ships.back()->path_speeds = { 1.0, 1.0, 1.0, 1.0 };
+			enemy_ships[enemy_ships.size() - 1]->path_speeds = { 1.0, 1.0, 1.0, 1.0 };
 
 			enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;
 
 			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
-			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships.back()->height * 0.5f;
+			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships[enemy_ships.size() - 1]->height * 0.5f;
 
 			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = 1000.0f;
 
 			// Push the enemy further offscreen by the desired distance.
 			// It will drift left at foreground_vel until it enters the screen,
 			// at which point the spline path takes over.
-			float desired_foreground_distance = 100.0f + 50.0f * (i + 1);
+			float desired_foreground_distance = 100.0f + 50.0f * (i + 0);
 
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
