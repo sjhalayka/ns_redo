@@ -45,13 +45,14 @@ CREATE TABLE path_speed
 	path_id INTEGER NOT NULL,
 	one_d_location_id INTEGER NOT NULL,
 	FOREIGN KEY (path_id) REFERENCES path(path_id),
-	FOREIGN KEY (one_d_location_id) REFERENCES one_d_location(one_d_location_id)
+	FOREIGN KEY (one_d_location_id) REFERENCES one_d_location(one_d_location_id),
+	UNIQUE (path_speed_id, path_id, one_d_location_id)
 );
 
-INSERT INTO path_speed (path_id, one_d_location_id) SELECT 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
-INSERT INTO path_speed (path_id, one_d_location_id) SELECT 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
-INSERT INTO path_speed (path_id, one_d_location_id) SELECT 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
-INSERT INTO path_speed (path_id, one_d_location_id) SELECT 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
+INSERT INTO path_speed (path_speed_id, path_id, one_d_location_id) SELECT (SELECT MAX(path_speed_id) FROM path_speed) + 1, 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
+INSERT INTO path_speed (path_speed_id, path_id, one_d_location_id) SELECT (SELECT MAX(path_speed_id) FROM path_speed) + 1, 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
+INSERT INTO path_speed (path_speed_id, path_id, one_d_location_id) SELECT (SELECT MAX(path_speed_id) FROM path_speed) + 1, 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
+INSERT INTO path_speed (path_speed_id, path_id, one_d_location_id) SELECT (SELECT MAX(path_speed_id) FROM path_speed) + 1, 1, one_d_location_id FROM one_d_location WHERE x = 1.0;
 
 
 CREATE TABLE path_location
@@ -60,13 +61,14 @@ CREATE TABLE path_location
 	path_id INTEGER NOT NULL,
 	two_d_location_id INTEGER NOT NULL,
 	FOREIGN KEY (path_id) REFERENCES path(path_id),
-	FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id)
+	FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id),
+	UNIQUE (path_location_id, path_id, two_d_location_id)
 );
 
-INSERT INTO path_location (path_id, two_d_location_id) SELECT 1, two_d_location_id FROM two_d_location WHERE x = 0.0 AND y = 0.75;
-INSERT INTO path_location (path_id, two_d_location_id) SELECT 1, two_d_location_id FROM two_d_location WHERE x = 0.5 AND y = 0.5;
-INSERT INTO path_location (path_id, two_d_location_id) SELECT 1, two_d_location_id FROM two_d_location WHERE x = 0.3 AND y = 0.25;
-INSERT INTO path_location (path_id, two_d_location_id) SELECT 1, two_d_location_id FROM two_d_location WHERE x = 0.0 AND y = 0.125;
+INSERT INTO path_location (path_location_id, path_id, two_d_location_id) SELECT (SELECT MAX(path_location_id) FROM path_location) + 1, 1, two_d_location_id FROM two_d_location WHERE x = 0.0 AND y = 0.75;
+INSERT INTO path_location (path_location_id, path_id, two_d_location_id) SELECT (SELECT MAX(path_location_id) FROM path_location) + 1, 1, two_d_location_id FROM two_d_location WHERE x = 0.5 AND y = 0.5;
+INSERT INTO path_location (path_location_id, path_id, two_d_location_id) SELECT (SELECT MAX(path_location_id) FROM path_location) + 1, 1, two_d_location_id FROM two_d_location WHERE x = 0.3 AND y = 0.25;
+INSERT INTO path_location (path_location_id, path_id, two_d_location_id) SELECT (SELECT MAX(path_location_id) FROM path_location) + 1, 1, two_d_location_id FROM two_d_location WHERE x = 0.0 AND y = 0.125;
 
 
 CREATE TABLE enemy
@@ -90,6 +92,22 @@ VALUES
 INSERT INTO enemy (file_template_id, path_id, path_pixel_delay, max_health)
 VALUES 
 (0, 1, 200, 1000.0);
+
+
+SELECT x, y FROM two_d_location WHERE two_d_location_id IN (SELECT two_d_location_id FROM path_location WHERE path_id = 1);
+
+SELECT x FROM one_d_location WHERE one_d_location_id IN (SELECT one_d_location_id FROM path_location WHERE path_id = 1);
+
+
+
+
+
+
+
+
+
+
+
 
 
 
