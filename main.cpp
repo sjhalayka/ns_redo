@@ -6330,6 +6330,64 @@ vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
 
 
 
+
+
+double get_path_animation_length(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	double path_animation_length = 0;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT path_animation_length FROM path WHERE path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		sqlite3_close(db);
+		return 0.0;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			path_animation_length = sqlite3_column_double(stmt, 0);
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	return path_animation_length;
+}
+
+
+
+
+
+
 void retrieve_level_data(const string& db_name)
 {
 	enemy_ships.clear();
@@ -6398,10 +6456,8 @@ void retrieve_level_data(const string& db_name)
 				get_path_speeds(path_id, db);
 
 
-			//enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;
-
-			enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;/*
-				get_path_animation_length(path_id);*/
+			enemy_ships[enemy_ships.size() - 1]->path_animation_length =
+				static_cast<float>(get_path_animation_length(path_id, db));
 
 
 			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
