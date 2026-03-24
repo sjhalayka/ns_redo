@@ -2,11 +2,13 @@
 #include <GL/freeglut.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
 #include "sqlite3.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#pragma comment(lib, "freeglut")
+#pragma comment(lib, "glew32")
 
 #include <iostream>
 #include <string>
@@ -303,7 +305,7 @@ glm::vec2 catmull_rom_segment(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec
 // points: control points (minimum 2)
 // t: parameter in [0, 1] spanning the entire curve
 // The curve passes through all control points
-float get_spline_point(const deque<float>& points, float t)
+float get_spline_point(const vector<float>& points, float t)
 {
 	if (points.size() == 0)
 		return 0.0f;
@@ -355,7 +357,7 @@ float get_spline_point(const deque<float>& points, float t)
 }
 
 
-glm::vec2 get_spline_point(const deque<glm::vec2>& points, float t)
+glm::vec2 get_spline_point(const vector<glm::vec2>& points, float t)
 {
 	glm::vec2 result;
 	result.x = result.y = 0.0f;
@@ -425,7 +427,7 @@ glm::vec2 get_spline_point(const deque<glm::vec2>& points, float t)
 
 // Optional: Get the tangent (derivative) at a point on the spline
 // Useful for orienting objects along the path
-glm::vec2 get_spline_tangent(const deque<glm::vec2>& points, float t)
+glm::vec2 get_spline_tangent(const vector<glm::vec2>& points, float t)
 {
 	glm::vec2 result;
 	result.x = result.y = 0.0f;
@@ -939,8 +941,8 @@ public:
 
 	float appearance_time = 0;
 	float path_animation_length = 0; // seconds
-	deque<glm::vec2> path_points;
-	deque<float> path_speeds;
+	vector<glm::vec2> path_points;
+	vector<float> path_speeds;
 
 	float path_t = -1.0f;
 
@@ -6213,9 +6215,247 @@ void keyboardup(unsigned char key, int x, int y) {
 }
 
 
-#pragma comment(lib, "freeglut")
-#pragma comment(lib, "glew32")
 
+
+
+
+
+vector<float> get_path_speeds(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<float> path_speeds;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		sqlite3_close(db);
+		return path_speeds;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			float x = static_cast<float>(sqlite3_column_double(stmt, 0));
+
+			path_speeds.push_back(x);
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	return path_speeds;
+}
+
+
+vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<glm::vec2> path_points;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		sqlite3_close(db);
+		return path_points;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			double x = sqlite3_column_double(stmt, 0);
+			double y = sqlite3_column_double(stmt, 1);
+
+			path_points.push_back(glm::vec2(x, y));
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	return path_points;
+}
+
+
+
+void retrieve_level_data(const string& db_name)
+{
+	enemy_ships.clear();
+
+	size_t row_count = 0;
+
+	sqlite3* db = 0;
+	sqlite3_stmt* stmt = 0;
+	string sql = "SELECT file_template_id, path_id, path_pixel_delay, max_health FROM enemy;";
+	int rc = sqlite3_open(db_name.c_str(), &db);
+
+	if (rc)
+	{
+		std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
+		return;
+	}
+
+	rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		sqlite3_close(db);
+		return;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			// Note: file_template_id is 0-based (C++'s behaviour)
+			int file_template_id = sqlite3_column_int(stmt, 0);
+
+			// Note: path_id is 1-based (SQLite's default behaviour)
+			int path_id = sqlite3_column_int(stmt, 1);
+
+			int path_pixel_delay = sqlite3_column_int(stmt, 2);
+			double max_health = sqlite3_column_double(stmt, 3);
+
+
+			size_t enemy_template_index = file_template_id;
+			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
+
+
+			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
+
+			enemy_ships[enemy_ships.size() - 1]->path_points =
+				get_path_points(path_id, db);
+
+			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
+			{
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].x *= SIM_WIDTH;
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].y *= SIM_HEIGHT;
+			}
+
+			// Overwrite .x for first and last path points
+			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
+			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
+
+
+			enemy_ships[enemy_ships.size() - 1]->path_speeds =
+				get_path_speeds(path_id, db);
+
+
+			//enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;
+
+			enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;/*
+				get_path_animation_length(path_id);*/
+
+
+			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
+			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships[enemy_ships.size() - 1]->height * 0.5f;
+
+			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = static_cast<float>(max_health);
+
+			// Push the enemy further offscreen by the desired distance.
+			// It will drift left at foreground_vel until it enters the screen,
+			// at which point the spline path takes over.
+			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
+
+			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
+
+			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
+				enemy_templates[enemy_template_index].to_present_up_data,
+				enemy_templates[enemy_template_index].to_present_down_data,
+				enemy_templates[enemy_template_index].to_present_rest_data);
+
+			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
+
+
+
+
+
+			row_count++;
+
+
+
+
+
+
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	//cout << row_count << " rows selected" << endl;
+
+	sqlite3_finalize(stmt);
+	sqlite3_close(db);
+}
 
 
 void load_media(const char* level_string)
@@ -6335,56 +6575,12 @@ void load_media(const char* level_string)
 		}
 
 
-		for (int i = 0; i < 3; i++)
-		{
-			// https://github.com/sjhalayka/light_blocking_asymmetric/blob/main/mysql_functions.h
+
+		retrieve_level_data("level1.db");
 
 
 
-			size_t enemy_template_index = i;
 
-			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
-
-			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
-
-			cout << half_w << endl;
-
-			enemy_ships[enemy_ships.size() - 1]->path_points =
-			{
-				// for first and last path points, .x is overwritten
-				glm::vec2(0,				0.75f  * SIM_HEIGHT),
-				glm::vec2(0.5f * SIM_WIDTH, 0.5f   * SIM_HEIGHT),
-				glm::vec2(0.3f * SIM_WIDTH, 0.25f  * SIM_HEIGHT),
-				glm::vec2(0,				0.125f * SIM_HEIGHT)
-			};
-
-			// Overwrite .x for first and last path points
-			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
-			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
-
-			enemy_ships[enemy_ships.size() - 1]->path_speeds = { 1.0, 1.0, 1.0, 1.0 };
-
-			enemy_ships[enemy_ships.size() - 1]->path_animation_length = 5;
-
-			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
-			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships[enemy_ships.size() - 1]->height * 0.5f;
-
-			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = 1000.0f;
-
-			// Push the enemy further offscreen by the desired distance.
-			// It will drift left at foreground_vel until it enters the screen,
-			// at which point the spline path takes over.
-			float desired_foreground_distance = 100.0f + 50.0f * (i + 0);
-
-			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
-
-			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
-				enemy_templates[enemy_template_index].to_present_up_data,
-				enemy_templates[enemy_template_index].to_present_down_data,
-				enemy_templates[enemy_template_index].to_present_rest_data);
-
-			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
-		}
 	}
 }
 

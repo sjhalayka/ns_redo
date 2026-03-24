@@ -96,7 +96,7 @@ VALUES
 
 SELECT x, y FROM two_d_location WHERE two_d_location_id IN (SELECT two_d_location_id FROM path_location WHERE path_id = 1);
 
-SELECT x FROM one_d_location WHERE one_d_location_id IN (SELECT one_d_location_id FROM path_location WHERE path_id = 1);
+SELECT x, path_speed_id FROM one_d_location WHERE one_d_location_id IN (SELECT * FROM path_speed WHERE path_id = 1);
 
 
 
