@@ -94,9 +94,10 @@ VALUES
 (0, 1, 200, 1000.0);
 
 
-SELECT x, y FROM two_d_location WHERE two_d_location_id IN (SELECT two_d_location_id FROM path_location WHERE path_id = 1);
 
-SELECT x, path_speed_id FROM one_d_location WHERE one_d_location_id IN (SELECT * FROM path_speed WHERE path_id = 1);
+SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = 1;
+
+SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = 1;
 
 
 
