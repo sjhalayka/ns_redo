@@ -6337,6 +6337,10 @@ void load_media(const char* level_string)
 
 		for (int i = 0; i < 3; i++)
 		{
+			// https://github.com/sjhalayka/light_blocking_asymmetric/blob/main/mysql_functions.h
+
+
+
 			size_t enemy_template_index = i;
 
 			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
