@@ -6236,7 +6236,6 @@ vector<float> get_path_speeds(int path_id, sqlite3* (&db))
 	if (rc != SQLITE_OK)
 	{
 		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		sqlite3_close(db);
 		return path_speeds;
 	}
 
@@ -6270,6 +6269,7 @@ vector<float> get_path_speeds(int path_id, sqlite3* (&db))
 		}
 	}
 
+	sqlite3_finalize(stmt);
 	return path_speeds;
 }
 
@@ -6290,7 +6290,6 @@ vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
 	if (rc != SQLITE_OK)
 	{
 		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		sqlite3_close(db);
 		return path_points;
 	}
 
@@ -6325,6 +6324,7 @@ vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
 		}
 	}
 
+	sqlite3_finalize(stmt);
 	return path_points;
 }
 
@@ -6348,7 +6348,6 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 	if (rc != SQLITE_OK)
 	{
 		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		sqlite3_close(db);
 		return 0.0;
 	}
 
@@ -6379,7 +6378,8 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 		}
 		}
 	}
-
+	
+	sqlite3_finalize(stmt);
 	return path_animation_length;
 }
 
@@ -6506,8 +6506,6 @@ void retrieve_level_data(const string& db_name)
 		}
 		}
 	}
-
-	//cout << row_count << " rows selected" << endl;
 
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
