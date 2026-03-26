@@ -6386,6 +6386,60 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 
 
 
+vector<glm::vec3> get_cannons(int enemy_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<glm::vec3> cannons;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT ec.enemy_id, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return cannons;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			int enemy_id = sqlite3_column_int(stmt, 0);
+			int cannon_type = sqlite3_column_int(stmt, 1);
+			double x = sqlite3_column_double(stmt, 2);
+			double y = sqlite3_column_double(stmt, 3);
+
+			cannons.push_back(glm::vec3(x, y, cannon_type));
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return cannons;
+}
 
 
 void retrieve_level_data(const string& db_name)
@@ -6435,6 +6489,17 @@ void retrieve_level_data(const string& db_name)
 			size_t enemy_template_index = file_template_id;
 			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
 
+			// Note: enemy_id is 1-based (SQLite's default behaviour)
+			vector<glm::vec3> cannons = get_cannons(enemy_ships.size(), db);
+
+			cout << cannons.size() << endl;
+
+			for (size_t i = 0; i < cannons.size(); i++)
+			{
+				cannons[i].x *= SIM_WIDTH;
+				cannons[i].y *= SIM_HEIGHT;
+				cannons[i].z -= 1; // Switch from 1-based to 0-based
+			}
 
 			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
 
