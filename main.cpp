@@ -6496,8 +6496,8 @@ void retrieve_level_data(const string& db_name)
 
 			for (size_t i = 0; i < cannons.size(); i++)
 			{
-				cannons[i].x *= SIM_WIDTH;
-				cannons[i].y *= SIM_HEIGHT;
+				cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width;
+				cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height;
 				cannons[i].z -= 1; // Switch from 1-based to 0-based
 			}
 
