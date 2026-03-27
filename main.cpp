@@ -6490,15 +6490,17 @@ void retrieve_level_data(const string& db_name)
 			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
 
 			// Note: enemy_id is 1-based (SQLite's default behaviour)
-			vector<glm::vec3> cannons = get_cannons(enemy_ships.size(), db);
+			vector<glm::vec3> cannons = get_cannons(static_cast<int>(enemy_ships.size()), db);
 
-			cout << cannons.size() << endl;
+			//cout << cannons.size() << endl;
 
 			for (size_t i = 0; i < cannons.size(); i++)
 			{
 				cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width;
 				cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height;
 				cannons[i].z -= 1; // Switch from 1-based to 0-based
+
+				//cout << cannons[i].x << " " << cannons[i].y  << endl;
 			}
 
 			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
