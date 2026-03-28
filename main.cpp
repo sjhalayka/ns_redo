@@ -6381,7 +6381,7 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 		}
 		}
 	}
-	
+
 	sqlite3_finalize(stmt);
 	return path_animation_length;
 }
@@ -6500,8 +6500,6 @@ void retrieve_level_data(const string& db_name)
 				enemy_ships[enemy_ships.size() - 1]->cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width - 1;
 				enemy_ships[enemy_ships.size() - 1]->cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height - 1;
 				enemy_ships[enemy_ships.size() - 1]->cannons[i].z -= 1; // Switch from 1-based to 0-based
-
-//				cout << enemy_ships[enemy_ships.size() - 1]->cannons[i].x << " " << enemy_ships[enemy_ships.size() - 1]->cannons[i].y  << endl;
 			}
 
 			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
@@ -6536,7 +6534,7 @@ void retrieve_level_data(const string& db_name)
 			// Push the enemy further offscreen by the desired distance.
 			// It will drift left at foreground_vel until it enters the screen,
 			// at which point the spline path takes over.
-			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
+			float desired_foreground_distance = static_cast<float>(path_pixel_delay / 2.0);
 
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
