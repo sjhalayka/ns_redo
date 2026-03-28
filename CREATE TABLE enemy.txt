@@ -87,15 +87,15 @@ CREATE TABLE enemy
 
 INSERT INTO enemy (file_template_id, path_id, path_pixel_delay, max_health)
 VALUES 
-(0, 1, 100, 1000.0);
+(0, 1, 1000, 1000.0);
 
 INSERT INTO enemy (file_template_id, path_id, path_pixel_delay, max_health)
 VALUES 
-(0, 1, 150, 1000.0);
+(0, 1, 1050, 1000.0);
 
 INSERT INTO enemy (file_template_id, path_id, path_pixel_delay, max_health)
 VALUES 
-(0, 1, 200, 1000.0);
+(0, 1, 1100, 1000.0);
 
 
 CREATE TABLE cannon_type
