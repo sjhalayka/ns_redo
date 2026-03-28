@@ -5125,6 +5125,14 @@ void simulate()
 				//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
 				//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 			}
+			else
+			{
+				enemy_ships[i]->vel_x = foreground_vel;
+				enemy_ships[i]->vel_y = 0;
+
+				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+				enemy_ships[i]->integrate(DT);
+			}
 		}
 		else
 		{
@@ -6533,7 +6541,7 @@ void retrieve_level_data(const string& db_name)
 			// Push the enemy further offscreen by the desired distance.
 			// It will drift left at foreground_vel until it enters the screen,
 			// at which point the spline path takes over.
-			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
+			float desired_foreground_distance = static_cast<float>(path_pixel_delay	);
 
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
