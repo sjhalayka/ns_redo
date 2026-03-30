@@ -10,4 +10,11 @@
 
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/40ef24f2-775e-4ee6-aa96-0a61ba1f5926" />
 
-5) 
+5) Close Visual Studio
+
+6) Extract code from https://github.com/sjhalayka/ns_redo to C:\dev\ns_redo
+
+7) Re-open the ns_redo solution/project
+
+8) 
+
