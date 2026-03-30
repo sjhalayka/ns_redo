@@ -28,10 +28,9 @@ using namespace std;
 namespace fs = std::filesystem;
 
 
-// to do: Enemy cannon type can be straight ahead, sideways, random single, circular spread
+// to do: Enemy cannon type can be straight ahead (left), sideways (up and down), random direction, tracking, circular spread
 
-// to do: add in cannon locations and type for each enemy ship type
-
+// to do: make sure enemy bullets are culled when they hit the foreground
 
 
 
@@ -5380,7 +5379,7 @@ void simulate()
 				//}
 
 
-
+				(*it)->to_be_culled = true;
 				break;
 			}
 		}
@@ -5915,7 +5914,7 @@ void display()
 	{
 		if ((*it)->to_be_culled)
 		{
-			cout << "culling ally bullet" << endl;
+			//cout << "culling ally bullet" << endl;
 			it = ally_bullets.erase(it);
 		}
 		else
