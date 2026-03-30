@@ -1,7 +1,7 @@
-﻿#include <GL/glew.h>
-#include <GL/freeglut.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+﻿#include "GL/glew.h"
+#include "GL/freeglut.h"
+#include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "sqlite3.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -64,7 +64,7 @@ float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
 bool spacePressed = false;
 
-const float MIN_BULLET_INTERVAL = 0.5f;
+const float PROTAGONIST_MIN_BULLET_INTERVAL = 0.5f;
 
 
 // Add a variable to track the time of the last fired bullet
@@ -4923,7 +4923,7 @@ void fireBullet(void)
 	std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float> timeSinceLastBullet = currentTime - lastBulletTime;
 
-	if (timeSinceLastBullet.count() < MIN_BULLET_INTERVAL)
+	if (timeSinceLastBullet.count() < PROTAGONIST_MIN_BULLET_INTERVAL)
 		return;
 
 	lastBulletTime = currentTime;
@@ -4980,7 +4980,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 		return;
 
 
-	const float aspect = SIM_WIDTH / float(SIM_HEIGHT);
+	//const float aspect = SIM_WIDTH / float(SIM_HEIGHT);
 
 	//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
 	//std::chrono::duration<float, std::milli> elapsed;
@@ -5015,59 +5015,50 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 
 
 
+	//for (size_t j = 0; j < 3; j++)
+	//{
+	//	bullet newStamp = newCentralStamp;
+
+	//	newStamp.density_add = avg_rad / 4;
+	//	newStamp.velocity_add = avg_rad / 4;
 
 
+	//	RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
+	//	newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
+	//	newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
 
+	//	//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
 
+	//	newStamp.birth_time = GLOBAL_TIME;
+	//	newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
 
+	//	if (enemy)
+	//		enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	//	else
+	//		ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	//}
 
+	//for (size_t j = 0; j < 5; j++)
+	//{
+	//	bullet newStamp = newCentralStamp;
 
+	//	newStamp.density_add = avg_rad / 8;
+	//	newStamp.velocity_add = avg_rad / 8;
 
-	for (size_t j = 0; j < 3; j++)
-	{
-		bullet newStamp = newCentralStamp;
+	//	RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
 
-		newStamp.density_add = avg_rad / 4;
-		newStamp.velocity_add = avg_rad / 4;
+	//	newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
+	//	newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
+	//	//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
+	//	newStamp.birth_time = GLOBAL_TIME;
+	//	newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
 
-
-		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
-
-		newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
-		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
-
-		//		newStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
-
-		newStamp.birth_time = GLOBAL_TIME;
-		newStamp.death_time = GLOBAL_TIME + 1.0f * rand() / float(RAND_MAX);
-
-		if (enemy)
-			enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
-		else
-			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
-	}
-
-	for (size_t j = 0; j < 5; j++)
-	{
-		bullet newStamp = newCentralStamp;
-
-		newStamp.density_add = avg_rad / 8;
-		newStamp.velocity_add = avg_rad / 8;
-
-		RandomUnitVector(newStamp.vel_x, newStamp.vel_y);
-
-		newStamp.vel_x *= aspect * 100 * (rand() / float(RAND_MAX));
-		newStamp.vel_y *= 100 * (rand() / float(RAND_MAX));
-		//rnewStamp.path_randomization = (rand() / float(RAND_MAX)) * 0.01f;
-		newStamp.birth_time = GLOBAL_TIME;
-		newStamp.death_time = GLOBAL_TIME + 3.0f * rand() / float(RAND_MAX);
-
-		if (enemy)
-			enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
-		else
-			ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
-	}
+	//	if (enemy)
+	//		enemy_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	//	else
+	//		ally_bullets.push_back(make_unique<straight_bullet>(newStamp));
+	//}
 }
 
 
