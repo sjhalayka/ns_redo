@@ -16,5 +16,17 @@
 
 7) Re-open the ns_redo solution/project
 
-8) 
+8) Add main.cpp and sqlite3.c to project by Add existing items to Source Files
+
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/f6501c36-3fd0-475b-98a4-d524bb57bb20" />
+
+9) Change to Release mode:
+
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/87eb58fd-0f57-4bdc-9b40-926f289d53c3" />
+
+10) Click on the Local Windows Debugger green Play icon to start the app:
+
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/ef736907-a394-456b-8a5b-12c9cf278ec7" />
+ 
+
 
