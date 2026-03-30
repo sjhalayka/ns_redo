@@ -114,19 +114,20 @@ CREATE TABLE enemy_cannon
 	cannon_type_id INTEGER NOT NULL,
 	enemy_id INTEGER NOT NULL,
 	two_d_location_id INTEGER NOT NULL,
+	min_bullet_interval REAL NOT NULL,
 	enemy_cannon_nickname TEXT,
 	FOREIGN KEY (cannon_type_id) REFERENCES cannon_type(cannon_type_id),
 	FOREIGN KEY (enemy_id) REFERENCES enemy(enemy_id),
 	FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id)
 );
 
-INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 1, two_d_location_id FROM two_d_location WHERE x = 0.5 AND y = 0.5;
+INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id, min_bullet_interval) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 1, two_d_location_id, 0.15 FROM two_d_location WHERE x = 0.5 AND y = 0.5;
 
-INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 1, two_d_location_id FROM two_d_location WHERE x = 0 AND y = 0.75;
+INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id, min_bullet_interval) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 1, two_d_location_id, 0.25 FROM two_d_location WHERE x = 0 AND y = 0.75;
 
-INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 2, two_d_location_id FROM two_d_location WHERE x = 0.5 AND y = 0.5;
+INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id, min_bullet_interval) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 2, two_d_location_id, 0.35 FROM two_d_location WHERE x = 0.5 AND y = 0.5;
 
-INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 3, two_d_location_id FROM two_d_location WHERE x = 0.5 AND y = 0.5;
+INSERT INTO enemy_cannon (enemy_cannon_id, cannon_type_id, enemy_id, two_d_location_id, min_bullet_interval) SELECT (SELECT MAX(enemy_cannon_id) FROM enemy_cannon) + 1, 1, 3, two_d_location_id, 0.45 FROM two_d_location WHERE x = 0.5 AND y = 0.5;
 
 
 
@@ -148,12 +149,15 @@ SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.
 
 SELECT
     ec.enemy_id,
+    ec.min_bullet_interval,
     ct.cannon_type_nickname,
     t.x,
     t.y
+	
 FROM enemy_cannon ec
 JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id
-JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id;
+JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id
+WHERE ec.enemy_id = 1;
 
 
 

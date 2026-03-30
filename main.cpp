@@ -942,7 +942,7 @@ public:
 	float path_animation_length = 0; // seconds
 	vector<glm::vec2> path_points;
 	vector<float> path_speeds;
-	vector<glm::vec3> cannons;
+	vector<glm::vec4> cannons;
 
 	float path_t = -1.0f;
 
@@ -6386,16 +6386,18 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 
 
 
-vector<glm::vec3> get_cannons(int enemy_id, sqlite3* (&db))
+vector<glm::vec4> get_cannons(int enemy_id, sqlite3* (&db))
 {
 	size_t row_count = 0;
 
-	vector<glm::vec3> cannons;
+	vector<glm::vec4> cannons;
 
 	sqlite3_stmt* stmt;
 
 	ostringstream oss;
-	oss << "SELECT ec.enemy_id, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+
+	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+	
 	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
 	if (rc != SQLITE_OK)
@@ -6412,12 +6414,13 @@ vector<glm::vec3> get_cannons(int enemy_id, sqlite3* (&db))
 		{
 		case SQLITE_ROW:
 		{
-			int enemy_id = sqlite3_column_int(stmt, 0);
-			int cannon_type = sqlite3_column_int(stmt, 1);
-			double x = sqlite3_column_double(stmt, 2);
-			double y = sqlite3_column_double(stmt, 3);
+			// int enemy_id = sqlite3_column_int(stmt, 0);
+			double min_bullet_interval = sqlite3_column_double(stmt, 1);
+			int cannon_type = sqlite3_column_int(stmt, 2);
+			double x = sqlite3_column_double(stmt, 3);
+			double y = sqlite3_column_double(stmt, 4);
 
-			cannons.push_back(glm::vec3(x, y, cannon_type));
+			cannons.push_back(glm::vec4(x, y, cannon_type, min_bullet_interval));
 
 			row_count++;
 
