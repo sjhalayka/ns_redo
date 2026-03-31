@@ -5093,7 +5093,6 @@ void simulate()
 
 		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
 		{
-
 			std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<float> timeSinceLastBullet = currentTime - enemy_ships[i]->cannons[j].lastBulletTime;
 
@@ -5105,6 +5104,19 @@ void simulate()
 
 
 			straight_bullet s;
+			s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
+			s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
+
+
+			const float BULLET_SPEED = 1600.0;  // Adjust as needed
+
+			s.vel_x = -BULLET_SPEED;
+
+
+			enemy_bullets.push_back(make_unique<straight_bullet>(s));
+
+
+
 
 			cout << "shoot" << endl;
 		}
