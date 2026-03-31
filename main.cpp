@@ -5104,6 +5104,11 @@ void simulate()
 
 
 			straight_bullet s;
+			s.tex = bullet_template.tex;                          // add
+			s.to_present_data = bullet_template.to_present_data;  // add
+			s.width = bullet_template.width;                      // add
+			s.height = bullet_template.height;                    // add
+
 			s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
 			s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
 
@@ -5404,6 +5409,9 @@ void simulate()
 
 	for (auto it = enemy_bullets.begin(); it != enemy_bullets.end(); it++)
 	{
+		if ((*it)->to_be_culled)
+			continue;
+
 		(*it)->integrate(DT);
 
 		bool found_collision = false;
@@ -5419,20 +5427,6 @@ void simulate()
 			{
 				cout << "ENEMY BULLET - FOREGROUND COLLISION" << endl;
 
-				// Apply blackening on the foreground at the bullet impact point
-				// The fluid-based path doesn't reliably catch enemy fire because
-				// the green density dissipates before the periodic collision check runs.
-				//{
-				//	float bulletCenterX = (*it)->x + (*it)->width / 2.0f;
-				//	float bulletCenterY = (*it)->y + (*it)->height / 2.0f;
-				//	float localX = bulletCenterX - foreground_chunked[i].x;
-				//	float localY = bulletCenterY - foreground_chunked[i].y;
-
-				//	vector<glm::vec2> blackening_points;
-				//	blackening_points.push_back(glm::vec2(localX, localY));
-				//	foreground_chunked[i].animate_blackening(blackening_points);
-				//}
-
 				(*it)->to_be_culled = true;
 				break;
 			}
@@ -5444,22 +5438,8 @@ void simulate()
 
 			if (true == found_collision)
 			{
-				// Trigger chromatic aberration when hit by enemy bullet
-				//const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
-
-				//if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
-				//{
-				//	// damage is already applied by collision between the protagonist and the density field
-				//	// don't apply damage here too
-
-				//	protagonist.last_time_collided = GLOBAL_TIME;
-
-				//	// Trigger chromatic aberration effect on collision damage
-				//	lastDamageTime = GLOBAL_TIME;
-				//}
-
 				(*it)->to_be_culled = true;  // Mark bullet for removal so it doesn't keep triggering
-				break;
+				//break;
 			}
 		}
 
