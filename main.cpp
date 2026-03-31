@@ -5151,10 +5151,7 @@ void simulate()
 				enemy_bullets.push_back(make_unique<straight_bullet>(s));
 			}
 
-
-
-
-			cout << "shoot" << endl;
+			//cout << "shoot" << endl;
 		}
 
 	}
