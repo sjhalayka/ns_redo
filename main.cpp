@@ -5417,19 +5417,21 @@ void simulate()
 
 			if (true == found_collision)
 			{
-				//const float DAMAGE_INTERVAL = aberrationDuration;  // seconds between damage ticks
+				cout << "ENEMY BULLET - FOREGROUND COLLISION" << endl;
 
-				//if (GLOBAL_TIME - protagonist.last_time_collided >= DAMAGE_INTERVAL)
+				// Apply blackening on the foreground at the bullet impact point
+				// The fluid-based path doesn't reliably catch enemy fire because
+				// the green density dissipates before the periodic collision check runs.
 				//{
-				//	// damage is already applied by collision between the protagonist and the density field
-				//	// don't apply damage here too
+				//	float bulletCenterX = (*it)->x + (*it)->width / 2.0f;
+				//	float bulletCenterY = (*it)->y + (*it)->height / 2.0f;
+				//	float localX = bulletCenterX - foreground_chunked[i].x;
+				//	float localY = bulletCenterY - foreground_chunked[i].y;
 
-				//	protagonist.last_time_collided = GLOBAL_TIME;
-
-				//	// Trigger chromatic aberration effect on collision damage
-				//	lastDamageTime = GLOBAL_TIME;
+				//	vector<glm::vec2> blackening_points;
+				//	blackening_points.push_back(glm::vec2(localX, localY));
+				//	foreground_chunked[i].animate_blackening(blackening_points);
 				//}
-
 
 				(*it)->to_be_culled = true;
 				break;
@@ -6458,7 +6460,7 @@ vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
 	ostringstream oss;
 
 	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
-	
+
 	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
 	if (rc != SQLITE_OK)
@@ -6598,7 +6600,7 @@ void retrieve_level_data(const string& db_name)
 			// Push the enemy further offscreen by the desired distance.
 			// It will drift left at foreground_vel until it enters the screen,
 			// at which point the spline path takes over.
-			float desired_foreground_distance = static_cast<float>(path_pixel_delay	);
+			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
 
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
