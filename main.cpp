@@ -1071,17 +1071,11 @@ public:
 
 	void integrate(float dt)
 	{
-		const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
-
 		old_x = x;
 		old_y = y;
 
-		//std::chrono::high_resolution_clock::time_point global_time_end = std::chrono::high_resolution_clock::now();
-		//std::chrono::duration<float, std::milli> elapsed;
-		//elapsed = global_time_end - app_start_time;
-
 		// Store the original direction vector
-		float dirX = vel_x * inv_aspect * dt;
+		float dirX = vel_x * dt;
 		float dirY = vel_y * dt;
 
 		// Normalize the direction vector
@@ -1101,7 +1095,6 @@ public:
 		float frequency = sinusoidal_frequency; // Controls how many waves appear
 		float amplitude = sinusoidal_amplitude * dt; // Controls wave height
 
-
 		float sinValue = 0;
 
 		if (sinusoidal_shift)
@@ -1115,16 +1108,9 @@ public:
 		y += dirY * forwardSpeed;
 
 		// Add sinusoidal motion perpendicular to the path
-		x += perpX * sinValue * amplitude * dt;// *(120.0f / FPS);
-		y += perpY * sinValue * amplitude * dt;// *(120.0f / FPS);
-
-		//float path_randomization = 10;// dis_real(generator_real) * 0.01f;
-		//float rand_x = 0, rand_y = 0;
-		//RandomUnitVector(rand_x, rand_y);
-		//x += rand_x * path_randomization;
-		//y += rand_y * path_randomization;
+		x += perpX * sinValue * amplitude * dt;
+		y += perpY * sinValue * amplitude * dt;
 	}
-
 };
 
 
@@ -4960,8 +4946,8 @@ void fireBullet(void)
 	float angle_start = 0, angle_end = 0;
 	size_t num_streams = 1;
 
-	if (x3_fire) { angle_start = 0.1f; angle_end = -0.1f; num_streams = 3; }
-	if (x5_fire) { angle_start = 0.2f; angle_end = -0.2f; num_streams = 5; }
+	if (x3_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 3; }
+	if (x5_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 5; }
 
 	float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
 	float angle = angle_start;
