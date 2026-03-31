@@ -928,16 +928,20 @@ public:
 };
 
 
+
+#define CANNON_TYPE_LEFT 0
+#define CANNON_TYPE_UP_DOWN 1
+#define CANNON_TYPE_TRACKING 2
+
+
 class cannon
 {
 public:
-	double min_bullet_interval = 0;//sqlite3_column_double(stmt, 1);
-	int cannon_type = 0;//sqlite3_column_int(stmt, 2);
-	double x = 0;//sqlite3_column_double(stmt, 3);
-	double y = 0;//sqlite3_column_double(stmt, 4);
+	double min_bullet_interval = 0;
+	int cannon_type = 0;
+	double x = 0;
+	double y = 0;
 	std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
-
-	//cannons.push_back(glm::vec4(x, y, cannon_type, min_bullet_interval));
 };
 
 class enemy_ship : public ship
@@ -1145,13 +1149,13 @@ public:
 
 	void integrate(float dt)
 	{
-		const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
+		//const float inv_aspect = SIM_HEIGHT / float(SIM_WIDTH);
 
 		old_x = x;
 		old_y = y;
 
 		// Store the original direction vector
-		float dirX = vel_x * inv_aspect * dt;
+		float dirX = vel_x * dt;
 		float dirY = vel_y * dt;
 
 		// Normalize the direction vector
@@ -5081,6 +5085,11 @@ void simulate()
 	if (spacePressed)
 		fireBullet();
 
+	protagonist.integrate(DT);
+
+	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
+	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
+
 
 	// to do:
 	// for each enemy, for each cannon
@@ -5115,10 +5124,32 @@ void simulate()
 
 			const float BULLET_SPEED = 1600.0;  // Adjust as needed
 
-			s.vel_x = -BULLET_SPEED;
+			if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_LEFT)
+			{
+				s.vel_x = -BULLET_SPEED;
+				enemy_bullets.push_back(make_unique<straight_bullet>(s));
+			}
+			else if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)
+			{
+				s.vel_y = -BULLET_SPEED;
+				enemy_bullets.push_back(make_unique<straight_bullet>(s));
 
+				s.vel_y = BULLET_SPEED;
+				enemy_bullets.push_back(make_unique<straight_bullet>(s));
+			}
+			else if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_TRACKING)
+			{
+				glm::vec2 aim;
+				aim.x = (protagonist.x + protagonist.width * 0.5) - s.x;
+				aim.y = (protagonist.y + protagonist.height * 0.5) - s.y;
 
-			enemy_bullets.push_back(make_unique<straight_bullet>(s));
+				aim = normalize(aim) * BULLET_SPEED;
+
+				s.vel_x = aim.x;
+				s.vel_y = aim.y;
+
+				enemy_bullets.push_back(make_unique<straight_bullet>(s));
+			}
 
 
 
@@ -5131,10 +5162,7 @@ void simulate()
 
 
 
-	protagonist.integrate(DT);
 
-	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
-	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
 
 
 
@@ -5439,7 +5467,6 @@ void simulate()
 			if (true == found_collision)
 			{
 				(*it)->to_be_culled = true;  // Mark bullet for removal so it doesn't keep triggering
-				//break;
 			}
 		}
 
