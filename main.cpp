@@ -928,6 +928,18 @@ public:
 };
 
 
+class cannon
+{
+public:
+	double min_bullet_interval = 0;//sqlite3_column_double(stmt, 1);
+	int cannon_type = 0;//sqlite3_column_int(stmt, 2);
+	double x = 0;//sqlite3_column_double(stmt, 3);
+	double y = 0;//sqlite3_column_double(stmt, 4);
+	std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
+
+	//cannons.push_back(glm::vec4(x, y, cannon_type, min_bullet_interval));
+};
+
 class enemy_ship : public ship
 {
 public:
@@ -942,7 +954,7 @@ public:
 	float path_animation_length = 0; // seconds
 	vector<glm::vec2> path_points;
 	vector<float> path_speeds;
-	vector<glm::vec4> cannons;
+	vector<cannon> cannons;
 
 	float path_t = -1.0f;
 
@@ -5069,10 +5081,47 @@ void simulate()
 	if (spacePressed)
 		fireBullet();
 
+
+	// to do:
+	// for each enemy, for each cannon
+	// fire if cannon location is not transparent, and if onscreen, and if cannon's timing interval has passed
+
+	for (size_t i = 0; i < enemy_ships.size(); i++)
+	{
+		if (enemy_ships[i]->to_be_culled || false == enemy_ships[i]->isOnscreen())
+			continue;
+
+		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
+		{
+
+			std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<float> timeSinceLastBullet = currentTime - enemy_ships[i]->cannons[j].lastBulletTime;
+
+			if (timeSinceLastBullet.count() < enemy_ships[i]->cannons[j].min_bullet_interval)
+				continue;
+
+			enemy_ships[i]->cannons[j].lastBulletTime = currentTime;
+
+
+
+			straight_bullet s;
+
+			cout << "shoot" << endl;
+		}
+
+	}
+
+
+
+
 	protagonist.integrate(DT);
 
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
+
+
+
+
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
@@ -6386,11 +6435,11 @@ double get_path_animation_length(int path_id, sqlite3* (&db))
 
 
 
-vector<glm::vec4> get_cannons(int enemy_id, sqlite3* (&db))
+vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
 {
 	size_t row_count = 0;
 
-	vector<glm::vec4> cannons;
+	vector<cannon> cannons;
 
 	sqlite3_stmt* stmt;
 
@@ -6415,12 +6464,15 @@ vector<glm::vec4> get_cannons(int enemy_id, sqlite3* (&db))
 		case SQLITE_ROW:
 		{
 			// int enemy_id = sqlite3_column_int(stmt, 0);
-			double min_bullet_interval = sqlite3_column_double(stmt, 1);
-			int cannon_type = sqlite3_column_int(stmt, 2);
-			double x = sqlite3_column_double(stmt, 3);
-			double y = sqlite3_column_double(stmt, 4);
 
-			cannons.push_back(glm::vec4(x, y, cannon_type, min_bullet_interval));
+			cannon c;
+
+			c.min_bullet_interval = sqlite3_column_double(stmt, 1);
+			c.cannon_type = sqlite3_column_int(stmt, 2);
+			c.x = sqlite3_column_double(stmt, 3);
+			c.y = sqlite3_column_double(stmt, 4);
+
+			cannons.push_back(c);
 
 			row_count++;
 
@@ -6499,7 +6551,7 @@ void retrieve_level_data(const string& db_name)
 			{
 				enemy_ships[enemy_ships.size() - 1]->cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width - 1;
 				enemy_ships[enemy_ships.size() - 1]->cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height - 1;
-				enemy_ships[enemy_ships.size() - 1]->cannons[i].z -= 1; // Switch from 1-based to 0-based
+				enemy_ships[enemy_ships.size() - 1]->cannons[i].cannon_type -= 1; // Switch from 1-based to 0-based
 			}
 
 			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
