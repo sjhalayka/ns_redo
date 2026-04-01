@@ -5128,10 +5128,10 @@ void simulate()
 
 
 			straight_bullet s;
-			s.tex = bullet_template.tex;                          
-			s.to_present_data = bullet_template.to_present_data;  
-			s.width = bullet_template.width;                      
-			s.height = bullet_template.height;                   
+			s.tex = bullet_template.tex;
+			s.to_present_data = bullet_template.to_present_data;
+			s.width = bullet_template.width;
+			s.height = bullet_template.height;
 
 			s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
 			s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
@@ -5683,6 +5683,696 @@ void simulate()
 
 
 
+// =============================================================================
+//  EDITOR MODE
+//
+//  CONTROLS (Tab to toggle)
+//  ──────────────────────────────────────
+//  Tab               Toggle editor on/off
+//
+//  [ / ]             Select previous / next enemy ship
+//  N                 Spawn new enemy (cycles through loaded templates)
+//  Delete            Remove selected enemy
+//
+//  LMB near knot     Select & drag that Catmull-Rom control point
+//  LMB on empty      Insert new control point in nearest segment
+//  RMB near knot     Delete that control point (minimum 2 kept)
+//
+//  C                 Add a cannon at current mouse position (sprite-local coords)
+//  V                 Remove the last cannon from selected enemy
+//  T                 Cycle cannon type: LEFT -> UP_DOWN -> TRACKING
+//  , / .             Decrease / increase fire interval of last cannon
+//
+//  Shift+LMB         Add a speed knot (default value 1.0)
+//  Shift+RMB         Remove last speed knot
+//
+//  P                 Print current state to stdout
+//  S                 Save to level1_edited.db
+// =============================================================================
+
+bool g_editorMode = false;
+
+int  g_selectedEnemy = 0;
+int  g_selectedPoint = -1;
+bool g_draggingPoint = false;
+int  g_spawnTemplateIdx = 0;
+
+
+// Return which template index the given enemy currently uses (match by tex handle)
+int editorFindTemplateIdx(enemy_ship* e)
+{
+	for (size_t t = 0; t < enemy_templates.size(); ++t)
+		if (enemy_templates[t].tex == e->tex)
+			return (int)t;
+	return 0;
+}
+
+
+static bool editorHasEnemy()
+{
+	return g_editorMode && !enemy_ships.empty();
+}
+
+static enemy_ship* editorSelected()
+{
+	if (!editorHasEnemy()) return nullptr;
+	g_selectedEnemy = std::max(0, std::min(g_selectedEnemy, (int)enemy_ships.size() - 1));
+	return enemy_ships[g_selectedEnemy].get();
+}
+
+// ---- Draw helpers -----------------------------------------------------------
+
+static void editorDrawCircle(float cx, float cy, float r,
+	float red, float green, float blue, float alpha)
+{
+	const int SEG = 24;
+	std::vector<Line> segs;
+	const float tau = 6.2831853f;
+	glm::vec2 prev(cx + r, cy);
+	for (int i = 1; i <= SEG; ++i)
+	{
+		float angle = tau * i / SEG;
+		glm::vec2 cur(cx + r * std::cos(angle), cy + r * std::sin(angle));
+		segs.push_back(Line(prev, cur, glm::vec4(red, green, blue, alpha)));
+		prev = cur;
+	}
+	drawLinesWithWidth(segs, 2.0f);
+}
+
+static void editorDrawCross(float cx, float cy, float half,
+	float red, float green, float blue)
+{
+	std::vector<Line> v;
+	glm::vec4 col(red, green, blue, 1.f);
+	v.push_back(Line(glm::vec2(cx - half, cy - half), glm::vec2(cx + half, cy + half), col));
+	v.push_back(Line(glm::vec2(cx - half, cy + half), glm::vec2(cx + half, cy - half), col));
+	drawLinesWithWidth(v, 2.0f);
+}
+
+static void editorDrawSpline(const enemy_ship& e, bool isSelected)
+{
+	if (e.path_points.size() < 2) return;
+
+	glm::vec4 splineCol = isSelected
+		? glm::vec4(1.f, 1.f, 0.f, 1.f)
+		: glm::vec4(0.5f, 0.5f, 0.8f, 0.6f);
+
+	std::vector<Line> segs;
+	glm::vec2 prev = get_spline_point(e.path_points, 0.f);
+	const int STEPS = 120;
+	for (int i = 1; i <= STEPS; ++i)
+	{
+		float t = i / float(STEPS);
+		glm::vec2 cur = get_spline_point(e.path_points, t);
+		segs.push_back(Line(prev, cur, splineCol));
+		prev = cur;
+	}
+	drawLinesWithWidth(segs, isSelected ? 3.f : 1.5f);
+
+	for (size_t i = 0; i < e.path_points.size(); ++i)
+	{
+		bool sel = isSelected && (int)i == g_selectedPoint;
+		float r = sel ? 12.f : 8.f;
+		editorDrawCircle(e.path_points[i].x, e.path_points[i].y, r,
+			sel ? 1.f : 0.8f,
+			sel ? 0.6f : 0.8f,
+			0.f, 1.f);
+	}
+}
+
+static void editorDrawCannons(const enemy_ship& e)
+{
+	for (size_t ci = 0; ci < e.cannons.size(); ++ci)
+	{
+		float wx = e.x + (float)e.cannons[ci].x;
+		float wy = e.y + (float)e.cannons[ci].y;
+
+		float cr = 1.f, cg = 0.3f, cb = 0.3f;   // LEFT  = red
+		if (e.cannons[ci].cannon_type == CANNON_TYPE_UP_DOWN) { cr = 0.3f; cg = 1.f; cb = 0.3f; }  // green
+		if (e.cannons[ci].cannon_type == CANNON_TYPE_TRACKING) { cr = 0.3f; cg = 0.3f; cb = 1.f; }  // blue
+
+		editorDrawCircle(wx, wy, 14.f, cr, cg, cb, 1.f);
+		editorDrawCross(wx, wy, 14.f, cr, cg, cb);
+	}
+}
+
+static void editorDrawSelectionBox(const enemy_ship& e)
+{
+	float x0 = e.x, y0 = e.y;
+	float x1 = x0 + e.width, y1 = y0 + e.height;
+	glm::vec4 col(1, 1, 0, 1);
+	std::vector<Line> v;
+	v.push_back(Line(glm::vec2(x0, y0), glm::vec2(x1, y0), col));
+	v.push_back(Line(glm::vec2(x1, y0), glm::vec2(x1, y1), col));
+	v.push_back(Line(glm::vec2(x1, y1), glm::vec2(x0, y1), col));
+	v.push_back(Line(glm::vec2(x0, y1), glm::vec2(x0, y0), col));
+	drawLinesWithWidth(v, 2.f);
+}
+
+// ---- Main overlay render (called inside display()) --------------------------
+
+void renderEditorOverlay()
+{
+	if (!g_editorMode) return;
+
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		bool sel = ((int)i == g_selectedEnemy);
+		editorDrawSpline(*enemy_ships[i], sel);
+		if (sel)
+		{
+			editorDrawSelectionBox(*enemy_ships[i]);
+			editorDrawCannons(*enemy_ships[i]);
+		}
+	}
+
+	if (textRenderer)
+	{
+		enemy_ship* e = editorSelected();
+
+		char buf[512];
+		snprintf(buf, sizeof(buf), "[EDITOR]  Tab=exit  Enemies:%d  Sel:%d",
+			(int)enemy_ships.size(), g_selectedEnemy);
+		textRenderer->renderText(buf, 10, 10, 0.7f, glm::vec4(1, 1, 0, 1));
+
+		if (e)
+		{
+			int curTpl = editorFindTemplateIdx(e);
+			snprintf(buf, sizeof(buf),
+				"Path pts:%d  Cannons:%d  SpeedKnots:%d  Template:%d/%d  [N]ew [Del]ete [[]prev []]next [E]cycle template",
+				(int)e->path_points.size(),
+				(int)e->cannons.size(),
+				(int)e->path_speeds.size(),
+				curTpl + 1,
+				(int)enemy_templates.size());
+			textRenderer->renderText(buf, 10, 34, 0.55f, glm::vec4(1, 0.9f, 0.4f, 1));
+
+			snprintf(buf, sizeof(buf),
+				"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  P=print  S=save");
+			textRenderer->renderText(buf, 10, 54, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 1));
+
+			if (!e->cannons.empty())
+			{
+				const cannon& last = e->cannons.back();
+				const char* tname = "LEFT";
+				if (last.cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
+				if (last.cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+
+				snprintf(buf, sizeof(buf),
+					"Last cannon  type:%s  interval:%.2fs",
+					tname, last.min_bullet_interval);
+				textRenderer->renderText(buf, 10, 74, 0.50f, glm::vec4(0.6f, 1.f, 0.6f, 1));
+			}
+		}
+	}
+}
+
+// ---- Path-point search ------------------------------------------------------
+
+static int editorFindNearestPoint(const enemy_ship& e, float mx, float my,
+	float threshold = 20.f)
+{
+	int best = -1;
+	float bestDist = threshold * threshold;
+	for (size_t i = 0; i < e.path_points.size(); ++i)
+	{
+		float dx = e.path_points[i].x - mx;
+		float dy = e.path_points[i].y - my;
+		float d2 = dx * dx + dy * dy;
+		if (d2 < bestDist) { bestDist = d2; best = (int)i; }
+	}
+	return best;
+}
+
+// ---- Print state to stdout --------------------------------------------------
+
+static void editorPrintState()
+{
+	std::cout << "\n========== EDITOR STATE ==========\n";
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		const enemy_ship& e = *enemy_ships[i];
+		std::cout << "Enemy " << i << ":\n";
+		std::cout << "  Path points (" << e.path_points.size() << "):\n";
+		for (size_t j = 0; j < e.path_points.size(); ++j)
+			std::cout << "    [" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
+			<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
+
+		std::cout << "  Speed knots (" << e.path_speeds.size() << "):\n";
+		for (size_t j = 0; j < e.path_speeds.size(); ++j)
+			std::cout << "    [" << j << "] " << e.path_speeds[j] << "\n";
+
+		std::cout << "  Cannons (" << e.cannons.size() << "):\n";
+		for (size_t j = 0; j < e.cannons.size(); ++j)
+		{
+			const char* tname = "LEFT";
+			if (e.cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
+			if (e.cannons[j].cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+			std::cout << "    [" << j << "] type=" << tname
+				<< " x=" << e.cannons[j].x / std::max(1, e.width - 1) << " (norm)"
+				<< " y=" << e.cannons[j].y / std::max(1, e.height - 1) << " (norm)"
+				<< " interval=" << e.cannons[j].min_bullet_interval << "s\n";
+		}
+	}
+	std::cout << "==================================\n\n";
+}
+
+// ---- Save to SQLite ---------------------------------------------------------
+
+static void editorSaveToDatabase(const std::string& db_name)
+{
+	sqlite3* db = nullptr;
+	if (sqlite3_open(db_name.c_str(), &db) != SQLITE_OK)
+	{
+		std::cerr << "[Editor] Cannot open DB: " << sqlite3_errmsg(db) << "\n";
+		return;
+	}
+
+	auto exec = [&](const char* sql) {
+		char* err = nullptr;
+		if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK)
+		{
+			std::cerr << "[Editor] SQL error: " << err << "\n";
+			sqlite3_free(err);
+		}
+		};
+
+	exec("BEGIN TRANSACTION;");
+
+	exec("DELETE FROM enemy;");
+	exec("DELETE FROM enemy_cannon;");
+	exec("DELETE FROM path;");
+	exec("DELETE FROM path_location;");
+	exec("DELETE FROM two_d_location;");
+	exec("DELETE FROM path_speed;");
+	exec("DELETE FROM one_d_location;");
+
+	int path_id = 0;
+	int loc2d_id = 0;
+	int loc1d_id = 0;
+	int enemy_id = 0;
+	int cannon_id = 0;
+
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		const enemy_ship& e = *enemy_ships[i];
+
+		// path row
+		path_id++;
+		{
+			char sql[256];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO path(path_id, path_animation_length) VALUES(%d, %.4f);",
+				path_id, e.path_animation_length);
+			exec(sql);
+		}
+
+		// path control-point locations
+		for (size_t j = 0; j < e.path_points.size(); ++j)
+		{
+			loc2d_id++;
+			char sql[512];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO two_d_location(two_d_location_id,x,y) VALUES(%d,%.6f,%.6f);",
+				loc2d_id,
+				e.path_points[j].x / SIM_WIDTH,
+				e.path_points[j].y / SIM_HEIGHT);
+			exec(sql);
+
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO path_location(path_id,two_d_location_id) VALUES(%d,%d);",
+				path_id, loc2d_id);
+			exec(sql);
+		}
+
+		// speed knots
+		for (size_t j = 0; j < e.path_speeds.size(); ++j)
+		{
+			loc1d_id++;
+			char sql[256];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO one_d_location(one_d_location_id,x) VALUES(%d,%.6f);",
+				loc1d_id, e.path_speeds[j]);
+			exec(sql);
+
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO path_speed(path_id,one_d_location_id) VALUES(%d,%d);",
+				path_id, loc1d_id);
+			exec(sql);
+		}
+
+		// enemy row
+		enemy_id++;
+		{
+			int tpl_id = 0;
+			for (size_t t = 0; t < enemy_templates.size(); ++t)
+				if (enemy_templates[t].width == e.width && enemy_templates[t].height == e.height)
+				{
+					tpl_id = (int)t; break;
+				}
+
+			char sql[256];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO enemy(enemy_id,file_template_id,path_id,path_pixel_delay,max_health)"
+				" VALUES(%d,%d,%d,%d,%.1f);",
+				enemy_id, tpl_id, path_id, 0, e.max_health);
+			exec(sql);
+		}
+
+		// cannons
+		for (size_t j = 0; j < e.cannons.size(); ++j)
+		{
+			loc2d_id++;
+			const cannon& c = e.cannons[j];
+
+			char sql[512];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO two_d_location(two_d_location_id,x,y) VALUES(%d,%.6f,%.6f);",
+				loc2d_id,
+				(e.width > 1) ? c.x / (e.width - 1) : 0.0,
+				(e.height > 1) ? c.y / (e.height - 1) : 0.0);
+			exec(sql);
+
+			cannon_id++;
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO enemy_cannon(enemy_cannon_id,enemy_id,cannon_type_id,"
+				"two_d_location_id,min_bullet_interval)"
+				" VALUES(%d,%d,%d,%d,%.4f);",
+				cannon_id, enemy_id,
+				c.cannon_type + 1,  // back to 1-based
+				loc2d_id,
+				c.min_bullet_interval);
+			exec(sql);
+		}
+	}
+
+	exec("COMMIT;");
+	sqlite3_close(db);
+	std::cout << "[Editor] Saved " << enemy_ships.size()
+		<< " enemies to " << db_name << "\n";
+}
+
+// ---- Keyboard handler (returns true if editor consumed the key) -------------
+
+
+
+// Swap the sprite/GL data of an existing enemy to a different template,
+// keeping its path, cannons, position, and health intact.
+static void editorApplyTemplate(enemy_ship* e, int tIdx)
+{
+	if (tIdx < 0 || tIdx >= (int)enemy_templates.size()) return;
+	const enemy_ship& tmpl = enemy_templates[tIdx];
+
+	// Remember centre position so the ship doesn't jump when size changes
+	float cx = e->x + e->width * 0.5f;
+	float cy = e->y + e->height * 0.5f;
+
+	// Preserve everything that isn't visual
+	auto  saved_path_points = e->path_points;
+	auto  saved_path_speeds = e->path_speeds;
+	auto  saved_cannons = e->cannons;
+	float saved_path_t = e->path_t;
+	float saved_path_animation_length = e->path_animation_length;
+	float saved_health = e->health;
+	float saved_max_health = e->max_health;
+
+	// Apply new visual from template
+	e->tex = tmpl.tex;
+	e->width = tmpl.width;
+	e->height = tmpl.height;
+	e->manually_update_data(
+		tmpl.to_present_up_data,
+		tmpl.to_present_down_data,
+		tmpl.to_present_rest_data);
+
+	// Re-centre
+	e->x = cx - e->width * 0.5f;
+	e->y = cy - e->height * 0.5f;
+
+	// Restore gameplay state
+	e->path_points = saved_path_points;
+	e->path_speeds = saved_path_speeds;
+	e->path_t = saved_path_t;
+	e->path_animation_length = saved_path_animation_length;
+	e->health = saved_health;
+	e->max_health = saved_max_health;
+
+	// Restore cannons, clamping local coords to the new sprite bounds
+	e->cannons = saved_cannons;
+	for (auto& c : e->cannons)
+	{
+		c.x = std::max(0.0, std::min(c.x, (double)(e->width - 1)));
+		c.y = std::max(0.0, std::min(c.y, (double)(e->height - 1)));
+	}
+}
+
+
+
+
+bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
+{
+	if (key == '\t')
+	{
+		g_editorMode = !g_editorMode;
+		g_selectedPoint = -1;
+		g_draggingPoint = false;
+		std::cout << "[Editor] " << (g_editorMode ? "ON" : "OFF") << "\n";
+		return true;
+	}
+
+	if (!g_editorMode) return false;
+
+	enemy_ship* e = editorSelected();
+
+	switch (key)
+	{
+	case 'e': case 'E':
+		if (e && !enemy_templates.empty())
+		{
+			int cur = editorFindTemplateIdx(e);
+			int next = (cur + 1) % (int)enemy_templates.size();
+			editorApplyTemplate(e, next);
+			std::cout << "[Editor] Template -> " << next
+				<< "  (" << next + 1 << "/" << enemy_templates.size() << ")\n";
+		}
+		return true;
+
+	case '[':
+		if (!enemy_ships.empty())
+			g_selectedEnemy = (g_selectedEnemy - 1 + (int)enemy_ships.size()) % (int)enemy_ships.size();
+		g_selectedPoint = -1;
+		return true;
+
+	case ']':
+		if (!enemy_ships.empty())
+			g_selectedEnemy = (g_selectedEnemy + 1) % (int)enemy_ships.size();
+		g_selectedPoint = -1;
+		return true;
+
+	case 'n': case 'N':
+		if (!enemy_templates.empty())
+		{
+			int tIdx = g_spawnTemplateIdx % (int)enemy_templates.size();
+			enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
+			enemy_ship* ne = enemy_ships.back().get();
+			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
+			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
+			ne->health = ne->max_health = 50.f;
+			ne->path_animation_length = 10.f;
+			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width, SIM_HEIGHT * 0.5f));
+			ne->path_points.push_back(glm::vec2(-(float)ne->width, SIM_HEIGHT * 0.5f));
+			ne->path_speeds.push_back(1.f);
+			ne->path_speeds.push_back(1.f);
+			ne->path_t = -1.f;
+			ne->manually_update_data(
+				enemy_templates[tIdx].to_present_up_data,
+				enemy_templates[tIdx].to_present_down_data,
+				enemy_templates[tIdx].to_present_rest_data);
+			g_selectedEnemy = (int)enemy_ships.size() - 1;
+			g_spawnTemplateIdx++;
+			std::cout << "[Editor] Spawned enemy " << g_selectedEnemy << "\n";
+		}
+		return true;
+
+	case 127:  // Delete
+		if (e)
+		{
+			enemy_ships.erase(enemy_ships.begin() + g_selectedEnemy);
+			g_selectedEnemy = std::max(0, g_selectedEnemy - 1);
+			g_selectedPoint = -1;
+			std::cout << "[Editor] Deleted enemy\n";
+		}
+		return true;
+
+	case 'c': case 'C':
+		if (e)
+		{
+			cannon c;
+			c.x = std::max(0.0, std::min((double)(mouseX - e->x), (double)(e->width - 1)));
+			c.y = std::max(0.0, std::min((double)(mouseY - e->y), (double)(e->height - 1)));
+			c.cannon_type = CANNON_TYPE_LEFT;
+			c.min_bullet_interval = 2.0;
+			e->cannons.push_back(c);
+			std::cout << "[Editor] Added cannon at local (" << c.x << ", " << c.y << ")\n";
+		}
+		return true;
+
+	case 'v': case 'V':
+		if (e && !e->cannons.empty())
+		{
+			e->cannons.pop_back();
+			std::cout << "[Editor] Removed last cannon\n";
+		}
+		return true;
+
+	case 't': case 'T':
+		if (e && !e->cannons.empty())
+		{
+			cannon& lc = e->cannons.back();
+			lc.cannon_type = (lc.cannon_type + 1) % 3;
+			const char* names[] = { "LEFT", "UP_DOWN", "TRACKING" };
+			std::cout << "[Editor] Cannon type -> " << names[lc.cannon_type] << "\n";
+		}
+		return true;
+
+	case ',':
+		if (e && !e->cannons.empty())
+		{
+			e->cannons.back().min_bullet_interval =
+				std::max(0.1, e->cannons.back().min_bullet_interval - 0.1);
+			std::cout << "[Editor] Fire interval: " << e->cannons.back().min_bullet_interval << "s\n";
+		}
+		return true;
+
+	case '.':
+		if (e && !e->cannons.empty())
+		{
+			e->cannons.back().min_bullet_interval += 0.1;
+			std::cout << "[Editor] Fire interval: " << e->cannons.back().min_bullet_interval << "s\n";
+		}
+		return true;
+
+	case 'p': case 'P':
+		editorPrintState();
+		return true;
+
+	case 's': case 'S':
+		editorSaveToDatabase("level1_edited.db");
+		return true;
+
+	default:
+		break;
+	}
+
+	return false;
+}
+
+// ---- Mouse button handler (returns true if editor consumed the event) -------
+
+bool editorHandleMouse(int button, int state, int mx, int my)
+{
+	if (!g_editorMode) return false;
+
+	enemy_ship* e = editorSelected();
+	if (!e) return false;
+
+	bool shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+
+	if (button == GLUT_LEFT_BUTTON)
+	{
+		if (state == GLUT_DOWN)
+		{
+			if (shift)
+			{
+				// Shift+LMB -> add speed knot
+				e->path_speeds.push_back(1.f);
+				std::cout << "[Editor] Added speed knot (val=1.0)\n";
+			}
+			else
+			{
+				int idx = editorFindNearestPoint(*e, (float)mx, (float)my, 20.f);
+				if (idx >= 0)
+				{
+					g_selectedPoint = idx;
+					g_draggingPoint = true;
+				}
+				else
+				{
+					// Insert new control point in the nearest segment
+					glm::vec2 np((float)mx, (float)my);
+					int insertAfter = 0;
+					float bestDist = 1e30f;
+					for (size_t i = 0; i + 1 < e->path_points.size(); ++i)
+					{
+						glm::vec2 mid = (e->path_points[i] + e->path_points[i + 1]) * 0.5f;
+						float dx = mid.x - np.x, dy = mid.y - np.y;
+						float d = dx * dx + dy * dy;
+						if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
+					}
+					e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
+					g_selectedPoint = insertAfter + 1;
+					g_draggingPoint = true;
+					std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
+				}
+			}
+		}
+		else  // GLUT_UP
+		{
+			g_draggingPoint = false;
+		}
+		return true;
+	}
+
+	if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
+	{
+		if (shift)
+		{
+			if (!e->path_speeds.empty())
+			{
+				e->path_speeds.pop_back();
+				std::cout << "[Editor] Removed last speed knot\n";
+			}
+		}
+		else
+		{
+			int idx = editorFindNearestPoint(*e, (float)mx, (float)my, 20.f);
+			if (idx >= 0 && e->path_points.size() > 2)
+			{
+				e->path_points.erase(e->path_points.begin() + idx);
+				if (g_selectedPoint >= (int)e->path_points.size())
+					g_selectedPoint = (int)e->path_points.size() - 1;
+				std::cout << "[Editor] Deleted path point " << idx << "\n";
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+// ---- Motion handler (returns true if editor consumed the event) -------------
+
+bool editorHandleMotion(int mx, int my)
+{
+	if (!g_editorMode || !g_draggingPoint) return false;
+
+	enemy_ship* e = editorSelected();
+	if (!e) return false;
+
+	if (g_selectedPoint >= 0 && g_selectedPoint < (int)e->path_points.size())
+	{
+		e->path_points[g_selectedPoint].x = (float)mx;
+		e->path_points[g_selectedPoint].y = (float)my;
+	}
+
+	return true;
+}
+
+// =============================================================================
+//  END EDITOR MODE
+// =============================================================================
+
+
 void display()
 {
 	// Fixed time step
@@ -5714,8 +6404,11 @@ void display()
 
 	if (DT > d)
 	{
-		simulate();
-		GLOBAL_TIME += DT;
+		if (!g_editorMode)
+		{
+			simulate();
+			GLOBAL_TIME += DT;
+		}
 		lastTime = currentTime;
 	}
 
@@ -6007,7 +6700,7 @@ void display()
 
 	for (auto it = enemy_ships.begin(); it != enemy_ships.end();)
 	{
-		if ((*it)->to_be_culled)
+		if (!g_editorMode && (*it)->to_be_culled)
 		{
 			cout << "culling enemy enemy_ship" << endl;
 			it = enemy_ships.erase(it);
@@ -6016,6 +6709,8 @@ void display()
 			it++;
 	}
 
+
+	renderEditorOverlay();
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -6033,6 +6728,8 @@ void reshape(int w, int h) {
 
 void keyboard(unsigned char key, int x, int y)
 {
+	if (editorHandleKey(key, x, y)) return;
+
 	switch (key)
 	{
 	case ' ': // Space bar
@@ -6158,6 +6855,8 @@ void specialKeysUp(int key, int x, int y) {
 }
 
 void mouse(int button, int state, int x, int y) {
+	if (editorHandleMouse(button, state, x, y)) return;
+
 	mouseX = x;
 	mouseY = y;
 
@@ -6175,6 +6874,8 @@ void mouse(int button, int state, int x, int y) {
 }
 
 void motion(int x, int y) {
+	if (editorHandleMotion(x, y)) return;
+
 	mouseX = x;
 	mouseY = y;
 }
