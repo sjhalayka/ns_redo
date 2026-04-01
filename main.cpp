@@ -843,6 +843,14 @@ public:
 		if (src_to_present_rest_data.size() > 0)
 			to_present_rest_data = src_to_present_rest_data;
 
+		// Create a unique OpenGL texture for this instance so that
+		// multiple sprites cloned from the same template do not
+		// overwrite each other when update_tex() is called.
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 		rebuild_pointers();
 		update_tex();
 	}
@@ -4142,7 +4150,7 @@ void detectEdgeCollisions()
 				glm::vec2 hit;
 
 				if (isPixelInsideTriSpriteAndTransparent(
-					*enemy_ships[i],
+					*enemy_ships[h],
 					enemy_ships[h]->tex,
 					static_cast<int>(enemy_ships[h]->x),
 					static_cast<int>(enemy_ships[h]->y),
@@ -6306,10 +6314,10 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			enemy_ship* ne = enemy_ships.back().get();
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
-			ne->health = ne->max_health = 50.f;
+			ne->health = ne->max_health = 10000.f;
 			ne->path_animation_length = 10.f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
-			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0 , SIM_HEIGHT * 0.5f));
+			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_speeds.push_back(1.f);
 			ne->path_speeds.push_back(1.f);
 			ne->path_t = 0.0f;
