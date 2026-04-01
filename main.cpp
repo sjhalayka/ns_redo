@@ -270,10 +270,6 @@ void main() {
 
 
 
-
-
-
-
 float foreground_vel = -50.0f;
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
@@ -959,6 +955,7 @@ public:
 	vector<glm::vec2> path_points;
 	vector<float> path_speeds;
 	vector<cannon> cannons;
+	int path_pixel_delay = 0;
 
 	float path_t = -1.0f;
 
@@ -1158,6 +1155,9 @@ public:
 	}
 
 };
+
+
+
 
 
 
@@ -1961,6 +1961,13 @@ public:
 };
 
 
+int editorFindTemplateIdx(const enemy_ship* e)
+{
+	for (size_t t = 0; t < enemy_templates.size(); ++t)
+		if (enemy_templates[t].tex == e->tex)
+			return (int)t;
+	return 0;
+}
 
 TextRenderer* textRenderer = nullptr;
 
@@ -5182,53 +5189,52 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		// Activate path when enemy drifts onscreen (for level-loaded enemies with path_t == -1)
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
 			enemy_ships[i]->path_t = 0.0;
 
-		if (enemy_ships[i]->isOnscreen())
+		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->appearance_time == 0)
+			enemy_ships[i]->appearance_time = GLOBAL_TIME;
+
+		// Spline-driven movement: always follow path when path_t is active,
+		// even if the enemy is currently offscreen (e.g. starting from an offscreen knot)
+		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
 		{
-			if (enemy_ships[i]->appearance_time == 0)
-				enemy_ships[i]->appearance_time = GLOBAL_TIME;
+			float t = enemy_ships[i]->path_t;
 
-			// Use path_t for proper speed-modulated progression
-			if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-			{
-				float t = enemy_ships[i]->path_t;
+			// Get speed multiplier at current path position
+			float speed_mult = get_spline_point(enemy_ships[i]->path_speeds, t);
 
-				// Get speed multiplier at current path position
-				float speed_mult = get_spline_point(enemy_ships[i]->path_speeds, t);
+			// Advance path_t based on speed (base rate = 1/path_animation_length per second)
+			float base_rate = 1.0f / enemy_ships[i]->path_animation_length;
+			enemy_ships[i]->path_t += base_rate * speed_mult * DT;
 
-				// Advance path_t based on speed (base rate = 1/path_animation_length per second)
-				float base_rate = 1.0f / enemy_ships[i]->path_animation_length;
-				enemy_ships[i]->path_t += base_rate * speed_mult * DT;
-
-				// Set position directly from spline (more stable than velocity integration)
-				glm::vec2 pos = get_spline_point(enemy_ships[i]->path_points, t);
-				enemy_ships[i]->old_x = enemy_ships[i]->x;
-				enemy_ships[i]->old_y = enemy_ships[i]->y;
-				enemy_ships[i]->x = pos.x - enemy_ships[i]->width * 0.5f;
-				enemy_ships[i]->y = pos.y - enemy_ships[i]->height * 0.5f;
+			// Set position directly from spline (more stable than velocity integration)
+			glm::vec2 pos = get_spline_point(enemy_ships[i]->path_points, t);
+			enemy_ships[i]->old_x = enemy_ships[i]->x;
+			enemy_ships[i]->old_y = enemy_ships[i]->y;
+			enemy_ships[i]->x = pos.x - enemy_ships[i]->width * 0.5f;
+			enemy_ships[i]->y = pos.y - enemy_ships[i]->height * 0.5f;
 
 
-				enemy_ships[i]->vel_x = 0;
-				enemy_ships[i]->vel_y = 0;
+			enemy_ships[i]->vel_x = 0;
+			enemy_ships[i]->vel_y = 0;
 
 
-				// Calculate velocity for visual effects/physics (optional)
-				//glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
-				//float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
-				//float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
-				//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
-				//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
-			}
-			else
-			{
-				enemy_ships[i]->vel_x = foreground_vel;
-				enemy_ships[i]->vel_y = 0;
+			// Calculate velocity for visual effects/physics (optional)
+			//glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
+			//float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
+			//float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
+			//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
+			//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
+		}
+		else if (enemy_ships[i]->isOnscreen())
+		{
+			enemy_ships[i]->vel_x = foreground_vel;
+			enemy_ships[i]->vel_y = 0;
 
-				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-				enemy_ships[i]->integrate(DT);
-			}
+			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+			enemy_ships[i]->integrate(DT);
 		}
 		else
 		{
@@ -5717,17 +5723,6 @@ int  g_selectedPoint = -1;
 bool g_draggingPoint = false;
 int  g_spawnTemplateIdx = 0;
 
-
-// Return which template index the given enemy currently uses (match by tex handle)
-int editorFindTemplateIdx(enemy_ship* e)
-{
-	for (size_t t = 0; t < enemy_templates.size(); ++t)
-		if (enemy_templates[t].tex == e->tex)
-			return (int)t;
-	return 0;
-}
-
-
 static bool editorHasEnemy()
 {
 	return g_editorMode && !enemy_ships.empty();
@@ -5789,14 +5784,36 @@ static void editorDrawSpline(const enemy_ship& e, bool isSelected)
 	}
 	drawLinesWithWidth(segs, isSelected ? 3.f : 1.5f);
 
+	int lastIdx = (int)e.path_points.size() - 1;
 	for (size_t i = 0; i < e.path_points.size(); ++i)
 	{
+		bool isEndpoint = ((int)i == 0 || (int)i == lastIdx);
 		bool sel = isSelected && (int)i == g_selectedPoint;
 		float r = sel ? 12.f : 8.f;
-		editorDrawCircle(e.path_points[i].x, e.path_points[i].y, r,
-			sel ? 1.f : 0.8f,
-			sel ? 0.6f : 0.8f,
-			0.f, 1.f);
+
+		// Endpoints live off-screen; clamp X to the screen edge so they're clickable
+		float drawX = isEndpoint
+			? std::max(r, std::min(e.path_points[i].x, (float)windowWidth - r))
+			: e.path_points[i].x;
+		float drawY = e.path_points[i].y;
+
+		// Cyan for endpoints (X is locked), yellow/orange for interior points
+		float cr = isEndpoint ? 0.f : (sel ? 1.f : 0.8f);
+		float cg = isEndpoint ? (sel ? 1.f : 0.8f) : (sel ? 0.6f : 0.8f);
+		float cb = isEndpoint ? (sel ? 1.f : 0.8f) : 0.f;
+
+		editorDrawCircle(drawX, drawY, r, cr, cg, cb, 1.f);
+
+		// Draw a small horizontal arrow on endpoints to indicate X is locked
+		if (isEndpoint && isSelected)
+		{
+			std::vector<Line> arr;
+			float dir = ((int)i == 0) ? -1.f : 1.f;  // arrow points off-screen
+			arr.push_back(Line(glm::vec2(drawX, drawY),
+				glm::vec2(drawX + dir * 20.f, drawY),
+				glm::vec4(cr, cg, cb, 0.7f)));
+			drawLinesWithWidth(arr, 2.f);
+		}
 	}
 }
 
@@ -5869,7 +5886,7 @@ void renderEditorOverlay()
 
 			snprintf(buf, sizeof(buf),
 				"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  P=print  S=save");
-			textRenderer->renderText(buf, 10, 54, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 1));
+			textRenderer->renderText(buf, 10, 54, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 2));
 
 			if (!e->cannons.empty())
 			{
@@ -5894,9 +5911,15 @@ static int editorFindNearestPoint(const enemy_ship& e, float mx, float my,
 {
 	int best = -1;
 	float bestDist = threshold * threshold;
+	int lastIdx = (int)e.path_points.size() - 1;
 	for (size_t i = 0; i < e.path_points.size(); ++i)
 	{
-		float dx = e.path_points[i].x - mx;
+		bool isEndpoint = ((int)i == 0 || (int)i == lastIdx);
+		// Endpoints are drawn clamped to the screen edge — use the same position for picking
+		float testX = isEndpoint
+			? std::max(0.f, std::min(e.path_points[i].x, (float)windowWidth))
+			: e.path_points[i].x;
+		float dx = testX - mx;
 		float dy = e.path_points[i].y - my;
 		float d2 = dx * dx + dy * dy;
 		if (d2 < bestDist) { bestDist = d2; best = (int)i; }
@@ -6035,7 +6058,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 			snprintf(sql, sizeof(sql),
 				"INSERT INTO enemy(enemy_id,file_template_id,path_id,path_pixel_delay,max_health)"
 				" VALUES(%d,%d,%d,%d,%.1f);",
-				enemy_id, tpl_id, path_id, 0, e.max_health);
+				enemy_id, tpl_id, path_id, e.path_pixel_delay, e.max_health);
 			exec(sql);
 		}
 
@@ -6074,6 +6097,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 
 // ---- Keyboard handler (returns true if editor consumed the key) -------------
 
+// Return which template index the given enemy currently uses (match by tex handle)
 
 
 // Swap the sprite/GL data of an existing enemy to a different template,
@@ -6126,9 +6150,6 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	}
 }
 
-
-
-
 bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 {
 	if (key == '\t')
@@ -6172,7 +6193,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'n': case 'N':
 		if (!enemy_templates.empty())
 		{
-			int tIdx = g_spawnTemplateIdx % (int)enemy_templates.size();
+			int tIdx = 0;//g_spawnTemplateIdx % (int)enemy_templates.size();
 			enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
 			enemy_ship* ne = enemy_ships.back().get();
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
@@ -6183,7 +6204,13 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_points.push_back(glm::vec2(-(float)ne->width, SIM_HEIGHT * 0.5f));
 			ne->path_speeds.push_back(1.f);
 			ne->path_speeds.push_back(1.f);
-			ne->path_t = -1.f;
+			ne->path_t = 0.0f;
+			// Position at the first knot immediately
+			{
+				glm::vec2 start = get_spline_point(ne->path_points, 0.0f);
+				ne->x = start.x - ne->width * 0.5f;
+				ne->y = start.y - ne->height * 0.5f;
+			}
 			ne->manually_update_data(
 				enemy_templates[tIdx].to_present_up_data,
 				enemy_templates[tIdx].to_present_down_data,
@@ -6361,7 +6388,11 @@ bool editorHandleMotion(int mx, int my)
 
 	if (g_selectedPoint >= 0 && g_selectedPoint < (int)e->path_points.size())
 	{
-		e->path_points[g_selectedPoint].x = (float)mx;
+		bool isEndpoint = (g_selectedPoint == 0 ||
+			g_selectedPoint == (int)e->path_points.size() - 1);
+		// Endpoints: X is fixed (must enter/exit off-screen); only Y is editable
+		if (!isEndpoint)
+			e->path_points[g_selectedPoint].x = (float)mx;
 		e->path_points[g_selectedPoint].y = (float)my;
 	}
 
@@ -7323,6 +7354,8 @@ void retrieve_level_data(const string& db_name)
 			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
 
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
+
+			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
 
 			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 				enemy_templates[enemy_template_index].to_present_up_data,
