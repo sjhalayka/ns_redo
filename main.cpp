@@ -6207,9 +6207,9 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_t = 0.0f;
 			// Position at the first knot immediately
 			{
-				glm::vec2 start = get_spline_point(ne->path_points, 0.0f);
-				ne->x = start.x - ne->width * 0.5f;
-				ne->y = start.y - ne->height * 0.5f;
+				//glm::vec2 start = get_spline_point(ne->path_points, 0.0f);
+				//ne->x = start.x - ne->width * 0.5f;
+				//ne->y = start.y - ne->height * 0.5f;
 			}
 			ne->manually_update_data(
 				enemy_templates[tIdx].to_present_up_data,
