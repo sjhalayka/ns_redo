@@ -5088,6 +5088,36 @@ void simulate()
 
 		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
 		{
+
+			double x = enemy_ships[i]->cannons[j].x;
+			double y = enemy_ships[i]->cannons[j].y;
+
+			// Skip firing if the cannon location is transparent in the sprite
+			{
+				int px = static_cast<int>(x);
+				int py = static_cast<int>(y);
+
+				cout << px << " " << py << endl;
+
+				bool transparent = false;
+
+				if (px < 0 || px >= enemy_ships[i]->width ||
+					py < 0 || py >= enemy_ships[i]->height)
+				{
+					transparent = true;
+				}
+				else if (!enemy_ships[i]->to_present_rest_data.empty())
+				{
+					size_t index = (static_cast<size_t>(py) * enemy_ships[i]->width + px) * 4 + 3;
+					transparent = (enemy_ships[i]->to_present_rest_data[index] == 0);
+				}
+
+				if (transparent)
+					continue;
+			}
+
+
+
 			std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<float> timeSinceLastBullet = currentTime - enemy_ships[i]->cannons[j].lastBulletTime;
 
@@ -5099,10 +5129,10 @@ void simulate()
 
 
 			straight_bullet s;
-			s.tex = bullet_template.tex;                          // add
-			s.to_present_data = bullet_template.to_present_data;  // add
-			s.width = bullet_template.width;                      // add
-			s.height = bullet_template.height;                    // add
+			s.tex = bullet_template.tex;                          
+			s.to_present_data = bullet_template.to_present_data;  
+			s.width = bullet_template.width;                      
+			s.height = bullet_template.height;                   
 
 			s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
 			s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
