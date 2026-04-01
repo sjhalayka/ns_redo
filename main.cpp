@@ -5077,9 +5077,10 @@ void simulate()
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
 
 
-	// to do:
-	// for each enemy, for each cannon
-	// fire if cannon location is not transparent, and if onscreen, and if cannon's timing interval has passed
+
+
+
+
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
@@ -5096,8 +5097,6 @@ void simulate()
 			{
 				int px = static_cast<int>(x);
 				int py = static_cast<int>(y);
-
-				cout << px << " " << py << endl;
 
 				bool transparent = false;
 
