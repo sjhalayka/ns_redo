@@ -5387,9 +5387,10 @@ void simulate()
 
 
 
+
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		if (false == enemy_ships[i]->isOnscreen())
+		if (false == enemy_ships[i]->isOnscreen() || true == enemy_ships[i]->to_be_culled)
 			continue;
 
 		const float DAMAGE_INTERVAL = aberrationDuration;
@@ -5637,7 +5638,7 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen() && false == enemy_ships[i]->to_be_culled)
 		{
 			addObstacleStamp(enemy_ships[i]->tex,
 				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
@@ -5975,26 +5976,142 @@ static void editorSaveToDatabase(const std::string& db_name)
 		char* err = nullptr;
 		if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK)
 		{
-			std::cerr << "[Editor] SQL error: " << err << "\n";
+			std::cerr << "[Editor] SQL error (" << sql << "): " << err << "\n";
 			sqlite3_free(err);
 		}
 		};
 
 	exec("BEGIN TRANSACTION;");
 
-	exec("DELETE FROM enemy;");
-	exec("DELETE FROM enemy_cannon;");
-	exec("DELETE FROM path;");
-	exec("DELETE FROM path_location;");
-	exec("DELETE FROM two_d_location;");
-	exec("DELETE FROM path_speed;");
-	exec("DELETE FROM one_d_location;");
+	// Drop all tables so we always start from the canonical schema,
+	// regardless of what was on disk before.  Order respects FK deps.
+	exec("DROP TABLE IF EXISTS enemy_cannon;");
+	exec("DROP TABLE IF EXISTS cannon_type;");
+	exec("DROP TABLE IF EXISTS enemy;");
+	exec("DROP TABLE IF EXISTS path_location;");
+	exec("DROP TABLE IF EXISTS path_speed;");
+	exec("DROP TABLE IF EXISTS path;");
+	exec("DROP TABLE IF EXISTS two_d_location;");
+	exec("DROP TABLE IF EXISTS one_d_location;");
+
+	// Recreate with the exact schema from CREATE_TABLE_enemy.txt
+	exec(R"(CREATE TABLE one_d_location (
+		one_d_location_id INTEGER PRIMARY KEY NOT NULL,
+		x REAL NOT NULL,
+		UNIQUE (x)
+	);)");
+
+	exec(R"(CREATE TABLE two_d_location (
+		two_d_location_id INTEGER PRIMARY KEY NOT NULL,
+		x REAL NOT NULL,
+		y REAL NOT NULL,
+		UNIQUE (x, y)
+	);)");
+
+	exec(R"(CREATE TABLE path (
+		path_id INTEGER PRIMARY KEY NOT NULL,
+		path_animation_length REAL NOT NULL,
+		path_nickname TEXT
+	);)");
+
+	exec(R"(CREATE TABLE path_speed (
+		path_speed_id INTEGER PRIMARY KEY NOT NULL,
+		path_id INTEGER NOT NULL,
+		one_d_location_id INTEGER NOT NULL,
+		FOREIGN KEY (path_id) REFERENCES path(path_id),
+		FOREIGN KEY (one_d_location_id) REFERENCES one_d_location(one_d_location_id),
+		UNIQUE (path_speed_id, path_id, one_d_location_id)
+	);)");
+
+	exec(R"(CREATE TABLE path_location (
+		path_location_id INTEGER PRIMARY KEY NOT NULL,
+		path_id INTEGER NOT NULL,
+		two_d_location_id INTEGER NOT NULL,
+		FOREIGN KEY (path_id) REFERENCES path(path_id),
+		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id),
+		UNIQUE (path_location_id, path_id, two_d_location_id)
+	);)");
+
+	exec(R"(CREATE TABLE enemy (
+		enemy_id INTEGER PRIMARY KEY NOT NULL,
+		file_template_id INTEGER NOT NULL,
+		path_id INTEGER NOT NULL,
+		path_pixel_delay INTEGER NOT NULL,
+		max_health REAL NOT NULL,
+		enemy_nickname TEXT,
+		FOREIGN KEY (path_id) REFERENCES path(path_id)
+	);)");
+
+	exec(R"(CREATE TABLE cannon_type (
+		cannon_type_id INTEGER PRIMARY KEY NOT NULL,
+		cannon_type_nickname TEXT
+	);)");
+
+	// Populate cannon_type with the same 3 rows used at load time.
+	// cannon_type_id is 1-based; get_cannons() does cannon_type -= 1 on read.
+	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('left shot');");
+	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('up-down shot');");
+	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('tracking shot');");
+
+	exec(R"(CREATE TABLE enemy_cannon (
+		enemy_cannon_id INTEGER PRIMARY KEY NOT NULL,
+		cannon_type_id INTEGER NOT NULL,
+		enemy_id INTEGER NOT NULL,
+		two_d_location_id INTEGER NOT NULL,
+		min_bullet_interval REAL NOT NULL,
+		enemy_cannon_nickname TEXT,
+		FOREIGN KEY (cannon_type_id) REFERENCES cannon_type(cannon_type_id),
+		FOREIGN KEY (enemy_id) REFERENCES enemy(enemy_id),
+		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id)
+	);)");
 
 	int path_id = 0;
+	int path_location_id = 0;
+	int path_speed_id = 0;
 	int loc2d_id = 0;
 	int loc1d_id = 0;
 	int enemy_id = 0;
 	int cannon_id = 0;
+
+	// Returns the two_d_location_id for (x,y), inserting a new row only when
+	// that coordinate pair is not already present (satisfies UNIQUE(x,y)).
+	auto use2D = [&](float x, float y) -> int {
+		char q[256];
+		snprintf(q, sizeof(q),
+			"SELECT two_d_location_id FROM two_d_location WHERE x=%.6f AND y=%.6f;",
+			x, y);
+		int found = -1;
+		sqlite3_exec(db, q, [](void* d, int, char** v, char**) -> int {
+			*static_cast<int*>(d) = std::atoi(v[0]); return 0;
+			}, &found, nullptr);
+		if (found != -1) return found;
+		loc2d_id++;
+		char s[256];
+		snprintf(s, sizeof(s),
+			"INSERT INTO two_d_location(two_d_location_id,x,y) VALUES(%d,%.6f,%.6f);",
+			loc2d_id, x, y);
+		exec(s);
+		return loc2d_id;
+		};
+
+	// Returns the one_d_location_id for x, inserting only when absent (UNIQUE(x)).
+	auto use1D = [&](float x) -> int {
+		char q[256];
+		snprintf(q, sizeof(q),
+			"SELECT one_d_location_id FROM one_d_location WHERE x=%.6f;", x);
+		int found = -1;
+		sqlite3_exec(db, q, [](void* d, int, char** v, char**) -> int {
+			*static_cast<int*>(d) = std::atoi(v[0]); return 0;
+			}, &found, nullptr);
+		if (found != -1) return found;
+		loc1d_id++;
+		char s[256];
+		snprintf(s, sizeof(s),
+			"INSERT INTO one_d_location(one_d_location_id,x) VALUES(%d,%.6f);",
+			loc1d_id, x);
+		exec(s);
+		return loc1d_id;
+		};
 
 	for (size_t i = 0; i < enemy_ships.size(); ++i)
 	{
@@ -6013,34 +6130,30 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// path control-point locations
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
-			loc2d_id++;
-			char sql[512];
-			snprintf(sql, sizeof(sql),
-				"INSERT INTO two_d_location(two_d_location_id,x,y) VALUES(%d,%.6f,%.6f);",
-				loc2d_id,
-				e.path_points[j].x / SIM_WIDTH,
-				e.path_points[j].y / SIM_HEIGHT);
-			exec(sql);
+			float nx = e.path_points[j].x / SIM_WIDTH;
+			float ny = e.path_points[j].y / SIM_HEIGHT;
+			int tid = use2D(nx, ny);
 
+			path_location_id++;
+			char sql[256];
 			snprintf(sql, sizeof(sql),
-				"INSERT INTO path_location(path_id,two_d_location_id) VALUES(%d,%d);",
-				path_id, loc2d_id);
+				"INSERT INTO path_location(path_location_id,path_id,two_d_location_id)"
+				" VALUES(%d,%d,%d);",
+				path_location_id, path_id, tid);
 			exec(sql);
 		}
 
 		// speed knots
 		for (size_t j = 0; j < e.path_speeds.size(); ++j)
 		{
-			loc1d_id++;
+			int oid = use1D(e.path_speeds[j]);
+
+			path_speed_id++;
 			char sql[256];
 			snprintf(sql, sizeof(sql),
-				"INSERT INTO one_d_location(one_d_location_id,x) VALUES(%d,%.6f);",
-				loc1d_id, e.path_speeds[j]);
-			exec(sql);
-
-			snprintf(sql, sizeof(sql),
-				"INSERT INTO path_speed(path_id,one_d_location_id) VALUES(%d,%d);",
-				path_id, loc1d_id);
+				"INSERT INTO path_speed(path_speed_id,path_id,one_d_location_id)"
+				" VALUES(%d,%d,%d);",
+				path_speed_id, path_id, oid);
 			exec(sql);
 		}
 
@@ -6065,25 +6178,20 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// cannons
 		for (size_t j = 0; j < e.cannons.size(); ++j)
 		{
-			loc2d_id++;
 			const cannon& c = e.cannons[j];
-
-			char sql[512];
-			snprintf(sql, sizeof(sql),
-				"INSERT INTO two_d_location(two_d_location_id,x,y) VALUES(%d,%.6f,%.6f);",
-				loc2d_id,
-				(e.width > 1) ? c.x / (e.width - 1) : 0.0,
-				(e.height > 1) ? c.y / (e.height - 1) : 0.0);
-			exec(sql);
+			float cx = (e.width > 1) ? (float)(c.x / (e.width - 1)) : 0.0f;
+			float cy = (e.height > 1) ? (float)(c.y / (e.height - 1)) : 0.0f;
+			int tid = use2D(cx, cy);
 
 			cannon_id++;
+			char sql[256];
 			snprintf(sql, sizeof(sql),
 				"INSERT INTO enemy_cannon(enemy_cannon_id,enemy_id,cannon_type_id,"
 				"two_d_location_id,min_bullet_interval)"
 				" VALUES(%d,%d,%d,%d,%.4f);",
 				cannon_id, enemy_id,
 				c.cannon_type + 1,  // back to 1-based
-				loc2d_id,
+				tid,
 				c.min_bullet_interval);
 			exec(sql);
 		}
@@ -6200,11 +6308,17 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
 			ne->health = ne->max_health = 50.f;
 			ne->path_animation_length = 10.f;
-			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width, SIM_HEIGHT * 0.5f));
-			ne->path_points.push_back(glm::vec2(-(float)ne->width, SIM_HEIGHT * 0.5f));
+			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
+			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0 , SIM_HEIGHT * 0.5f));
 			ne->path_speeds.push_back(1.f);
 			ne->path_speeds.push_back(1.f);
 			ne->path_t = 0.0f;
+
+			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
+			ne->path_pixel_delay = (int)(ne->path_points[0].x - SIM_WIDTH + foreground_scrolled);
+
+			ne->to_be_culled = false;
+
 			// Position at the first knot immediately
 			{
 				//glm::vec2 start = get_spline_point(ne->path_points, 0.0f);
@@ -6284,7 +6398,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		return true;
 
 	case 's': case 'S':
-		editorSaveToDatabase("level1_edited.db");
+		editorSaveToDatabase("level1.db");
 		return true;
 
 	default:
@@ -6497,7 +6611,7 @@ void display()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen() && enemy_ships[i]->to_be_culled == false)
 		{
 			drawSprite(enemy_ships[i]->tex,
 				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
@@ -6531,7 +6645,7 @@ void display()
 	// Enemy health bars
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen())
+		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen() && enemy_ships[i]->to_be_culled == false)
 		{
 			drawHealthBar(
 				static_cast<int>(enemy_ships[i]->x),
@@ -6564,7 +6678,7 @@ void display()
 
 	for (size_t e = 0; e < enemy_ships.size(); e++)
 	{
-		if (false == enemy_ships[e]->isOnscreen())
+		if (false == enemy_ships[e]->isOnscreen() && enemy_ships[e]->to_be_culled == true)
 			continue;
 
 		glm::vec2 previous_pos = get_spline_point(enemy_ships[e]->path_points, 0.0f);
@@ -6600,22 +6714,22 @@ void display()
 
 
 
-	std::vector<Point> pv;
+	//std::vector<Point> pv;
 
-	if (enemy_ships.size() > 0)
-		for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
-		{
-			Point p(
-				enemy_ships[0]->path_points[i].x,
-				enemy_ships[0]->path_points[i].y,
-				glm::vec4(1, 0, 0, 1));
+	//if (enemy_ships.size() > 0)
+	//	for (size_t i = 0; i < enemy_ships[0]->path_points.size(); i++)
+	//	{
+	//		Point p(
+	//			enemy_ships[0]->path_points[i].x,
+	//			enemy_ships[0]->path_points[i].y,
+	//			glm::vec4(1, 0, 0, 1));
 
-			//cout << p.position.x << " " << p.position.y << endl;
+	//		//cout << p.position.x << " " << p.position.y << endl;
 
-			pv.push_back(p);
-		}
+	//		pv.push_back(p);
+	//	}
 
-	drawPointsWithSize(pv, 20.0f);
+	//drawPointsWithSize(pv, 20.0f);
 
 
 
@@ -6729,16 +6843,16 @@ void display()
 			it++;
 	}
 
-	for (auto it = enemy_ships.begin(); it != enemy_ships.end();)
-	{
-		if (!g_editorMode && (*it)->to_be_culled)
-		{
-			cout << "culling enemy enemy_ship" << endl;
-			it = enemy_ships.erase(it);
-		}
-		else
-			it++;
-	}
+	//for (auto it = enemy_ships.begin(); it != enemy_ships.end();)
+	//{
+	//	if (!g_editorMode && (*it)->to_be_culled)
+	//	{
+	//		cout << "culling enemy enemy_ship" << endl;
+	//		it = enemy_ships.erase(it);
+	//	}
+	//	else
+	//		it++;
+	//}
 
 
 	renderEditorOverlay();
