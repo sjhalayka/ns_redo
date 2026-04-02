@@ -5437,7 +5437,7 @@ void simulate()
 		{
 			for (size_t i = 0; i < enemy_ships.size(); i++)
 			{
-				if (false == enemy_ships[i]->isOnscreen())
+				if (false == enemy_ships[i]->isOnscreen() || enemy_ships[i]->to_be_culled)
 					continue;
 
 				found_collision = detectTriSpriteToSpriteOverlap(*enemy_ships[i], *(*it), 1);
@@ -6315,7 +6315,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
 			ne->health = ne->max_health = 10000.f;
-			ne->path_animation_length = 10.f;
+			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_speeds.push_back(1.f);
