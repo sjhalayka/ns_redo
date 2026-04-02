@@ -5705,6 +5705,8 @@ void simulate()
 //  ──────────────────────────────────────
 //  Tab               Toggle editor on/off
 //
+//  Left / Right      Scroll foreground (and enemies) back / forth
+//
 //  [ / ]             Select previous / next enemy ship
 //  N                 Spawn new enemy (cycles through loaded templates)
 //  Delete            Remove selected enemy
@@ -5726,6 +5728,7 @@ void simulate()
 // =============================================================================
 
 bool g_editorMode = false;
+float g_editorFgScrollSpeed = 600.0f; // pixels per second when arrow key held
 
 int  g_selectedEnemy = 0;
 int  g_selectedPoint = -1;
@@ -5894,7 +5897,7 @@ void renderEditorOverlay()
 			textRenderer->renderText(buf, 10, 34, 0.55f, glm::vec4(1, 0.9f, 0.4f, 1));
 
 			snprintf(buf, sizeof(buf),
-				"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  P=print  S=save");
+				"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  Left/Right=scroll FG  P=print  S=save");
 			textRenderer->renderText(buf, 10, 54, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 2));
 
 			if (!e->cannons.empty())
@@ -6562,6 +6565,60 @@ void display()
 			simulate();
 			GLOBAL_TIME += DT;
 		}
+		else
+		{
+			// Editor mode: left/right arrows scroll the foreground and enemies
+			float scrollDelta = 0.0f;
+			if (rightKeyPressed) scrollDelta += g_editorFgScrollSpeed * DT;
+			if (leftKeyPressed)  scrollDelta -= g_editorFgScrollSpeed * DT;
+
+			if (scrollDelta != 0.0f)
+			{
+				for (size_t i = 0; i < foreground_chunked.size(); i++)
+					foreground_chunked[i].x += scrollDelta;
+
+				for (size_t i = 0; i < enemy_ships.size(); i++)
+				{
+					enemy_ships[i]->x += scrollDelta;
+					for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
+						enemy_ships[i]->path_points[j].x += scrollDelta;
+				}
+			}
+
+			// Rebuild obstacle texture so foreground collisions stay in sync
+			GLuint clearColor[4] = { 0, 0, 0, 0 };
+			glClearTexImage(obstacleTex, 0, GL_RGBA, GL_UNSIGNED_BYTE, clearColor);
+
+			if (protagonist.to_be_culled == false)
+			{
+				addObstacleStamp(protagonist.tex,
+					static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
+					protagonist.width, protagonist.height, true,
+					1, true);
+			}
+
+			for (size_t i = 0; i < foreground_chunked.size(); i++)
+			{
+				if (foreground_chunked[i].tex != 0 && foreground_chunked[i].isOnscreen())
+				{
+					addObstacleStamp(foreground_chunked[i].tex,
+						static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
+						foreground_chunked[i].width, foreground_chunked[i].height, true,
+						0.5, true);
+				}
+			}
+
+			for (size_t i = 0; i < enemy_ships.size(); i++)
+			{
+				if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen() && false == enemy_ships[i]->to_be_culled)
+				{
+					addObstacleStamp(enemy_ships[i]->tex,
+						static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
+						enemy_ships[i]->width, enemy_ships[i]->height, true,
+						0.5, true);
+				}
+			}
+		}
 		lastTime = currentTime;
 	}
 
@@ -7059,6 +7116,8 @@ void specialKeyboard(int key, int x, int y)
 		break;
 	}
 
+	// In editor mode, left/right scroll the foreground (handled in display loop)
+	if (g_editorMode) return;
 
 	float local_vel_x = 0;
 	float local_vel_y = 0;
@@ -7108,6 +7167,8 @@ void specialKeyboardUp(int key, int x, int y)
 
 	}
 
+	// In editor mode, left/right scroll the foreground (handled in display loop)
+	if (g_editorMode) return;
 
 	float local_vel_x = 0;
 	float local_vel_y = 0;
