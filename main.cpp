@@ -5197,6 +5197,9 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
+			enemy_ships[i]->path_points[j].x += foreground_vel * DT;
+
 		// Activate path when enemy drifts onscreen (for level-loaded enemies with path_t == -1)
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
 			enemy_ships[i]->path_t = 0.0;
@@ -6141,7 +6144,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// path control-point locations
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
-			float nx = e.path_points[j].x / SIM_WIDTH;
+			float nx = (e.path_points[j].x - (float)e.path_pixel_delay) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 			int tid = use2D(nx, ny);
 
@@ -7539,6 +7542,12 @@ void retrieve_level_data(const string& db_name)
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
 
 			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
+
+			// Shift path points by the pixel delay so the spline starts
+			// where the enemy actually is.  The foreground drift during
+			// gameplay will cancel this out by the time the enemy activates.
+			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].x += desired_foreground_distance;
 
 			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 				enemy_templates[enemy_template_index].to_present_up_data,
