@@ -6343,7 +6343,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		}
 		return true;
 
-	case 127:  // Delete
+	case 'd': case 'D':
 		if (e)
 		{
 			enemy_ships.erase(enemy_ships.begin() + g_selectedEnemy);
