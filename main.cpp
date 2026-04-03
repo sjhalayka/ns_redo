@@ -1982,12 +1982,14 @@ TextRenderer* textRenderer = nullptr;
 
 
 
-static ostringstream editorPrintState()
+static ostringstream editorPrintState(int g_selectedEnemy)
 {
 	ostringstream oss;
 
 	oss << "\n========== EDITOR STATE ==========\n";
-	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	//for (size_t i = 0; i < enemy_ships.size(); ++i)
+	
+	int i = g_selectedEnemy;
 	{
 		const enemy_ship& e = *enemy_ships[i];
 		oss << "Enemy " << i << ":\n";
@@ -5951,21 +5953,24 @@ void renderEditorOverlay()
 		char buf[512];
 		snprintf(buf, sizeof(buf), "Enemies:%d  Sel:%d",
 			(int)enemy_ships.size(), g_selectedEnemy);
-		textRenderer->renderText(buf, 10, 10, 0.25f, glm::vec4(1, 1, 0, 1));
+		textRenderer->renderText(buf, 10, 10, 0.5f, glm::vec4(1, 1, 0, 1));
 
-		//ostringstream oss = editorPrintState();
+		if (e)
+		{
+			ostringstream oss = editorPrintState(g_selectedEnemy);
 
-		//std::vector<std::string> result;
-		//std::string line;
-		//std::istringstream stream(oss.str()); // oss is your ostringstream
+			std::vector<std::string> result;
+			std::string line;
+			std::istringstream stream(oss.str()); // oss is your ostringstream
 
-		//while (std::getline(stream, line)) {
-		//	result.push_back(line);
-		//}
+			while (std::getline(stream, line)) {
+				result.push_back(line);
+			}
 
-		//for(size_t i = 0; i < result.size(); i++)
-		//textRenderer->renderText(result[i].c_str(), 10, (i+1)*20, 0.25f, glm::vec4(1, 1, 0, 1));
+			for (size_t i = 0; i < result.size(); i++)
+				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50, 0.5f, glm::vec4(1, 1, 0, 1));
 
+		}
 
 		//if (e)
 		//{
@@ -6455,10 +6460,6 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			e->cannons.back().min_bullet_interval += 0.1;
 			std::cout << "[Editor] Fire interval: " << e->cannons.back().min_bullet_interval << "s\n";
 		}
-		return true;
-
-	case 'p': case 'P':
-		editorPrintState();
 		return true;
 
 	case 's': case 'S':
