@@ -964,6 +964,7 @@ public:
 	vector<float> path_speeds;
 	vector<cannon> cannons;
 	int path_pixel_delay = 0;
+	float path_scroll_rate = 0.0f; // computed at activation
 
 	float path_t = -1.0f;
 
@@ -5197,12 +5198,31 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
-			enemy_ships[i]->path_points[j].x += foreground_vel * DT;
-
 		// Activate path when enemy drifts onscreen (for level-loaded enemies with path_t == -1)
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
+		{
 			enemy_ships[i]->path_t = 0.0;
+			// Compute scroll rate so the rightmost knot reaches SIM_WIDTH
+			// exactly when the enemy reaches the last knot (t == 1).
+			// At activation the first knot is at approximately SIM_WIDTH + half_w,
+			// so it needs to drift left by half_w over path_animation_length seconds.
+			float half_w = enemy_ships[i]->width * 0.5f;
+			enemy_ships[i]->path_scroll_rate =
+				-half_w / enemy_ships[i]->path_animation_length;
+		}
+
+		// Choose scroll rate depending on phase:
+		//   pre-activation  -> foreground_vel (keep path aligned with drifting enemy)
+		//   active spline   -> path_scroll_rate (calibrated so first knot hits screen edge at t=1)
+		//   post-animation  -> foreground_vel (resume world drift)
+		float scroll_rate;
+		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
+			scroll_rate = enemy_ships[i]->path_scroll_rate;
+		else
+			scroll_rate = foreground_vel;
+
+		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
+			enemy_ships[i]->path_points[j].x += scroll_rate * DT;
 
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->appearance_time == 0)
 			enemy_ships[i]->appearance_time = GLOBAL_TIME;
@@ -5250,7 +5270,12 @@ void simulate()
 		else
 		{
 			if (enemy_ships[i]->x < 0)
+			{
+				if (enemy_ships[i]->to_be_culled == false)
+					cout << enemy_ships[i]->x << endl;
+
 				enemy_ships[i]->to_be_culled = true;
+			}
 			else
 			{
 				enemy_ships[i]->vel_x = foreground_vel;
@@ -5259,6 +5284,8 @@ void simulate()
 				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
 				enemy_ships[i]->integrate(DT);
 			}
+
+
 		}
 
 
@@ -5274,7 +5301,7 @@ void simulate()
 
 	// Calculate how much the foreground moved this frame
 	// This is needed to properly resolve collisions with moving geometry
-	float foreground_dx = foreground_vel * DT;
+	const float foreground_dx = foreground_vel * DT;
 
 	// Then, check for collision with protagonist separately
 	bool resolved = false;
@@ -6263,6 +6290,10 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	e->health = saved_health;
 	e->max_health = saved_max_health;
 
+	// Recalculate scroll rate because width may have changed
+	if (e->path_t >= 0.0f && e->path_animation_length > 0.0f)
+		e->path_scroll_rate = -(e->width * 0.5f) / e->path_animation_length;
+
 	// Restore cannons, clamping local coords to the new sprite bounds
 	e->cannons = saved_cannons;
 	for (auto& c : e->cannons)
@@ -6327,22 +6358,18 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_speeds.push_back(1.f);
 			ne->path_speeds.push_back(1.f);
 			ne->path_t = 0.0f;
+			ne->path_scroll_rate = -(ne->width * 0.5f) / ne->path_animation_length;
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
 			ne->path_pixel_delay = (int)(ne->path_points[0].x - SIM_WIDTH + foreground_scrolled);
 
 			ne->to_be_culled = false;
 
-			// Position at the first knot immediately
-			{
-				//glm::vec2 start = get_spline_point(ne->path_points, 0.0f);
-				//ne->x = start.x - ne->width * 0.5f;
-				//ne->y = start.y - ne->height * 0.5f;
-			}
 			ne->manually_update_data(
 				enemy_templates[tIdx].to_present_up_data,
 				enemy_templates[tIdx].to_present_down_data,
 				enemy_templates[tIdx].to_present_rest_data);
+
 			g_selectedEnemy = (int)enemy_ships.size() - 1;
 			g_spawnTemplateIdx++;
 			std::cout << "[Editor] Spawned enemy " << g_selectedEnemy << "\n";
