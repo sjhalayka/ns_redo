@@ -5258,14 +5258,14 @@ void simulate()
 			//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
 			//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 		}
-		else if (enemy_ships[i]->isOnscreen())
-		{
-			enemy_ships[i]->vel_x = foreground_vel;
-			enemy_ships[i]->vel_y = 0;
+		//else if (enemy_ships[i]->isOnscreen())
+		//{
+		//	enemy_ships[i]->vel_x = foreground_vel;
+		//	enemy_ships[i]->vel_y = 0;
 
-			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-			enemy_ships[i]->integrate(DT);
-		}
+		//	enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+		//	enemy_ships[i]->integrate(DT);
+		//}
 		else
 		{
 			if (enemy_ships[i]->x < 0)
