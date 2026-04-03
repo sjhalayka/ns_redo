@@ -1981,6 +1981,46 @@ int editorFindTemplateIdx(const enemy_ship* e)
 TextRenderer* textRenderer = nullptr;
 
 
+
+static ostringstream editorPrintState()
+{
+	ostringstream oss;
+
+	oss << "\n========== EDITOR STATE ==========\n";
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		const enemy_ship& e = *enemy_ships[i];
+		oss << "Enemy " << i << ":\n";
+		oss << "  Path points (" << e.path_points.size() << "):\n";
+		for (size_t j = 0; j < e.path_points.size(); ++j)
+			oss << "    [" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
+			<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
+
+		oss << "  Speed knots (" << e.path_speeds.size() << "):\n";
+		for (size_t j = 0; j < e.path_speeds.size(); ++j)
+			oss << "    [" << j << "] " << e.path_speeds[j] << "\n";
+
+		oss << "  Cannons (" << e.cannons.size() << "):\n";
+		for (size_t j = 0; j < e.cannons.size(); ++j)
+		{
+			const char* tname = "LEFT";
+			if (e.cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
+			if (e.cannons[j].cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+			oss << "    [" << j << "] type=" << tname
+				<< " x=" << e.cannons[j].x / std::max(1, e.width - 1) << " (norm)"
+				<< " y=" << e.cannons[j].y / std::max(1, e.height - 1) << " (norm)"
+				<< " interval=" << e.cannons[j].min_bullet_interval << "s\n";
+		}
+	}
+	oss << "==================================\n\n";
+
+	cout << oss.str() << endl;
+
+	return oss;
+}
+
+
+
 void displayFPS()
 {
 	static int frame_count = 0;
@@ -5258,14 +5298,14 @@ void simulate()
 			//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
 			//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 		}
-		//else if (enemy_ships[i]->isOnscreen())
-		//{
-		//	enemy_ships[i]->vel_x = foreground_vel;
-		//	enemy_ships[i]->vel_y = 0;
+		else if (enemy_ships[i]->isOnscreen())
+		{
+			enemy_ships[i]->vel_x = foreground_vel;
+			enemy_ships[i]->vel_y = 0;
 
-		//	enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-		//	enemy_ships[i]->integrate(DT);
-		//}
+			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
+			enemy_ships[i]->integrate(DT);
+		}
 		else
 		{
 			if (enemy_ships[i]->x < 0)
@@ -5909,39 +5949,53 @@ void renderEditorOverlay()
 		enemy_ship* e = editorSelected();
 
 		char buf[512];
-		snprintf(buf, sizeof(buf), "[EDITOR]  Tab=exit  Enemies:%d  Sel:%d",
+		snprintf(buf, sizeof(buf), "Enemies:%d  Sel:%d",
 			(int)enemy_ships.size(), g_selectedEnemy);
-		textRenderer->renderText(buf, 10, 10, 0.7f, glm::vec4(1, 1, 0, 1));
+		textRenderer->renderText(buf, 10, 10, 0.25f, glm::vec4(1, 1, 0, 1));
 
-		if (e)
-		{
-			int curTpl = editorFindTemplateIdx(e);
-			snprintf(buf, sizeof(buf),
-				"Path pts:%d  Cannons:%d  SpeedKnots:%d  Template:%d/%d  [N]ew [Del]ete [[]prev []]next [E]cycle template",
-				(int)e->path_points.size(),
-				(int)e->cannons.size(),
-				(int)e->path_speeds.size(),
-				curTpl + 1,
-				(int)enemy_templates.size());
-			textRenderer->renderText(buf, 10, 34, 0.55f, glm::vec4(1, 0.9f, 0.4f, 1));
+		//ostringstream oss = editorPrintState();
 
-			snprintf(buf, sizeof(buf),
-				"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  Left/Right=scroll FG  P=print  S=save");
-			textRenderer->renderText(buf, 10, 54, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 2));
+		//std::vector<std::string> result;
+		//std::string line;
+		//std::istringstream stream(oss.str()); // oss is your ostringstream
 
-			if (!e->cannons.empty())
-			{
-				const cannon& last = e->cannons.back();
-				const char* tname = "LEFT";
-				if (last.cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
-				if (last.cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+		//while (std::getline(stream, line)) {
+		//	result.push_back(line);
+		//}
 
-				snprintf(buf, sizeof(buf),
-					"Last cannon  type:%s  interval:%.2fs",
-					tname, last.min_bullet_interval);
-				textRenderer->renderText(buf, 10, 74, 0.50f, glm::vec4(0.6f, 1.f, 0.6f, 1));
-			}
-		}
+		//for(size_t i = 0; i < result.size(); i++)
+		//textRenderer->renderText(result[i].c_str(), 10, (i+1)*20, 0.25f, glm::vec4(1, 1, 0, 1));
+
+
+		//if (e)
+		//{
+		//	int curTpl = editorFindTemplateIdx(e);
+		//	snprintf(buf, sizeof(buf),
+		//		"Path pts:%d  Cannons:%d  SpeedKnots:%d  Template:%d/%d  [N]ew [Del]ete [[]prev []]next [E]cycle template",
+		//		(int)e->path_points.size(),
+		//		(int)e->cannons.size(),
+		//		(int)e->path_speeds.size(),
+		//		curTpl + 1,
+		//		(int)enemy_templates.size());
+		//	textRenderer->renderText(buf, 10, 50, 0.55f, glm::vec4(1, 0.9f, 0.4f, 1));
+
+		//	snprintf(buf, sizeof(buf),
+		//		"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  Left/Right=scroll FG  P=print  S=save");
+		//	textRenderer->renderText(buf, 10, 100, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 2));
+
+		//	if (!e->cannons.empty())
+		//	{
+		//		const cannon& last = e->cannons.back();
+		//		const char* tname = "LEFT";
+		//		if (last.cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
+		//		if (last.cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+
+		//		snprintf(buf, sizeof(buf),
+		//			"Last cannon  type:%s  interval:%.2fs",
+		//			tname, last.min_bullet_interval);
+		//		textRenderer->renderText(buf, 10, 150, 0.50f, glm::vec4(0.6f, 1.f, 0.6f, 1));
+		//	}
+		//}
 	}
 }
 
@@ -5970,36 +6024,6 @@ static int editorFindNearestPoint(const enemy_ship& e, float mx, float my,
 
 // ---- Print state to stdout --------------------------------------------------
 
-static void editorPrintState()
-{
-	std::cout << "\n========== EDITOR STATE ==========\n";
-	for (size_t i = 0; i < enemy_ships.size(); ++i)
-	{
-		const enemy_ship& e = *enemy_ships[i];
-		std::cout << "Enemy " << i << ":\n";
-		std::cout << "  Path points (" << e.path_points.size() << "):\n";
-		for (size_t j = 0; j < e.path_points.size(); ++j)
-			std::cout << "    [" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
-			<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
-
-		std::cout << "  Speed knots (" << e.path_speeds.size() << "):\n";
-		for (size_t j = 0; j < e.path_speeds.size(); ++j)
-			std::cout << "    [" << j << "] " << e.path_speeds[j] << "\n";
-
-		std::cout << "  Cannons (" << e.cannons.size() << "):\n";
-		for (size_t j = 0; j < e.cannons.size(); ++j)
-		{
-			const char* tname = "LEFT";
-			if (e.cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
-			if (e.cannons[j].cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
-			std::cout << "    [" << j << "] type=" << tname
-				<< " x=" << e.cannons[j].x / std::max(1, e.width - 1) << " (norm)"
-				<< " y=" << e.cannons[j].y / std::max(1, e.height - 1) << " (norm)"
-				<< " interval=" << e.cannons[j].min_bullet_interval << "s\n";
-		}
-	}
-	std::cout << "==================================\n\n";
-}
 
 // ---- Save to SQLite ---------------------------------------------------------
 
