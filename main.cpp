@@ -5202,18 +5202,17 @@ void simulate()
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
 		{
 			enemy_ships[i]->path_t = 0.0;
-			// Compute scroll rate so the rightmost knot reaches SIM_WIDTH
-			// exactly when the enemy reaches the last knot (t == 1).
-			// At activation the first knot is at approximately SIM_WIDTH + half_w,
-			// so it needs to drift left by half_w over path_animation_length seconds.
-			float half_w = enemy_ships[i]->width * 0.5f;
-			enemy_ships[i]->path_scroll_rate =
-				-half_w / enemy_ships[i]->path_animation_length;
+			// The path knots are already placed at their correct screen-space
+			// positions (knot 0 at SIM_WIDTH + half_w, last knot at -half_w).
+			// No scrolling during the spline phase: the rightmost knot stays at
+			// SIM_WIDTH + half_w while the enemy traverses to the leftmost knot
+			// at -half_w.
+			enemy_ships[i]->path_scroll_rate = 0.0f;
 		}
 
 		// Choose scroll rate depending on phase:
 		//   pre-activation  -> foreground_vel (keep path aligned with drifting enemy)
-		//   active spline   -> path_scroll_rate (calibrated so first knot hits screen edge at t=1)
+		//   active spline   -> 0 (path knots are fixed in screen space)
 		//   post-animation  -> foreground_vel (resume world drift)
 		float scroll_rate;
 		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
