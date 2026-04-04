@@ -1988,7 +1988,7 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 
 	oss << "\n========== EDITOR STATE ==========\n";
 	//for (size_t i = 0; i < enemy_ships.size(); ++i)
-	
+
 	int i = g_selectedEnemy;
 	{
 		const enemy_ship& e = *enemy_ships[i];
@@ -5896,6 +5896,22 @@ static void editorDrawSpline(const enemy_ship& e, bool isSelected)
 				glm::vec2(drawX + dir * 20.f, drawY),
 				glm::vec4(cr, cg, cb, 0.7f)));
 			drawLinesWithWidth(arr, 2.f);
+		}
+
+		// Draw a bounding box (width x height) centred on the first and last knots
+		if (isEndpoint && isSelected)
+		{
+			float hw = e.width * 0.5f;
+			float hh = e.height * 0.5f;
+			float bx0 = drawX - hw, by0 = drawY - hh;
+			float bx1 = drawX + hw, by1 = drawY + hh;
+			glm::vec4 boxCol(cr, cg, cb, 0.5f);
+			std::vector<Line> box;
+			box.push_back(Line(glm::vec2(bx0, by0), glm::vec2(bx1, by0), boxCol));
+			box.push_back(Line(glm::vec2(bx1, by0), glm::vec2(bx1, by1), boxCol));
+			box.push_back(Line(glm::vec2(bx1, by1), glm::vec2(bx0, by1), boxCol));
+			box.push_back(Line(glm::vec2(bx0, by1), glm::vec2(bx0, by0), boxCol));
+			drawLinesWithWidth(box, 2.f);
 		}
 	}
 }
