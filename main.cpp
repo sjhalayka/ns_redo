@@ -5827,6 +5827,10 @@ void simulate()
 //
 //  Shift+LMB         Add a speed knot (default value 1.0)
 //  Shift+RMB         Remove last speed knot
+//  LMB near diamond  Select that speed knot (shown in yellow)
+//  Scroll wheel      Adjust selected speed knot value (+/-0.1)
+//  - / =             Decrease / increase selected speed knot value (+/-0.1)
+//                      Colour: cyan=slow(<1), white=neutral(1), orange=fast(>1)
 //
 //  P                 Print current state to stdout
 //  S                 Save to level1_edited.db
@@ -5838,6 +5842,7 @@ float g_editorFgScrollSpeed = 600.0f; // pixels per second when arrow key held
 int  g_selectedEnemy = 0;
 int  g_selectedPoint = -1;
 bool g_draggingPoint = false;
+int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
 int  g_spawnTemplateIdx = 0;
 
 static bool editorHasEnemy()
@@ -5976,6 +5981,87 @@ static void editorDrawCannons(const enemy_ship& e)
 	}
 }
 
+// Returns the index of the speed knot whose spline-position is closest to (mx,my),
+// or -1 if none is within the given pixel threshold.
+static int editorFindNearestSpeedKnot(const enemy_ship& e, float mx, float my,
+	float threshold = 25.f)
+{
+	int n = (int)e.path_speeds.size();
+	if (n == 0 || e.path_points.size() < 2) return -1;
+
+	int best = -1;
+	float bestDist2 = threshold * threshold;
+	for (int i = 0; i < n; ++i)
+	{
+		float t = (n == 1) ? 0.5f : (float)i / (float)(n - 1);
+		glm::vec2 pos = get_spline_point(e.path_points, t);
+		float dx = pos.x - mx, dy = pos.y - my;
+		float d2 = dx * dx + dy * dy;
+		if (d2 < bestDist2) { bestDist2 = d2; best = i; }
+	}
+	return best;
+}
+
+// Draw diamond markers for each speed knot along the selected enemy's spline.
+// Color encodes value: cyan = slow (<1), white = neutral (=1), orange = fast (>1).
+// The selected knot is drawn larger and in bright yellow.
+static void editorDrawSpeedKnots(const enemy_ship& e, int selectedKnot)
+{
+	int n = (int)e.path_speeds.size();
+	if (n == 0 || e.path_points.size() < 2) return;
+
+	for (int i = 0; i < n; ++i)
+	{
+		float t = (n == 1) ? 0.5f : (float)i / (float)(n - 1);
+		glm::vec2 pos = get_spline_point(e.path_points, t);
+		float speed = e.path_speeds[i];
+		bool sel = (i == selectedKnot);
+
+		// Colour ramp: blue(0) -> white(1) -> orange(2+)
+		float cr, cg, cb;
+		if (speed <= 1.0f)
+		{
+			float s = std::max(0.f, speed);   // 0..1
+			cr = s; cg = s; cb = 1.f;         // dark-blue -> white
+		}
+		else
+		{
+			float s = std::min(speed - 1.0f, 1.0f);  // 0..1 for speed 1..2
+			cr = 1.f; cg = 1.f - s * 0.7f; cb = 0.f; // white -> orange
+		}
+
+		float half = sel ? 14.f : 10.f;
+		glm::vec4 col = sel ? glm::vec4(1.f, 1.f, 0.f, 1.f)
+			: glm::vec4(cr, cg, cb, 1.f);
+
+		// Diamond outline
+		glm::vec2 top(pos.x, pos.y - half);
+		glm::vec2 right(pos.x + half, pos.y);
+		glm::vec2 bot(pos.x, pos.y + half);
+		glm::vec2 left(pos.x - half, pos.y);
+
+		std::vector<Line> diamond;
+		diamond.push_back(Line(top, right, col));
+		diamond.push_back(Line(right, bot, col));
+		diamond.push_back(Line(bot, left, col));
+		diamond.push_back(Line(left, top, col));
+		drawLinesWithWidth(diamond, sel ? 3.f : 2.f);
+
+		// Extra inner diamond for selected knot
+		if (sel)
+		{
+			float ih = half * 0.45f;
+			glm::vec4 innerCol(1.f, 1.f, 0.f, 0.45f);
+			std::vector<Line> inner;
+			inner.push_back(Line(glm::vec2(pos.x, pos.y - ih), glm::vec2(pos.x + ih, pos.y), innerCol));
+			inner.push_back(Line(glm::vec2(pos.x + ih, pos.y), glm::vec2(pos.x, pos.y + ih), innerCol));
+			inner.push_back(Line(glm::vec2(pos.x, pos.y + ih), glm::vec2(pos.x - ih, pos.y), innerCol));
+			inner.push_back(Line(glm::vec2(pos.x - ih, pos.y), glm::vec2(pos.x, pos.y - ih), innerCol));
+			drawLinesWithWidth(inner, 1.5f);
+		}
+	}
+}
+
 static void editorDrawSelectionBox(const enemy_ship& e)
 {
 	float x0 = e.x, y0 = e.y;
@@ -6003,6 +6089,7 @@ void renderEditorOverlay()
 		{
 			editorDrawSelectionBox(*enemy_ships[i]);
 			editorDrawCannons(*enemy_ships[i]);
+			editorDrawSpeedKnots(*enemy_ships[i], g_selectedSpeedKnot);
 		}
 	}
 
@@ -6021,7 +6108,7 @@ void renderEditorOverlay()
 
 			std::vector<std::string> result;
 			std::string line;
-			std::istringstream stream(oss.str()); // oss is your ostringstream
+			std::istringstream stream(oss.str());
 
 			while (std::getline(stream, line)) {
 				result.push_back(line);
@@ -6030,37 +6117,51 @@ void renderEditorOverlay()
 			for (size_t i = 0; i < result.size(); i++)
 				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50, 0.5f, glm::vec4(1, 1, 0, 1));
 
+			// ---- Speed-knot value labels (drawn next to each diamond marker) ----
+			int sn = (int)e->path_speeds.size();
+			if (sn > 0 && e->path_points.size() >= 2)
+			{
+				for (int si = 0; si < sn; ++si)
+				{
+					float t = (sn == 1) ? 0.5f : (float)si / (float)(sn - 1);
+					glm::vec2 pos = get_spline_point(e->path_points, t);
+					bool sel = (si == g_selectedSpeedKnot);
+
+					char lbl[64];
+					snprintf(lbl, sizeof(lbl), "%.2f", e->path_speeds[si]);
+
+					glm::vec4 lblCol = sel
+						? glm::vec4(1.f, 1.f, 0.f, 1.f)
+						: glm::vec4(0.6f, 0.9f, 1.f, 0.85f);
+
+					textRenderer->renderText(lbl, pos.x + 16.f, pos.y - 10.f,
+						sel ? 0.45f : 0.38f, lblCol);
+				}
+			}
+
+			// ---- Selected speed-knot status line --------------------------------
+			if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < sn)
+			{
+				snprintf(buf, sizeof(buf),
+					"Speed knot [%d/%d] = %.2f   Scroll or -/= to adjust",
+					g_selectedSpeedKnot, sn - 1,
+					e->path_speeds[g_selectedSpeedKnot]);
+				textRenderer->renderText(buf, 10, (float)windowHeight - 60,
+					0.5f, glm::vec4(1.f, 1.f, 0.f, 1.f));
+			}
+			else
+			{
+				// Generic speed-knot hint when none is selected
+				if (sn > 0)
+				{
+					snprintf(buf, sizeof(buf),
+						"Speed knots: %d  |  LMB diamond to select  |  Shift+LMB add  |  Shift+RMB remove",
+						sn);
+					textRenderer->renderText(buf, 10, (float)windowHeight - 60,
+						0.45f, glm::vec4(0.6f, 0.9f, 1.f, 0.8f));
+				}
+			}
 		}
-
-		//if (e)
-		//{
-		//	int curTpl = editorFindTemplateIdx(e);
-		//	snprintf(buf, sizeof(buf),
-		//		"Path pts:%d  Cannons:%d  SpeedKnots:%d  Template:%d/%d  [N]ew [Del]ete [[]prev []]next [E]cycle template",
-		//		(int)e->path_points.size(),
-		//		(int)e->cannons.size(),
-		//		(int)e->path_speeds.size(),
-		//		curTpl + 1,
-		//		(int)enemy_templates.size());
-		//	textRenderer->renderText(buf, 10, 50, 0.55f, glm::vec4(1, 0.9f, 0.4f, 1));
-
-		//	snprintf(buf, sizeof(buf),
-		//		"LMB=select/move pt  RMB=del pt  C=add cannon  V=del cannon  T=cycle type  ,/.=fire interval  Left/Right=scroll FG  P=print  S=save");
-		//	textRenderer->renderText(buf, 10, 100, 0.45f, glm::vec4(0.8f, 0.8f, 0.8f, 2));
-
-		//	if (!e->cannons.empty())
-		//	{
-		//		const cannon& last = e->cannons.back();
-		//		const char* tname = "LEFT";
-		//		if (last.cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
-		//		if (last.cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
-
-		//		snprintf(buf, sizeof(buf),
-		//			"Last cannon  type:%s  interval:%.2fs",
-		//			tname, last.min_bullet_interval);
-		//		textRenderer->renderText(buf, 10, 150, 0.50f, glm::vec4(0.6f, 1.f, 0.6f, 1));
-		//	}
-		//}
 	}
 }
 
@@ -6429,12 +6530,14 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		if (!enemy_ships.empty())
 			g_selectedEnemy = (g_selectedEnemy - 1 + (int)enemy_ships.size()) % (int)enemy_ships.size();
 		g_selectedPoint = -1;
+		g_selectedSpeedKnot = -1;
 		return true;
 
 	case ']':
 		if (!enemy_ships.empty())
 			g_selectedEnemy = (g_selectedEnemy + 1) % (int)enemy_ships.size();
 		g_selectedPoint = -1;
+		g_selectedSpeedKnot = -1;
 		return true;
 
 	case 'n': case 'N':
@@ -6454,7 +6557,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 
 			float actual_duration = calculate_actual_path_duration(
 				ne->path_points, ne->path_speeds, ne->path_animation_length);
-			
+
 			ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
@@ -6535,6 +6638,27 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		editorSaveToDatabase("level1.db");
 		return true;
 
+	case '-': case '_':
+		// Decrease selected speed knot value by 0.1 (min 0.1)
+		if (e && g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
+		{
+			e->path_speeds[g_selectedSpeedKnot] =
+				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] - 0.1f);
+			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
+				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
+		}
+		return true;
+
+	case '=': case '+':
+		// Increase selected speed knot value by 0.1
+		if (e && g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
+		{
+			e->path_speeds[g_selectedSpeedKnot] += 0.1f;
+			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
+				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
+		}
+		return true;
+
 	default:
 		break;
 	}
@@ -6569,25 +6693,40 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 				if (idx >= 0)
 				{
 					g_selectedPoint = idx;
+					g_selectedSpeedKnot = -1;
 					g_draggingPoint = true;
 				}
 				else
 				{
-					// Insert new control point in the nearest segment
-					glm::vec2 np((float)mx, (float)my);
-					int insertAfter = 0;
-					float bestDist = 1e30f;
-					for (size_t i = 0; i + 1 < e->path_points.size(); ++i)
+					// Check for speed knot selection before inserting a new path point
+					int sIdx = editorFindNearestSpeedKnot(*e, (float)mx, (float)my, 25.f);
+					if (sIdx >= 0)
 					{
-						glm::vec2 mid = (e->path_points[i] + e->path_points[i + 1]) * 0.5f;
-						float dx = mid.x - np.x, dy = mid.y - np.y;
-						float d = dx * dx + dy * dy;
-						if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
+						g_selectedSpeedKnot = sIdx;
+						g_selectedPoint = -1;
+						std::cout << "[Editor] Selected speed knot " << sIdx
+							<< " (val=" << e->path_speeds[sIdx] << ")  "
+							<< "Use scroll wheel or -/= to adjust\n";
 					}
-					e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
-					g_selectedPoint = insertAfter + 1;
-					g_draggingPoint = true;
-					std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
+					else
+					{
+						g_selectedSpeedKnot = -1;
+						// Insert new control point in the nearest segment
+						glm::vec2 np((float)mx, (float)my);
+						int insertAfter = 0;
+						float bestDist = 1e30f;
+						for (size_t i = 0; i + 1 < e->path_points.size(); ++i)
+						{
+							glm::vec2 mid = (e->path_points[i] + e->path_points[i + 1]) * 0.5f;
+							float dx = mid.x - np.x, dy = mid.y - np.y;
+							float d = dx * dx + dy * dy;
+							if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
+						}
+						e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
+						g_selectedPoint = insertAfter + 1;
+						g_draggingPoint = true;
+						std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
+					}
 				}
 			}
 		}
@@ -6596,6 +6735,20 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			g_draggingPoint = false;
 		}
 		return true;
+	}
+
+	// Scroll wheel: adjust selected speed knot value
+	if ((button == 3 || button == 4) && state == GLUT_DOWN)
+	{
+		if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
+		{
+			float delta = (button == 3) ? 0.1f : -0.1f;
+			e->path_speeds[g_selectedSpeedKnot] =
+				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] + delta);
+			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
+				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
+			return true;
+		}
 	}
 
 	if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
