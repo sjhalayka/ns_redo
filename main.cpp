@@ -6451,12 +6451,11 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_speeds.push_back(0.1f);
 			ne->path_speeds.push_back(0.1f);
-			//ne->path_t = 0.0f;
-			//{
-				float actual_duration = calculate_actual_path_duration(
-					ne->path_points, ne->path_speeds, ne->path_animation_length);
-				ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
-			//}
+
+			float actual_duration = calculate_actual_path_duration(
+				ne->path_points, ne->path_speeds, ne->path_animation_length);
+			
+			ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
 			ne->path_pixel_delay = (int)(ne->path_points[0].x - SIM_WIDTH + foreground_scrolled);
