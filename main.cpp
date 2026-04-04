@@ -6456,6 +6456,9 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	float cx = e->x + e->width * 0.5f;
 	float cy = e->y + e->height * 0.5f;
 
+	// Capture the old half-width before we overwrite it; used to fix endpoints below.
+	float old_half_w = e->width * 0.5f;
+
 	// Preserve everything that isn't visual
 	auto  saved_path_points = e->path_points;
 	auto  saved_path_speeds = e->path_speeds;
@@ -6475,7 +6478,7 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 		tmpl.to_present_down_data,
 		tmpl.to_present_rest_data);
 
-	// Re-centre
+	// Re-centre the sprite on screen
 	e->x = cx - e->width * 0.5f;
 	e->y = cy - e->height * 0.5f;
 
@@ -6487,10 +6490,32 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	e->health = saved_health;
 	e->max_health = saved_max_health;
 
-	// Recalculate scroll rate because width may have changed.
-	// Use the actual traversal duration (which accounts for path_speeds != 1)
-	// so the path drifts at the correct rate for the real traversal time.
-	if (e->path_t >= 0.0f && e->path_animation_length > 0.0f)
+	// Fix the endpoint X positions to reflect the new half-width.
+	//
+	// When loaded / spawned the endpoints are set to:
+	//   path_points[0].x    = SIM_WIDTH + half_w  (+ pixel_delay offset)
+	//   path_points[last].x = -half_w             (+ pixel_delay offset)
+	//
+	// If the template size changed we must slide them by the delta so the
+	// enemy still enters and exits fully off-screen.
+	if (e->path_points.size() >= 2)
+	{
+		float new_half_w = e->width * 0.5f;
+		float delta = new_half_w - old_half_w;
+
+		// First endpoint moves further right when the sprite is wider.
+		e->path_points.front().x += delta;
+
+		// Last endpoint moves further left when the sprite is wider.
+		e->path_points.back().x -= delta;
+
+		// Keep path_pixel_delay consistent: it equals
+		// path_points[0].x - (SIM_WIDTH + new_half_w), clamped to >= 0.
+		e->path_pixel_delay = std::max(0, (int)(e->path_points.front().x - (SIM_WIDTH + new_half_w)));
+	}
+
+	// Always recalculate path_scroll_rate (works for both active and pre-activation enemies).
+	if (e->path_animation_length > 0.0f)
 	{
 		float actual_duration = calculate_actual_path_duration(
 			e->path_points, e->path_speeds, e->path_animation_length);
