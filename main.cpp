@@ -7476,6 +7476,44 @@ void passiveMotion(int x, int y) {
 
 void specialKeyboard(int key, int x, int y)
 {
+	bool shiftHeld = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+
+	// In editor mode, Shift+Arrow nudges the selected enemy AND its path points.
+	// We handle this here as a discrete step and return early so the foreground
+	// scroll logic (which runs continuously in the display loop) is not triggered.
+	if (g_editorMode && shiftHeld)
+	{
+		enemy_ship* e = editorSelected();
+		if (e)
+		{
+			const float NUDGE = 5.0f; // pixels per key-press; increase for coarser steps
+			float dx = 0.0f, dy = 0.0f;
+			switch (key)
+			{
+			case GLUT_KEY_UP:    dy = -NUDGE; break;
+			case GLUT_KEY_DOWN:  dy = NUDGE; break;
+			case GLUT_KEY_LEFT:  dx = -NUDGE; break;
+			case GLUT_KEY_RIGHT: dx = NUDGE; break;
+			}
+			if (dx != 0.0f || dy != 0.0f)
+			{
+				// Move the sprite position
+				e->x += dx;
+				e->y += dy;
+				// Move every path control point so the spline travels with the enemy
+				for (auto& pt : e->path_points)
+				{
+					pt.x += dx;
+					pt.y += dy;
+				}
+				std::cout << "[Editor] Nudged enemy " << g_selectedEnemy
+					<< " by (" << dx << ", " << dy << ")  "
+					<< "pos=(" << e->x << ", " << e->y << ")\n";
+			}
+		}
+		return; // do NOT set key flags — foreground scrolls only on plain Arrow
+	}
+
 	switch (key) {
 	case GLUT_KEY_UP:
 		upKeyPressed = true;
