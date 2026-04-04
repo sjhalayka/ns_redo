@@ -503,6 +503,40 @@ glm::vec2 get_spline_tangent(const vector<glm::vec2>& points, float t)
 
 
 
+// Pre-calculates the actual time (in seconds) for an enemy to traverse the
+// entire spline path, accounting for the variable speed profile in path_speeds.
+//
+// With a uniform speed of 1.0 everywhere the result equals path_animation_length.
+// Speeds < 1 lengthen the traversal proportionally; speeds > 1 shorten it.
+//
+// The integral  T = path_animation_length * integral_0^1 (1/speed(t)) dt
+// is evaluated numerically with the midpoint rule.
+//
+// path_points is included in the signature so that an arc-length-weighted
+// variant can be added here in the future without changing all call sites.
+float calculate_actual_path_duration(
+	const std::vector<glm::vec2>& /*path_points*/,
+	const std::vector<float>& path_speeds,
+	float path_animation_length)
+{
+	if (path_speeds.empty() || path_animation_length <= 0.0f)
+		return path_animation_length;
+
+	const int N = 512;
+	float inv_speed_sum = 0.0f;
+	for (int i = 0; i < N; ++i)
+	{
+		float t = (i + 0.5f) / static_cast<float>(N);
+		float speed = get_spline_point(path_speeds, t);
+		if (speed > 0.0f)
+			inv_speed_sum += 1.0f / speed;
+	}
+	// Average of 1/speed over [0,1] scaled by path_animation_length gives
+	// the true traversal duration regardless of the speed profile.
+	return path_animation_length * (inv_speed_sum / static_cast<float>(N));
+}
+
+
 float get_curve_point(vector<float> points, float t)
 {
 	if (points.size() == 0)
@@ -6344,9 +6378,15 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	e->health = saved_health;
 	e->max_health = saved_max_health;
 
-	// Recalculate scroll rate because width may have changed
+	// Recalculate scroll rate because width may have changed.
+	// Use the actual traversal duration (which accounts for path_speeds != 1)
+	// so the path drifts at the correct rate for the real traversal time.
 	if (e->path_t >= 0.0f && e->path_animation_length > 0.0f)
-		e->path_scroll_rate = -(e->width * 0.5f) / e->path_animation_length;
+	{
+		float actual_duration = calculate_actual_path_duration(
+			e->path_points, e->path_speeds, e->path_animation_length);
+		e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
+	}
 
 	// Restore cannons, clamping local coords to the new sprite bounds
 	e->cannons = saved_cannons;
@@ -6409,10 +6449,14 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
-			ne->path_speeds.push_back(1.f);
-			ne->path_speeds.push_back(1.f);
-			ne->path_t = 0.0f;
-			ne->path_scroll_rate = -(ne->width * 0.5f) / ne->path_animation_length;
+			ne->path_speeds.push_back(0.1f);
+			ne->path_speeds.push_back(0.1f);
+			//ne->path_t = 0.0f;
+			//{
+				float actual_duration = calculate_actual_path_duration(
+					ne->path_points, ne->path_speeds, ne->path_animation_length);
+				ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
+			//}
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
 			ne->path_pixel_delay = (int)(ne->path_points[0].x - SIM_WIDTH + foreground_scrolled);
