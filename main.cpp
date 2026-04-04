@@ -6449,8 +6449,8 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
-			ne->path_speeds.push_back(0.1f);
-			ne->path_speeds.push_back(0.1f);
+			ne->path_speeds.push_back(1.0f);
+			ne->path_speeds.push_back(1.0f);
 
 			float actual_duration = calculate_actual_path_duration(
 				ne->path_points, ne->path_speeds, ne->path_animation_length);
