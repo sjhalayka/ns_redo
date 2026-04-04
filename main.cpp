@@ -2016,7 +2016,7 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 	}
 	oss << "==================================\n\n";
 
-	cout << oss.str() << endl;
+	//cout << oss.str() << endl;
 
 	return oss;
 }
