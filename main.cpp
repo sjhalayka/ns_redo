@@ -5897,15 +5897,25 @@ static void editorDrawSpline(const enemy_ship& e, bool isSelected)
 				glm::vec4(cr, cg, cb, 0.7f)));
 			drawLinesWithWidth(arr, 2.f);
 		}
+	}
 
-		// Draw a bounding box (width x height) centred on the first and last knots
-		if (isEndpoint && isSelected)
+	// Draw width x height boxes centred on the first and last knots
+	if (e.path_points.size() >= 2)
+	{
+		glm::vec4 boxCol = isSelected
+			? glm::vec4(0.f, 1.f, 1.f, 0.8f)
+			: glm::vec4(0.f, 0.6f, 0.6f, 0.5f);
+
+		int endpoints[2] = { 0, (int)e.path_points.size() - 1 };
+		for (int ei = 0; ei < 2; ++ei)
 		{
+			float cx = e.path_points[endpoints[ei]].x;
+			float cy = e.path_points[endpoints[ei]].y;
 			float hw = e.width * 0.5f;
 			float hh = e.height * 0.5f;
-			float bx0 = drawX - hw, by0 = drawY - hh;
-			float bx1 = drawX + hw, by1 = drawY + hh;
-			glm::vec4 boxCol(cr, cg, cb, 0.5f);
+			float bx0 = cx - hw, by0 = cy - hh;
+			float bx1 = cx + hw, by1 = cy + hh;
+
 			std::vector<Line> box;
 			box.push_back(Line(glm::vec2(bx0, by0), glm::vec2(bx1, by0), boxCol));
 			box.push_back(Line(glm::vec2(bx1, by0), glm::vec2(bx1, by1), boxCol));
