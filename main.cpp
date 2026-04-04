@@ -5833,6 +5833,9 @@ void simulate()
 //
 //  P                 Print current state to stdout
 //  S                 Save to level1_edited.db
+//
+//  Ctrl+C            Copy selected enemy's path points and path speeds
+//  Ctrl+V            Paste copied path points and path speeds onto selected enemy
 // =============================================================================
 
 bool g_editorMode = false;
@@ -5843,6 +5846,11 @@ int  g_selectedPoint = -1;
 bool g_draggingPoint = false;
 int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
 int  g_spawnTemplateIdx = 0;
+
+// Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
+std::vector<glm::vec2> g_clipboard_path_points;
+std::vector<float>     g_clipboard_path_speeds;
+bool                   g_clipboard_has_data = false;
 
 static bool editorHasEnemy()
 {
@@ -6656,6 +6664,45 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			e->path_speeds[g_selectedSpeedKnot] += 0.1f;
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
 				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
+		}
+		return true;
+
+	case 3: // Ctrl+C — copy selected enemy's path points and path speeds
+		if (e)
+		{
+			g_clipboard_path_points = e->path_points;
+			g_clipboard_path_speeds = e->path_speeds;
+			g_clipboard_has_data = true;
+			std::cout << "[Editor] Copied path data from enemy " << g_selectedEnemy
+				<< "  (" << g_clipboard_path_points.size() << " points, "
+				<< g_clipboard_path_speeds.size() << " speed knots)\n";
+		}
+		return true;
+
+	case 22: // Ctrl+V — paste path points and path speeds onto selected enemy
+		if (e && g_clipboard_has_data)
+		{
+			e->path_points = g_clipboard_path_points;
+			e->path_speeds = g_clipboard_path_speeds;
+			g_selectedPoint = -1;
+			g_selectedSpeedKnot = -1;
+			g_draggingPoint = false;
+
+			// Recalculate the scroll rate so the pasted path animates correctly
+			if (e->path_animation_length > 0.0f)
+			{
+				float actual_duration = calculate_actual_path_duration(
+					e->path_points, e->path_speeds, e->path_animation_length);
+				e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
+			}
+
+			std::cout << "[Editor] Pasted path data onto enemy " << g_selectedEnemy
+				<< "  (" << e->path_points.size() << " points, "
+				<< e->path_speeds.size() << " speed knots)\n";
+		}
+		else if (!g_clipboard_has_data)
+		{
+			std::cout << "[Editor] Clipboard is empty — use Ctrl+C on an enemy first\n";
 		}
 		return true;
 
