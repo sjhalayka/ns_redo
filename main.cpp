@@ -992,6 +992,8 @@ public:
 	//	max_health = 50.0f;
 	//}
 
+	int template_idx = 0; // tracks which enemy_template this ship is currently using
+
 	float appearance_time = 0;
 	float path_animation_length = 0; // seconds
 	vector<glm::vec2> path_points;
@@ -2006,10 +2008,7 @@ public:
 
 int editorFindTemplateIdx(const enemy_ship* e)
 {
-	for (size_t t = 0; t < enemy_templates.size(); ++t)
-		if (enemy_templates[t].tex == e->tex)
-			return (int)t;
-	return 0;
+	return e->template_idx;
 }
 
 TextRenderer* textRenderer = nullptr;
@@ -6459,6 +6458,7 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	float saved_max_health = e->max_health;
 
 	// Apply new visual from template
+	e->template_idx = tIdx;
 	e->tex = tmpl.tex;
 	e->width = tmpl.width;
 	e->height = tmpl.height;
