@@ -6690,43 +6690,70 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			else
 			{
 				int idx = editorFindNearestPoint(*e, (float)mx, (float)my, 20.f);
-				if (idx >= 0)
+				int sIdx = editorFindNearestSpeedKnot(*e, (float)mx, (float)my, 25.f);
+
+				// If both a path-point knot and a speed knot are under the cursor,
+				// toggle to the other type when the clicked one is already selected.
+				if (idx >= 0 && sIdx >= 0)
+				{
+					if (idx == g_selectedPoint)
+					{
+						// Path point already selected -> switch to speed knot
+						g_selectedSpeedKnot = sIdx;
+						g_selectedPoint = -1;
+						g_draggingPoint = false;
+						std::cout << "[Editor] Toggled to speed knot " << sIdx
+							<< " (val=" << e->path_speeds[sIdx] << ")  "
+							<< "Use scroll wheel or -/= to adjust\n";
+					}
+					else if (sIdx == g_selectedSpeedKnot)
+					{
+						// Speed knot already selected -> switch to path point
+						g_selectedPoint = idx;
+						g_selectedSpeedKnot = -1;
+						g_draggingPoint = true;
+						std::cout << "[Editor] Toggled to path point " << idx << "\n";
+					}
+					else
+					{
+						// Neither is selected yet: prefer the path-point knot
+						g_selectedPoint = idx;
+						g_selectedSpeedKnot = -1;
+						g_draggingPoint = true;
+					}
+				}
+				else if (idx >= 0)
 				{
 					g_selectedPoint = idx;
 					g_selectedSpeedKnot = -1;
 					g_draggingPoint = true;
 				}
+				else if (sIdx >= 0)
+				{
+					g_selectedSpeedKnot = sIdx;
+					g_selectedPoint = -1;
+					std::cout << "[Editor] Selected speed knot " << sIdx
+						<< " (val=" << e->path_speeds[sIdx] << ")  "
+						<< "Use scroll wheel or -/= to adjust\n";
+				}
 				else
 				{
-					// Check for speed knot selection before inserting a new path point
-					int sIdx = editorFindNearestSpeedKnot(*e, (float)mx, (float)my, 25.f);
-					if (sIdx >= 0)
+					g_selectedSpeedKnot = -1;
+					// Insert new control point in the nearest segment
+					glm::vec2 np((float)mx, (float)my);
+					int insertAfter = 0;
+					float bestDist = 1e30f;
+					for (size_t i = 0; i + 1 < e->path_points.size(); ++i)
 					{
-						g_selectedSpeedKnot = sIdx;
-						g_selectedPoint = -1;
-						std::cout << "[Editor] Selected speed knot " << sIdx
-							<< " (val=" << e->path_speeds[sIdx] << ")  "
-							<< "Use scroll wheel or -/= to adjust\n";
+						glm::vec2 mid = (e->path_points[i] + e->path_points[i + 1]) * 0.5f;
+						float dx = mid.x - np.x, dy = mid.y - np.y;
+						float d = dx * dx + dy * dy;
+						if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
 					}
-					else
-					{
-						g_selectedSpeedKnot = -1;
-						// Insert new control point in the nearest segment
-						glm::vec2 np((float)mx, (float)my);
-						int insertAfter = 0;
-						float bestDist = 1e30f;
-						for (size_t i = 0; i + 1 < e->path_points.size(); ++i)
-						{
-							glm::vec2 mid = (e->path_points[i] + e->path_points[i + 1]) * 0.5f;
-							float dx = mid.x - np.x, dy = mid.y - np.y;
-							float d = dx * dx + dy * dy;
-							if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
-						}
-						e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
-						g_selectedPoint = insertAfter + 1;
-						g_draggingPoint = true;
-						std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
-					}
+					e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
+					g_selectedPoint = insertAfter + 1;
+					g_draggingPoint = true;
+					std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
 				}
 			}
 		}
@@ -8063,4 +8090,4 @@ int main(int argc, char** argv)
 	glutMainLoop();
 
 	return 0;
-}	
+}
