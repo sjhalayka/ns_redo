@@ -5820,9 +5820,10 @@ void simulate()
 //  RMB near knot     Delete that control point (minimum 2 kept)
 //
 //  C                 Add a cannon at current mouse position (sprite-local coords)
-//  V                 Remove the last cannon from selected enemy
-//  T                 Cycle cannon type: LEFT -> UP_DOWN -> TRACKING
-//  , / .             Decrease / increase fire interval of last cannon
+//  V                 Remove the selected cannon (or last if none selected)
+//  { / }             Select previous / next cannon on the selected enemy
+//  T                 Cycle cannon type of selected cannon: LEFT -> UP_DOWN -> TRACKING
+//  , / .             Decrease / increase fire interval of selected cannon
 //
 //  Shift+LMB         Add a speed knot (default value 1.0)
 //  Shift+RMB         Remove last speed knot
@@ -5845,6 +5846,7 @@ int  g_selectedEnemy = 0;
 int  g_selectedPoint = -1;
 bool g_draggingPoint = false;
 int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
+int  g_selectedCannon = -1;      // index into selected enemy's cannons, -1 = none
 int  g_spawnTemplateIdx = 0;
 
 // Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
@@ -5983,8 +5985,15 @@ static void editorDrawCannons(const enemy_ship& e)
 		if (e.cannons[ci].cannon_type == CANNON_TYPE_UP_DOWN) { cr = 0.3f; cg = 1.f; cb = 0.3f; }  // green
 		if (e.cannons[ci].cannon_type == CANNON_TYPE_TRACKING) { cr = 0.3f; cg = 0.3f; cb = 1.f; }  // blue
 
-		editorDrawCircle(wx, wy, 14.f, cr, cg, cb, 1.f);
-		editorDrawCross(wx, wy, 14.f, cr, cg, cb);
+		bool sel = ((int)ci == g_selectedCannon);
+		float radius = sel ? 20.f : 14.f;
+
+		editorDrawCircle(wx, wy, radius, cr, cg, cb, 1.f);
+		editorDrawCross(wx, wy, radius, cr, cg, cb);
+
+		// Draw a bright yellow selection ring around the active cannon
+		if (sel)
+			editorDrawCircle(wx, wy, radius + 7.f, 1.f, 1.f, 0.f, 0.9f);
 	}
 }
 
@@ -6166,6 +6175,32 @@ void renderEditorOverlay()
 						sn);
 					textRenderer->renderText(buf, 10, (float)windowHeight - 60,
 						0.45f, glm::vec4(0.6f, 0.9f, 1.f, 0.8f));
+				}
+			}
+
+			// ---- Selected cannon status line ------------------------------------
+			int cn = (int)e->cannons.size();
+			if (cn > 0)
+			{
+				if (g_selectedCannon >= 0 && g_selectedCannon < cn)
+				{
+					const cannon& sc = e->cannons[g_selectedCannon];
+					const char* typeNames[] = { "LEFT", "UP_DOWN", "TRACKING" };
+					snprintf(buf, sizeof(buf),
+						"Cannon [%d/%d]  type=%s  interval=%.2fs   T=cycle type  ,/.=interval  V=remove",
+						g_selectedCannon, cn - 1,
+						typeNames[sc.cannon_type],
+						sc.min_bullet_interval);
+					textRenderer->renderText(buf, 10, (float)windowHeight - 110,
+						0.45f, glm::vec4(1.f, 0.6f, 0.3f, 1.f));
+				}
+				else
+				{
+					snprintf(buf, sizeof(buf),
+						"Cannons: %d  |  { / } to select  |  C=add  V=remove  T=type  ,/.=interval",
+						cn);
+					textRenderer->renderText(buf, 10, (float)windowHeight - 110,
+						0.45f, glm::vec4(1.f, 0.6f, 0.3f, 0.8f));
 				}
 			}
 		}
@@ -6564,6 +6599,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			g_selectedEnemy = (g_selectedEnemy - 1 + (int)enemy_ships.size()) % (int)enemy_ships.size();
 		g_selectedPoint = -1;
 		g_selectedSpeedKnot = -1;
+		g_selectedCannon = -1;
 		return true;
 
 	case ']':
@@ -6571,6 +6607,32 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			g_selectedEnemy = (g_selectedEnemy + 1) % (int)enemy_ships.size();
 		g_selectedPoint = -1;
 		g_selectedSpeedKnot = -1;
+		g_selectedCannon = -1;
+		return true;
+
+	case '{':
+		if (e && !e->cannons.empty())
+		{
+			if (g_selectedCannon < 0)
+				g_selectedCannon = (int)e->cannons.size() - 1;
+			else
+				g_selectedCannon = (g_selectedCannon - 1 + (int)e->cannons.size()) % (int)e->cannons.size();
+			std::cout << "[Editor] Selected cannon " << g_selectedCannon
+				<< " / " << (int)e->cannons.size() - 1
+				<< "  type=" << e->cannons[g_selectedCannon].cannon_type
+				<< "  interval=" << e->cannons[g_selectedCannon].min_bullet_interval << "s\n";
+		}
+		return true;
+
+	case '}':
+		if (e && !e->cannons.empty())
+		{
+			g_selectedCannon = (std::max(0, g_selectedCannon) + 1) % (int)e->cannons.size();
+			std::cout << "[Editor] Selected cannon " << g_selectedCannon
+				<< " / " << (int)e->cannons.size() - 1
+				<< "  type=" << e->cannons[g_selectedCannon].cannon_type
+				<< "  interval=" << e->cannons[g_selectedCannon].min_bullet_interval << "s\n";
+		}
 		return true;
 
 	case 'n': case 'N':
@@ -6628,42 +6690,57 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			c.cannon_type = CANNON_TYPE_LEFT;
 			c.min_bullet_interval = 2.0;
 			e->cannons.push_back(c);
-			std::cout << "[Editor] Added cannon at local (" << c.x << ", " << c.y << ")\n";
+			g_selectedCannon = (int)e->cannons.size() - 1;
+			std::cout << "[Editor] Added cannon " << g_selectedCannon
+				<< " at local (" << c.x << ", " << c.y << ")\n";
 		}
 		return true;
 
 	case 'v': case 'V':
 		if (e && !e->cannons.empty())
 		{
-			e->cannons.pop_back();
-			std::cout << "[Editor] Removed last cannon\n";
+			int removeIdx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
+				? g_selectedCannon : (int)e->cannons.size() - 1;
+			e->cannons.erase(e->cannons.begin() + removeIdx);
+			// Clamp selection to the new size
+			if (e->cannons.empty())
+				g_selectedCannon = -1;
+			else
+				g_selectedCannon = std::min(removeIdx, (int)e->cannons.size() - 1);
+			std::cout << "[Editor] Removed cannon " << removeIdx << "\n";
 		}
 		return true;
 
 	case 't': case 'T':
 		if (e && !e->cannons.empty())
 		{
-			cannon& lc = e->cannons.back();
+			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
+				? g_selectedCannon : (int)e->cannons.size() - 1;
+			cannon& lc = e->cannons[idx];
 			lc.cannon_type = (lc.cannon_type + 1) % 3;
 			const char* names[] = { "LEFT", "UP_DOWN", "TRACKING" };
-			std::cout << "[Editor] Cannon type -> " << names[lc.cannon_type] << "\n";
+			std::cout << "[Editor] Cannon " << idx << " type -> " << names[lc.cannon_type] << "\n";
 		}
 		return true;
 
 	case ',':
 		if (e && !e->cannons.empty())
 		{
-			e->cannons.back().min_bullet_interval =
-				std::max(0.1, e->cannons.back().min_bullet_interval - 0.1);
-			std::cout << "[Editor] Fire interval: " << e->cannons.back().min_bullet_interval << "s\n";
+			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
+				? g_selectedCannon : (int)e->cannons.size() - 1;
+			e->cannons[idx].min_bullet_interval =
+				std::max(0.1, e->cannons[idx].min_bullet_interval - 0.1);
+			std::cout << "[Editor] Cannon " << idx << " fire interval: " << e->cannons[idx].min_bullet_interval << "s\n";
 		}
 		return true;
 
 	case '.':
 		if (e && !e->cannons.empty())
 		{
-			e->cannons.back().min_bullet_interval += 0.1;
-			std::cout << "[Editor] Fire interval: " << e->cannons.back().min_bullet_interval << "s\n";
+			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
+				? g_selectedCannon : (int)e->cannons.size() - 1;
+			e->cannons[idx].min_bullet_interval += 0.1;
+			std::cout << "[Editor] Cannon " << idx << " fire interval: " << e->cannons[idx].min_bullet_interval << "s\n";
 		}
 		return true;
 
@@ -6799,7 +6876,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 					g_selectedPoint = idx;
 					g_selectedSpeedKnot = -1;
 					g_draggingPoint = true;
-				}	
+				}
 				else if (sIdx >= 0)
 				{
 					g_selectedSpeedKnot = sIdx;
@@ -6844,10 +6921,10 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			float delta = (button == 3) ? 0.1f : -0.1f;
 			e->path_speeds[g_selectedSpeedKnot] =
 				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] + delta);
-			
+
 			if (e->path_speeds[g_selectedSpeedKnot] > 1.0f)
 				e->path_speeds[g_selectedSpeedKnot] = 1.0f;
-			
+
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
 				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
 			return true;
