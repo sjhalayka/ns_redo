@@ -6799,7 +6799,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 					g_selectedPoint = idx;
 					g_selectedSpeedKnot = -1;
 					g_draggingPoint = true;
-				}
+				}	
 				else if (sIdx >= 0)
 				{
 					g_selectedSpeedKnot = sIdx;
@@ -6844,6 +6844,10 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			float delta = (button == 3) ? 0.1f : -0.1f;
 			e->path_speeds[g_selectedSpeedKnot] =
 				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] + delta);
+			
+			if (e->path_speeds[g_selectedSpeedKnot] > 1.0f)
+				e->path_speeds[g_selectedSpeedKnot] = 1.0f;
+			
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
 				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
 			return true;
