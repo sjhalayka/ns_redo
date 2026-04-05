@@ -1,0 +1,21 @@
+TAB key to toggle editor mode
+
+[ / ]: Cycle selected enemy
+{ / }: Cycle selected cannon
+N: Spawn new enemy
+E: Cycle enemy type
+D: Remove selected enemy
+LMB near a knot: select and drag knot
+LMB on empty space: Insert new knot
+RMB near a knot: Remove knot
+C: Add cannon at mouse location
+V: Remove selected cannon
+T: Cycle cannon type
+, / .: Decrease cannon fire interval
+S: Save to database file
+Shift + arrow keys: Move selected enemy
+Left / Right arrow keys: Move environment
+CTRL + C: Copy path
+CTRL + V: Paste path
+CTRL + SHIFT + C: Copy enemy
+CTRL + SHIFT + V: Paste enemy
