@@ -5837,6 +5837,8 @@ void simulate()
 //
 //  Ctrl+C            Copy selected enemy's path points and path speeds
 //  Ctrl+V            Paste copied path points and path speeds onto selected enemy
+//  Ctrl+Shift+C      Copy entire selected enemy (type, path, cannons, health, etc.)
+//  Ctrl+Shift+V      Paste entire enemy onto selected (creates new enemy if none selected)
 // =============================================================================
 
 bool g_editorMode = false;
@@ -5853,6 +5855,20 @@ int  g_spawnTemplateIdx = 0;
 std::vector<glm::vec2> g_clipboard_path_points;
 std::vector<float>     g_clipboard_path_speeds;
 bool                   g_clipboard_has_data = false;
+
+// Clipboard for copy/paste of entire enemy (Ctrl+Shift+C / Ctrl+Shift+V)
+struct EnemyClipboard {
+	int                    template_idx = 0;
+	std::vector<glm::vec2> path_points;
+	std::vector<float>     path_speeds;
+	std::vector<cannon>    cannons;
+	float                  path_animation_length = 0;
+	float                  health = 0;
+	float                  max_health = 0;
+	int                    path_pixel_delay = 0;
+};
+EnemyClipboard g_enemy_clipboard;
+bool           g_enemy_clipboard_has_data = false;
 
 static bool editorHasEnemy()
 {
@@ -6641,6 +6657,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			int tIdx = 0;//g_spawnTemplateIdx % (int)enemy_templates.size();
 			enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
 			enemy_ship* ne = enemy_ships.back().get();
+			ne->template_idx = tIdx;
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
 			ne->health = ne->max_health = 10000.f;
@@ -6769,28 +6786,99 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		}
 		return true;
 
-	case 3: // Ctrl+C — copy selected enemy's path points and path speeds
+	case 3: // Ctrl+C / Ctrl+Shift+C
 		if (e)
 		{
-			g_clipboard_path_points = e->path_points;
-			g_clipboard_path_speeds = e->path_speeds;
-			g_clipboard_has_data = true;
-			std::cout << "[Editor] Copied path data from enemy " << g_selectedEnemy
-				<< "  (" << g_clipboard_path_points.size() << " points, "
-				<< g_clipboard_path_speeds.size() << " speed knots)\n";
+			bool shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+			if (shift)
+			{
+				// Ctrl+Shift+C — copy entire enemy
+				g_enemy_clipboard.template_idx = e->template_idx;
+				g_enemy_clipboard.path_points = e->path_points;
+				g_enemy_clipboard.path_speeds = e->path_speeds;
+				g_enemy_clipboard.cannons = e->cannons;
+				g_enemy_clipboard.path_animation_length = e->path_animation_length;
+				g_enemy_clipboard.health = e->health;
+				g_enemy_clipboard.max_health = e->max_health;
+				g_enemy_clipboard.path_pixel_delay = e->path_pixel_delay;
+				g_enemy_clipboard_has_data = true;
+				std::cout << "[Editor] Copied enemy " << g_selectedEnemy
+					<< " (template " << e->template_idx
+					<< ", " << e->path_points.size() << " points, "
+					<< e->cannons.size() << " cannons)\n";
+			}
+			else
+			{
+				// Ctrl+C — copy path data only
+				g_clipboard_path_points = e->path_points;
+				g_clipboard_path_speeds = e->path_speeds;
+				g_clipboard_has_data = true;
+				std::cout << "[Editor] Copied path data from enemy " << g_selectedEnemy
+					<< "  (" << g_clipboard_path_points.size() << " points, "
+					<< g_clipboard_path_speeds.size() << " speed knots)\n";
+			}
 		}
 		return true;
 
-	case 22: // Ctrl+V — paste path points and path speeds onto selected enemy
-		if (e && g_clipboard_has_data)
+	case 22: // Ctrl+V / Ctrl+Shift+V
+	{
+		bool shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+		if (shift)
 		{
-			e->path_points = g_clipboard_path_points;
-			e->path_speeds = g_clipboard_path_speeds;
+			// Ctrl+Shift+V — paste entire enemy
+			if (!g_enemy_clipboard_has_data)
+			{
+				std::cout << "[Editor] Enemy clipboard is empty — use Ctrl+Shift+C on an enemy first\n";
+				return true;
+			}
+			if (enemy_templates.empty())
+			{
+				std::cout << "[Editor] No enemy templates loaded\n";
+				return true;
+			}
+
+			// If no enemy is selected (list is empty), create one first
+			if (!e)
+			{
+				int tIdx = g_enemy_clipboard.template_idx;
+				if (tIdx < 0 || tIdx >= (int)enemy_templates.size())
+					tIdx = 0;
+
+				enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
+				enemy_ship* ne = enemy_ships.back().get();
+				ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
+				ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
+				ne->to_be_culled = false;
+				ne->manually_update_data(
+					enemy_templates[tIdx].to_present_up_data,
+					enemy_templates[tIdx].to_present_down_data,
+					enemy_templates[tIdx].to_present_rest_data);
+
+				g_selectedEnemy = (int)enemy_ships.size() - 1;
+				e = enemy_ships.back().get();
+				std::cout << "[Editor] Created new enemy " << g_selectedEnemy << " for paste\n";
+			}
+
+			// Apply the correct template from the clipboard
+			int tIdx = g_enemy_clipboard.template_idx;
+			if (tIdx >= 0 && tIdx < (int)enemy_templates.size())
+				editorApplyTemplate(e, tIdx);
+
+			// Paste all saved properties
+			e->path_points = g_enemy_clipboard.path_points;
+			e->path_speeds = g_enemy_clipboard.path_speeds;
+			e->cannons = g_enemy_clipboard.cannons;
+			e->path_animation_length = g_enemy_clipboard.path_animation_length;
+			e->health = g_enemy_clipboard.health;
+			e->max_health = g_enemy_clipboard.max_health;
+			e->path_pixel_delay = g_enemy_clipboard.path_pixel_delay;
+
 			g_selectedPoint = -1;
 			g_selectedSpeedKnot = -1;
+			g_selectedCannon = -1;
 			g_draggingPoint = false;
 
-			// Recalculate the scroll rate so the pasted path animates correctly
+			// Recalculate scroll rate
 			if (e->path_animation_length > 0.0f)
 			{
 				float actual_duration = calculate_actual_path_duration(
@@ -6798,15 +6886,41 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
 			}
 
-			std::cout << "[Editor] Pasted path data onto enemy " << g_selectedEnemy
-				<< "  (" << e->path_points.size() << " points, "
-				<< e->path_speeds.size() << " speed knots)\n";
+			std::cout << "[Editor] Pasted enemy onto slot " << g_selectedEnemy
+				<< " (template " << tIdx
+				<< ", " << e->path_points.size() << " points, "
+				<< e->cannons.size() << " cannons)\n";
 		}
-		else if (!g_clipboard_has_data)
+		else
 		{
-			std::cout << "[Editor] Clipboard is empty — use Ctrl+C on an enemy first\n";
+			// Ctrl+V — paste path data only
+			if (e && g_clipboard_has_data)
+			{
+				e->path_points = g_clipboard_path_points;
+				e->path_speeds = g_clipboard_path_speeds;
+				g_selectedPoint = -1;
+				g_selectedSpeedKnot = -1;
+				g_draggingPoint = false;
+
+				// Recalculate the scroll rate so the pasted path animates correctly
+				if (e->path_animation_length > 0.0f)
+				{
+					float actual_duration = calculate_actual_path_duration(
+						e->path_points, e->path_speeds, e->path_animation_length);
+					e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
+				}
+
+				std::cout << "[Editor] Pasted path data onto enemy " << g_selectedEnemy
+					<< "  (" << e->path_points.size() << " points, "
+					<< e->path_speeds.size() << " speed knots)\n";
+			}
+			else if (!g_clipboard_has_data)
+			{
+				std::cout << "[Editor] Clipboard is empty — use Ctrl+C on an enemy first\n";
+			}
 		}
 		return true;
+	}
 
 	default:
 		break;
@@ -7985,6 +8099,7 @@ void retrieve_level_data(const string& db_name)
 
 			size_t enemy_template_index = file_template_id;
 			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
+			enemy_ships.back()->template_idx = static_cast<int>(enemy_template_index);
 
 			// Note: enemy_id is 1-based (SQLite's default behaviour)
 			enemy_ships[enemy_ships.size() - 1]->cannons = get_cannons(static_cast<int>(enemy_ships.size()), db);
