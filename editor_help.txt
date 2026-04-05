@@ -1,6 +1,7 @@
 TAB key to toggle editor mode
 
 [ / ]: Cycle selected enemy
+CTRL + LMB: Select enemy underneath mouse position
 { / }: Cycle selected cannon
 N: Spawn new enemy
 E: Cycle enemy type

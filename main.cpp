@@ -6939,6 +6939,36 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 	if (!e) return false;
 
 	bool shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+	bool ctrl = (glutGetModifiers() & GLUT_ACTIVE_CTRL) != 0;
+
+	// Ctrl+LMB: select the enemy whose bounding box is under the cursor
+	if (ctrl && button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+	{
+		// Scale mouse coords from window space to sim space
+		float simMx = (float)mx * SIM_WIDTH / (float)windowWidth;
+		float simMy = (float)my * SIM_HEIGHT / (float)windowHeight;
+
+		// Search back-to-front so the visually topmost enemy wins
+		for (int i = (int)enemy_ships.size() - 1; i >= 0; --i)
+		{
+			const enemy_ship& es = *enemy_ships[i];
+			if (es.to_be_culled) continue;
+
+			if (simMx >= es.x && simMx <= es.x + es.width &&
+				simMy >= es.y && simMy <= es.y + es.height)
+			{
+				g_selectedEnemy = i;
+				g_selectedPoint = -1;
+				g_selectedSpeedKnot = -1;
+				g_draggingPoint = false;
+				std::cout << "[Editor] Ctrl+Click selected enemy " << i << "\n";
+				return true;
+			}
+		}
+		// Nothing hit — leave selection unchanged
+		std::cout << "[Editor] Ctrl+Click: no enemy under cursor\n";
+		return true;
+	}
 
 	if (button == GLUT_LEFT_BUTTON)
 	{
