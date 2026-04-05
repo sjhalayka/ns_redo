@@ -7049,7 +7049,14 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 	{
 		if (shift)
 		{
-			if (!e->path_speeds.empty())
+			if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
+			{
+				std::cout << "[Editor] Removed selected speed knot " << g_selectedSpeedKnot
+					<< " (val=" << e->path_speeds[g_selectedSpeedKnot] << ")\n";
+				e->path_speeds.erase(e->path_speeds.begin() + g_selectedSpeedKnot);
+				g_selectedSpeedKnot = -1;
+			}
+			else if (!e->path_speeds.empty())
 			{
 				e->path_speeds.pop_back();
 				std::cout << "[Editor] Removed last speed knot\n";
