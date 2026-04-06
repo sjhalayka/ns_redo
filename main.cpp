@@ -5839,6 +5839,9 @@ void simulate()
 //  Ctrl+V            Paste copied path points and path speeds onto selected enemy
 //  Ctrl+Shift+C      Copy entire selected enemy (type, path, cannons, health, etc.)
 //  Ctrl+Shift+V      Paste entire enemy onto selected (creates new enemy if none selected)
+//
+//  Ctrl+Z            Undo last editor action
+//  Ctrl+Y            Redo last undone action
 // =============================================================================
 
 bool g_editorMode = false;
@@ -5850,6 +5853,7 @@ bool g_draggingPoint = false;
 int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
 int  g_selectedCannon = -1;      // index into selected enemy's cannons, -1 = none
 int  g_spawnTemplateIdx = 0;
+bool g_dragUndoPushed = false;   // true once editorPushUndo has been called for the current drag
 
 // Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
 std::vector<glm::vec2> g_clipboard_path_points;
@@ -5869,6 +5873,182 @@ struct EnemyClipboard {
 };
 EnemyClipboard g_enemy_clipboard;
 bool           g_enemy_clipboard_has_data = false;
+
+// ---- Undo / Redo system ------------------------------------------------
+//
+// Snapshots capture the editable state of every enemy ship.  A snapshot is
+// pushed onto g_undoHistory *before* each mutation.  Redo history is cleared
+// whenever a new action is performed (standard truncation behaviour).
+// Ctrl+Z = undo, Ctrl+Y = redo.
+// ------------------------------------------------------------------------
+
+struct CannonSnapshot {
+	double min_bullet_interval;
+	int    cannon_type;
+	double x, y;
+};
+
+struct EnemySnapshot {
+	int   template_idx;
+	float x, y;
+	std::vector<glm::vec2>    path_points;
+	std::vector<float>        path_speeds;
+	std::vector<CannonSnapshot> cannons;
+	float path_animation_length;
+	float health, max_health;
+	int   path_pixel_delay;
+	float path_scroll_rate;
+};
+
+struct EditorUndoState {
+	std::vector<EnemySnapshot> enemies;
+};
+
+std::vector<EditorUndoState> g_undoHistory;
+std::vector<EditorUndoState> g_redoHistory;
+const int MAX_UNDO_STEPS = 200;
+
+static EditorUndoState editorCaptureState()
+{
+	EditorUndoState state;
+	state.enemies.reserve(enemy_ships.size());
+	for (size_t i = 0; i < enemy_ships.size(); ++i)
+	{
+		const enemy_ship& e = *enemy_ships[i];
+		EnemySnapshot snap;
+		snap.template_idx = e.template_idx;
+		snap.x = e.x;
+		snap.y = e.y;
+		snap.path_points = e.path_points;
+		snap.path_speeds = e.path_speeds;
+		snap.path_animation_length = e.path_animation_length;
+		snap.health = e.health;
+		snap.max_health = e.max_health;
+		snap.path_pixel_delay = e.path_pixel_delay;
+		snap.path_scroll_rate = e.path_scroll_rate;
+		snap.cannons.reserve(e.cannons.size());
+		for (const auto& c : e.cannons)
+		{
+			CannonSnapshot cs;
+			cs.min_bullet_interval = c.min_bullet_interval;
+			cs.cannon_type = c.cannon_type;
+			cs.x = c.x;
+			cs.y = c.y;
+			snap.cannons.push_back(cs);
+		}
+		state.enemies.push_back(std::move(snap));
+	}
+	return state;
+}
+
+static void editorRestoreState(const EditorUndoState& state)
+{
+	// Shrink: remove excess enemies
+	while (enemy_ships.size() > state.enemies.size())
+		enemy_ships.pop_back();
+
+	// Grow: create new enemies from their templates
+	while (enemy_ships.size() < state.enemies.size())
+	{
+		int tIdx = state.enemies[enemy_ships.size()].template_idx;
+		if (tIdx < 0 || tIdx >= (int)enemy_templates.size()) tIdx = 0;
+		enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
+		enemy_ship* ne = enemy_ships.back().get();
+		ne->to_be_culled = false;
+		ne->manually_update_data(
+			enemy_templates[tIdx].to_present_up_data,
+			enemy_templates[tIdx].to_present_down_data,
+			enemy_templates[tIdx].to_present_rest_data);
+	}
+
+	// Restore every enemy's editable fields
+	for (size_t i = 0; i < state.enemies.size(); ++i)
+	{
+		const EnemySnapshot& snap = state.enemies[i];
+		enemy_ship* e = enemy_ships[i].get();
+
+		// Re-apply template if it changed (updates texture, width, height)
+		if (e->template_idx != snap.template_idx)
+		{
+			int tIdx = snap.template_idx;
+			if (tIdx >= 0 && tIdx < (int)enemy_templates.size())
+			{
+				const enemy_ship& tmpl = enemy_templates[tIdx];
+				e->template_idx = tIdx;
+				e->width = tmpl.width;
+				e->height = tmpl.height;
+				e->manually_update_data(
+					tmpl.to_present_up_data,
+					tmpl.to_present_down_data,
+					tmpl.to_present_rest_data);
+			}
+		}
+
+		e->x = snap.x;
+		e->y = snap.y;
+		e->path_points = snap.path_points;
+		e->path_speeds = snap.path_speeds;
+		e->path_animation_length = snap.path_animation_length;
+		e->health = snap.health;
+		e->max_health = snap.max_health;
+		e->path_pixel_delay = snap.path_pixel_delay;
+		e->path_scroll_rate = snap.path_scroll_rate;
+
+		// Restore cannons
+		e->cannons.resize(snap.cannons.size());
+		for (size_t j = 0; j < snap.cannons.size(); ++j)
+		{
+			e->cannons[j].min_bullet_interval = snap.cannons[j].min_bullet_interval;
+			e->cannons[j].cannon_type = snap.cannons[j].cannon_type;
+			e->cannons[j].x = snap.cannons[j].x;
+			e->cannons[j].y = snap.cannons[j].y;
+		}
+	}
+
+	// Clamp selection indices so nothing is out-of-bounds
+	if (!enemy_ships.empty())
+		g_selectedEnemy = std::max(0, std::min(g_selectedEnemy, (int)enemy_ships.size() - 1));
+	else
+		g_selectedEnemy = 0;
+	g_selectedPoint = -1;
+	g_selectedSpeedKnot = -1;
+	g_selectedCannon = -1;
+	g_draggingPoint = false;
+}
+
+static void editorPushUndo()
+{
+	g_undoHistory.push_back(editorCaptureState());
+	if ((int)g_undoHistory.size() > MAX_UNDO_STEPS)
+		g_undoHistory.erase(g_undoHistory.begin());
+	g_redoHistory.clear();
+}
+
+static void editorUndo()
+{
+	if (g_undoHistory.empty()) return;
+	g_redoHistory.push_back(editorCaptureState());
+	EditorUndoState prev = std::move(g_undoHistory.back());
+	g_undoHistory.pop_back();
+	editorRestoreState(prev);
+	std::cout << "[Editor] Undo  (" << g_undoHistory.size() << " steps remaining)\n";
+}
+
+static void editorRedo()
+{
+	if (g_redoHistory.empty()) return;
+	g_undoHistory.push_back(editorCaptureState());
+	EditorUndoState next = std::move(g_redoHistory.back());
+	g_redoHistory.pop_back();
+	editorRestoreState(next);
+	std::cout << "[Editor] Redo  (" << g_redoHistory.size() << " steps remaining)\n";
+}
+
+static void editorResetUndoHistory()
+{
+	g_undoHistory.clear();
+	g_redoHistory.clear();
+}
 
 static bool editorHasEnemy()
 {
@@ -7176,6 +7356,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		g_editorMode = !g_editorMode;
 		g_selectedPoint = -1;
 		g_draggingPoint = false;
+		if (g_editorMode) editorResetUndoHistory();
 		std::cout << "[Editor] " << (g_editorMode ? "ON" : "OFF") << "\n";
 		return true;
 	}
@@ -7189,6 +7370,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'e': case 'E':
 		if (e && !enemy_templates.empty())
 		{
+			editorPushUndo();
 			int cur = editorFindTemplateIdx(e);
 			int next = (cur + 1) % (int)enemy_templates.size();
 			editorApplyTemplate(e, next);
@@ -7241,6 +7423,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'n': case 'N':
 		if (!enemy_templates.empty())
 		{
+			editorPushUndo();
 			int tIdx = 0;//g_spawnTemplateIdx % (int)enemy_templates.size();
 			enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
 			enemy_ship* ne = enemy_ships.back().get();
@@ -7278,6 +7461,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'd': case 'D':
 		if (e)
 		{
+			editorPushUndo();
 			enemy_ships.erase(enemy_ships.begin() + g_selectedEnemy);
 			g_selectedEnemy = std::max(0, g_selectedEnemy - 1);
 			g_selectedPoint = -1;
@@ -7288,6 +7472,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'c': case 'C':
 		if (e)
 		{
+			editorPushUndo();
 			cannon c;
 			c.x = std::max(0.0, std::min((double)(mouseX - e->x), (double)(e->width - 1)));
 			c.y = std::max(0.0, std::min((double)(mouseY - e->y), (double)(e->height - 1)));
@@ -7303,6 +7488,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 'v': case 'V':
 		if (e && !e->cannons.empty())
 		{
+			editorPushUndo();
 			int removeIdx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
 				? g_selectedCannon : (int)e->cannons.size() - 1;
 			e->cannons.erase(e->cannons.begin() + removeIdx);
@@ -7318,6 +7504,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 't': case 'T':
 		if (e && !e->cannons.empty())
 		{
+			editorPushUndo();
 			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
 				? g_selectedCannon : (int)e->cannons.size() - 1;
 			cannon& lc = e->cannons[idx];
@@ -7330,6 +7517,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case ',':
 		if (e && !e->cannons.empty())
 		{
+			editorPushUndo();
 			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
 				? g_selectedCannon : (int)e->cannons.size() - 1;
 			e->cannons[idx].min_bullet_interval =
@@ -7341,6 +7529,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case '.':
 		if (e && !e->cannons.empty())
 		{
+			editorPushUndo();
 			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
 				? g_selectedCannon : (int)e->cannons.size() - 1;
 			e->cannons[idx].min_bullet_interval += 0.1;
@@ -7357,7 +7546,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		editorSaveToDatabase("level1.db");
 		reset_game();
 		g_editorMode = false;
-		
+
 		break;
 
 
@@ -7366,6 +7555,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		// Decrease selected speed knot value by 0.1 (min 0.1)
 		if (e && g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
 		{
+			editorPushUndo();
 			e->path_speeds[g_selectedSpeedKnot] =
 				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] - 0.1f);
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
@@ -7377,10 +7567,19 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		// Increase selected speed knot value by 0.1
 		if (e && g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
 		{
+			editorPushUndo();
 			e->path_speeds[g_selectedSpeedKnot] += 0.1f;
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
 				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
 		}
+		return true;
+
+	case 26: // Ctrl+Z — Undo
+		editorUndo();
+		return true;
+
+	case 25: // Ctrl+Y — Redo
+		editorRedo();
 		return true;
 
 	case 3: // Ctrl+C / Ctrl+Shift+C
@@ -7433,6 +7632,8 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				std::cout << "[Editor] No enemy templates loaded\n";
 				return true;
 			}
+
+			editorPushUndo();
 
 			// If no enemy is selected (list is empty), create one first
 			if (!e)
@@ -7493,6 +7694,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			// Ctrl+V — paste path data only
 			if (e && g_clipboard_has_data)
 			{
+				editorPushUndo();
 				e->path_points = g_clipboard_path_points;
 				e->path_speeds = g_clipboard_path_speeds;
 				g_selectedPoint = -1;
@@ -7574,6 +7776,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			if (shift)
 			{
 				// Shift+LMB -> add speed knot
+				editorPushUndo();
 				e->path_speeds.push_back(1.f);
 				std::cout << "[Editor] Added speed knot (val=1.0)\n";
 			}
@@ -7602,6 +7805,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 						g_selectedPoint = idx;
 						g_selectedSpeedKnot = -1;
 						g_draggingPoint = true;
+						g_dragUndoPushed = false;
 						std::cout << "[Editor] Toggled to path point " << idx << "\n";
 					}
 					else
@@ -7610,6 +7814,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 						g_selectedPoint = idx;
 						g_selectedSpeedKnot = -1;
 						g_draggingPoint = true;
+						g_dragUndoPushed = false;
 					}
 				}
 				else if (idx >= 0)
@@ -7617,6 +7822,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 					g_selectedPoint = idx;
 					g_selectedSpeedKnot = -1;
 					g_draggingPoint = true;
+					g_dragUndoPushed = false;
 				}
 				else if (sIdx >= 0)
 				{
@@ -7630,6 +7836,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 				{
 					g_selectedSpeedKnot = -1;
 					// Insert new control point in the nearest segment
+					editorPushUndo();
 					glm::vec2 np((float)mx, (float)my);
 					int insertAfter = 0;
 					float bestDist = 1e30f;
@@ -7643,6 +7850,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 					e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
 					g_selectedPoint = insertAfter + 1;
 					g_draggingPoint = true;
+					g_dragUndoPushed = true; // insert already pushed undo
 					std::cout << "[Editor] Inserted path point at (" << mx << ", " << my << ")\n";
 				}
 			}
@@ -7659,6 +7867,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 	{
 		if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
 		{
+			editorPushUndo();
 			float delta = (button == 3) ? 0.1f : -0.1f;
 			e->path_speeds[g_selectedSpeedKnot] =
 				std::max(0.1f, e->path_speeds[g_selectedSpeedKnot] + delta);
@@ -7678,6 +7887,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 		{
 			if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < (int)e->path_speeds.size())
 			{
+				editorPushUndo();
 				std::cout << "[Editor] Removed selected speed knot " << g_selectedSpeedKnot
 					<< " (val=" << e->path_speeds[g_selectedSpeedKnot] << ")\n";
 				e->path_speeds.erase(e->path_speeds.begin() + g_selectedSpeedKnot);
@@ -7685,6 +7895,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			}
 			else if (!e->path_speeds.empty())
 			{
+				editorPushUndo();
 				e->path_speeds.pop_back();
 				std::cout << "[Editor] Removed last speed knot\n";
 			}
@@ -7694,6 +7905,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			int idx = editorFindNearestPoint(*e, (float)mx, (float)my, 20.f);
 			if (idx >= 0 && e->path_points.size() > 2)
 			{
+				editorPushUndo();
 				e->path_points.erase(e->path_points.begin() + idx);
 				if (g_selectedPoint >= (int)e->path_points.size())
 					g_selectedPoint = (int)e->path_points.size() - 1;
@@ -7717,6 +7929,11 @@ bool editorHandleMotion(int mx, int my)
 
 	if (g_selectedPoint >= 0 && g_selectedPoint < (int)e->path_points.size())
 	{
+		if (!g_dragUndoPushed)
+		{
+			editorPushUndo();
+			g_dragUndoPushed = true;
+		}
 		bool isEndpoint = (g_selectedPoint == 0 ||
 			g_selectedPoint == (int)e->path_points.size() - 1);
 		// Endpoints: X is fixed (must enter/exit off-screen); only Y is editable
@@ -8328,6 +8545,7 @@ void specialKeyboard(int key, int x, int y)
 			}
 			if (dx != 0.0f || dy != 0.0f)
 			{
+				editorPushUndo();
 				// Move the sprite position
 				e->x += dx;
 				e->y += dy;
