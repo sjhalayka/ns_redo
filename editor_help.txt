@@ -1,5 +1,7 @@
 TAB key to toggle editor mode
 
+CTRL + Z: Undo
+CTRL + Y: Redo
 [ / ]: Cycle selected enemy
 CTRL + LMB: Select enemy at mouse location
 { / }: Cycle selected cannon
