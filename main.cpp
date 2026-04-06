@@ -8375,11 +8375,11 @@ void keyboard(unsigned char key, int x, int y)
 
 
 
-	case 27:  // ESC
-	case 'q':
-	case 'Q':
-		exit(0);
-		break;
+	//case 27:  // ESC
+	//case 'q':
+	//case 'Q':
+	//	exit(0);
+	//	break;
 	case 'r':
 	case 'R':
 		// Reset simulation
