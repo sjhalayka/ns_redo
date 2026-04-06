@@ -6582,6 +6582,510 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	}
 }
 
+
+
+
+
+vector<float> get_path_speeds(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<float> path_speeds;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return path_speeds;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			float x = static_cast<float>(sqlite3_column_double(stmt, 0));
+
+			path_speeds.push_back(x);
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return path_speeds;
+}
+
+
+vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<glm::vec2> path_points;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return path_points;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			double x = sqlite3_column_double(stmt, 0);
+			double y = sqlite3_column_double(stmt, 1);
+
+			path_points.push_back(glm::vec2(x, y));
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return path_points;
+}
+
+
+
+
+
+double get_path_animation_length(int path_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	double path_animation_length = 0;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT path_animation_length FROM path WHERE path_id = " << path_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return 0.0;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			path_animation_length = sqlite3_column_double(stmt, 0);
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return path_animation_length;
+}
+
+
+
+
+vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
+{
+	size_t row_count = 0;
+
+	vector<cannon> cannons;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+
+	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return cannons;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			// int enemy_id = sqlite3_column_int(stmt, 0);
+
+			cannon c;
+
+			c.min_bullet_interval = sqlite3_column_double(stmt, 1);
+			c.cannon_type = sqlite3_column_int(stmt, 2);
+			c.x = sqlite3_column_double(stmt, 3);
+			c.y = sqlite3_column_double(stmt, 4);
+
+			cannons.push_back(c);
+
+			row_count++;
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return cannons;
+}
+
+void retrieve_level_data(const string& db_name)
+{
+	enemy_ships.clear();
+
+	size_t row_count = 0;
+
+	sqlite3* db = 0;
+	sqlite3_stmt* stmt = 0;
+	string sql = "SELECT file_template_id, path_id, path_pixel_delay, max_health FROM enemy;";
+	int rc = sqlite3_open(db_name.c_str(), &db);
+
+	if (rc)
+	{
+		std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
+		return;
+	}
+
+	rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		sqlite3_close(db);
+		return;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			// Note: file_template_id is 0-based (C++'s behaviour)
+			int file_template_id = sqlite3_column_int(stmt, 0);
+
+			// Note: path_id is 1-based (SQLite's default behaviour)
+			int path_id = sqlite3_column_int(stmt, 1);
+
+			int path_pixel_delay = sqlite3_column_int(stmt, 2);
+			double max_health = sqlite3_column_double(stmt, 3);
+
+
+			size_t enemy_template_index = file_template_id;
+			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
+			enemy_ships.back()->template_idx = static_cast<int>(enemy_template_index);
+
+			// Note: enemy_id is 1-based (SQLite's default behaviour)
+			enemy_ships[enemy_ships.size() - 1]->cannons = get_cannons(static_cast<int>(enemy_ships.size()), db);
+
+			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->cannons.size(); i++)
+			{
+				enemy_ships[enemy_ships.size() - 1]->cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width - 1;
+				enemy_ships[enemy_ships.size() - 1]->cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height - 1;
+				enemy_ships[enemy_ships.size() - 1]->cannons[i].cannon_type -= 1; // Switch from 1-based to 0-based
+			}
+
+			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
+
+			enemy_ships[enemy_ships.size() - 1]->path_points =
+				get_path_points(path_id, db);
+
+			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
+			{
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].x *= SIM_WIDTH;
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].y *= SIM_HEIGHT;
+			}
+
+			// Overwrite .x for first and last path points
+			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
+			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
+
+
+			enemy_ships[enemy_ships.size() - 1]->path_speeds =
+				get_path_speeds(path_id, db);
+
+
+			enemy_ships[enemy_ships.size() - 1]->path_animation_length =
+				static_cast<float>(get_path_animation_length(path_id, db));
+
+
+			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
+			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships[enemy_ships.size() - 1]->height * 0.5f;
+
+			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = static_cast<float>(max_health);
+
+			// Push the enemy further offscreen by the desired distance.
+			// It will drift left at foreground_vel until it enters the screen,
+			// at which point the spline path takes over.
+			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
+
+			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
+
+			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
+
+			// Shift path points by the pixel delay so the spline starts
+			// where the enemy actually is.  The foreground drift during
+			// gameplay will cancel this out by the time the enemy activates.
+			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
+				enemy_ships[enemy_ships.size() - 1]->path_points[i].x += desired_foreground_distance;
+
+			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
+				enemy_templates[enemy_template_index].to_present_up_data,
+				enemy_templates[enemy_template_index].to_present_down_data,
+				enemy_templates[enemy_template_index].to_present_rest_data);
+
+			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
+
+
+
+
+
+			row_count++;
+
+
+
+
+
+
+
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	sqlite3_close(db);
+}
+
+
+
+void load_media(const char* level_string)
+{
+	// Load protagonist texture
+	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
+	if (protagonist.tex == 0)
+	{
+		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
+		return;
+	}
+
+	protagonist.x = 200;
+	protagonist.y = 300;
+
+	bullet_template.tex = loadTextureFromFile("media/bullet.png", &bullet_template.width, &bullet_template.height, bullet_template.to_present_data);
+	if (bullet_template.tex == 0)
+	{
+		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
+		return;
+	}
+
+	game_over_banner.tex = loadTextureFromFile("media/game_over.png", &game_over_banner.width, &game_over_banner.height, game_over_banner.to_present_data);
+	if (game_over_banner.tex == 0)
+	{
+		std::cout << "Warning: Could not load game_over_banner sprite" << std::endl;
+		return;
+	}
+
+	string affix = "media/";
+	affix += level_string;
+	affix += "/";
+
+	string s = affix + "background.png";
+
+	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data);
+	if (background.tex == 0)
+	{
+		std::cout << "Warning: Could not load background sprite" << std::endl;
+		return;
+	}
+
+	s = affix + "foreground.png";
+	if (!chunkForegroundTexture(s.c_str()))
+	{
+		std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
+		return;
+	}
+
+
+
+	// Dynamically load all enemy templates from media directory
+	// Looks for files matching pattern: enemy<N>_up.png, enemy<N>_down.png, enemy<N>_rest.png
+	{
+		std::vector<std::string> enemy_prefixes;
+
+		// Scan media directory for enemy*_up.png files
+
+		string s = "media/";
+		s += level_string;
+
+		for (const auto& entry : fs::directory_iterator(s))
+		{
+			if (!entry.is_regular_file()) continue;
+
+			std::string filename = entry.path().filename().string();
+
+			// Check if file matches pattern enemy*_up.png
+			if (filename.rfind("enemy", 0) == 0 && filename.find("_up.png") != std::string::npos)
+			{
+				// Extract the prefix (e.g., "enemy0" from "enemy0_up.png")
+				std::string prefix = filename.substr(0, filename.find("_up.png"));
+				enemy_prefixes.push_back(prefix);
+			}
+		}
+
+		// Sort prefixes to ensure consistent ordering
+		std::sort(enemy_prefixes.begin(), enemy_prefixes.end());
+
+		// Load each enemy template
+		for (const auto& prefix : enemy_prefixes)
+		{
+			s = affix;
+
+			std::string up_path = s + prefix + "_up.png";
+			std::string down_path = s + prefix + "_down.png";
+			std::string rest_path = s + prefix + "_rest.png";
+
+			// Check that all three files exist
+			if (!fs::exists(up_path) || !fs::exists(down_path) || !fs::exists(rest_path))
+			{
+				std::cout << "Warning: Incomplete enemy template for " << prefix << " (missing _up, _down, or _rest)" << std::endl;
+				continue;
+			}
+
+			enemy_ship new_template;
+			new_template.tex = loadTextureFromFile_Triplet(
+				up_path.c_str(), down_path.c_str(), rest_path.c_str(),
+				&new_template.width, &new_template.height,
+				new_template.to_present_up_data, new_template.to_present_down_data, new_template.to_present_rest_data,
+				new_template);
+
+			if (new_template.tex == 0)
+			{
+				std::cout << "Warning: Could not load " << prefix << " sprite" << std::endl;
+				continue;
+			}
+
+			enemy_templates.push_back(std::move(new_template));
+			std::cout << "Loaded enemy template: " << prefix << std::endl;
+		}
+
+		if (enemy_templates.empty())
+		{
+			std::cout << "Warning: No enemy templates found in media directory" << std::endl;
+			return;
+		}
+
+
+
+		retrieve_level_data("level1.db");
+
+
+
+
+	}
+}
+
+
+
+
+
 bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 {
 	if (key == '\t')
@@ -6764,6 +7268,10 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 's': case 'S':
 		editorSaveToDatabase("level1.db");
 		return true;
+
+
+
+		
 
 	case '-': case '_':
 		// Decrease selected speed knot value by 0.1 (min 0.1)
@@ -7862,501 +8370,6 @@ void keyboardup(unsigned char key, int x, int y) {
 
 
 
-vector<float> get_path_speeds(int path_id, sqlite3* (&db))
-{
-	size_t row_count = 0;
-
-	vector<float> path_speeds;
-
-	sqlite3_stmt* stmt;
-
-	ostringstream oss;
-	oss << "SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = " << path_id << ";";
-
-	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
-
-	if (rc != SQLITE_OK)
-	{
-		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		return path_speeds;
-	}
-
-	bool done = false;
-
-	while (!done)
-	{
-		switch (sqlite3_step(stmt))
-		{
-		case SQLITE_ROW:
-		{
-			float x = static_cast<float>(sqlite3_column_double(stmt, 0));
-
-			path_speeds.push_back(x);
-
-			row_count++;
-
-			break;
-		}
-		case SQLITE_DONE:
-		{
-			done = true;
-			break;
-		}
-		default:
-		{
-			done = true;
-			cout << "Failure" << endl;
-			break;
-		}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	return path_speeds;
-}
-
-
-vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
-{
-	size_t row_count = 0;
-
-	vector<glm::vec2> path_points;
-
-	sqlite3_stmt* stmt;
-
-	ostringstream oss;
-	oss << "SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = " << path_id << ";";
-
-	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
-
-	if (rc != SQLITE_OK)
-	{
-		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		return path_points;
-	}
-
-	bool done = false;
-
-	while (!done)
-	{
-		switch (sqlite3_step(stmt))
-		{
-		case SQLITE_ROW:
-		{
-			double x = sqlite3_column_double(stmt, 0);
-			double y = sqlite3_column_double(stmt, 1);
-
-			path_points.push_back(glm::vec2(x, y));
-
-			row_count++;
-
-			break;
-		}
-		case SQLITE_DONE:
-		{
-			done = true;
-			break;
-		}
-		default:
-		{
-			done = true;
-			cout << "Failure" << endl;
-			break;
-		}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	return path_points;
-}
-
-
-
-
-
-double get_path_animation_length(int path_id, sqlite3* (&db))
-{
-	size_t row_count = 0;
-
-	double path_animation_length = 0;
-
-	sqlite3_stmt* stmt;
-
-	ostringstream oss;
-	oss << "SELECT path_animation_length FROM path WHERE path_id = " << path_id << ";";
-
-	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
-
-	if (rc != SQLITE_OK)
-	{
-		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		return 0.0;
-	}
-
-	bool done = false;
-
-	while (!done)
-	{
-		switch (sqlite3_step(stmt))
-		{
-		case SQLITE_ROW:
-		{
-			path_animation_length = sqlite3_column_double(stmt, 0);
-
-			row_count++;
-
-			break;
-		}
-		case SQLITE_DONE:
-		{
-			done = true;
-			break;
-		}
-		default:
-		{
-			done = true;
-			cout << "Failure" << endl;
-			break;
-		}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	return path_animation_length;
-}
-
-
-
-
-vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
-{
-	size_t row_count = 0;
-
-	vector<cannon> cannons;
-
-	sqlite3_stmt* stmt;
-
-	ostringstream oss;
-
-	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
-
-	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
-
-	if (rc != SQLITE_OK)
-	{
-		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		return cannons;
-	}
-
-	bool done = false;
-
-	while (!done)
-	{
-		switch (sqlite3_step(stmt))
-		{
-		case SQLITE_ROW:
-		{
-			// int enemy_id = sqlite3_column_int(stmt, 0);
-
-			cannon c;
-
-			c.min_bullet_interval = sqlite3_column_double(stmt, 1);
-			c.cannon_type = sqlite3_column_int(stmt, 2);
-			c.x = sqlite3_column_double(stmt, 3);
-			c.y = sqlite3_column_double(stmt, 4);
-
-			cannons.push_back(c);
-
-			row_count++;
-
-			break;
-		}
-		case SQLITE_DONE:
-		{
-			done = true;
-			break;
-		}
-		default:
-		{
-			done = true;
-			cout << "Failure" << endl;
-			break;
-		}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	return cannons;
-}
-
-
-void retrieve_level_data(const string& db_name)
-{
-	enemy_ships.clear();
-
-	size_t row_count = 0;
-
-	sqlite3* db = 0;
-	sqlite3_stmt* stmt = 0;
-	string sql = "SELECT file_template_id, path_id, path_pixel_delay, max_health FROM enemy;";
-	int rc = sqlite3_open(db_name.c_str(), &db);
-
-	if (rc)
-	{
-		std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
-		return;
-	}
-
-	rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-
-	if (rc != SQLITE_OK)
-	{
-		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-		sqlite3_close(db);
-		return;
-	}
-
-	bool done = false;
-
-	while (!done)
-	{
-		switch (sqlite3_step(stmt))
-		{
-		case SQLITE_ROW:
-		{
-			// Note: file_template_id is 0-based (C++'s behaviour)
-			int file_template_id = sqlite3_column_int(stmt, 0);
-
-			// Note: path_id is 1-based (SQLite's default behaviour)
-			int path_id = sqlite3_column_int(stmt, 1);
-
-			int path_pixel_delay = sqlite3_column_int(stmt, 2);
-			double max_health = sqlite3_column_double(stmt, 3);
-
-
-			size_t enemy_template_index = file_template_id;
-			enemy_ships.push_back(make_unique<enemy_ship>(enemy_templates[enemy_template_index]));
-			enemy_ships.back()->template_idx = static_cast<int>(enemy_template_index);
-
-			// Note: enemy_id is 1-based (SQLite's default behaviour)
-			enemy_ships[enemy_ships.size() - 1]->cannons = get_cannons(static_cast<int>(enemy_ships.size()), db);
-
-			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->cannons.size(); i++)
-			{
-				enemy_ships[enemy_ships.size() - 1]->cannons[i].x *= enemy_ships[enemy_ships.size() - 1]->width - 1;
-				enemy_ships[enemy_ships.size() - 1]->cannons[i].y *= enemy_ships[enemy_ships.size() - 1]->height - 1;
-				enemy_ships[enemy_ships.size() - 1]->cannons[i].cannon_type -= 1; // Switch from 1-based to 0-based
-			}
-
-			float half_w = enemy_ships[enemy_ships.size() - 1]->width / 2.0f;
-
-			enemy_ships[enemy_ships.size() - 1]->path_points =
-				get_path_points(path_id, db);
-
-			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
-			{
-				enemy_ships[enemy_ships.size() - 1]->path_points[i].x *= SIM_WIDTH;
-				enemy_ships[enemy_ships.size() - 1]->path_points[i].y *= SIM_HEIGHT;
-			}
-
-			// Overwrite .x for first and last path points
-			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
-			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
-
-
-			enemy_ships[enemy_ships.size() - 1]->path_speeds =
-				get_path_speeds(path_id, db);
-
-
-			enemy_ships[enemy_ships.size() - 1]->path_animation_length =
-				static_cast<float>(get_path_animation_length(path_id, db));
-
-
-			glm::vec2 start_pos = get_spline_point(enemy_ships[enemy_ships.size() - 1]->path_points, 0.0f);
-			enemy_ships[enemy_ships.size() - 1]->y = start_pos.y - enemy_ships[enemy_ships.size() - 1]->height * 0.5f;
-
-			enemy_ships[enemy_ships.size() - 1]->health = enemy_ships[enemy_ships.size() - 1]->max_health = static_cast<float>(max_health);
-
-			// Push the enemy further offscreen by the desired distance.
-			// It will drift left at foreground_vel until it enters the screen,
-			// at which point the spline path takes over.
-			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
-
-			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
-
-			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
-
-			// Shift path points by the pixel delay so the spline starts
-			// where the enemy actually is.  The foreground drift during
-			// gameplay will cancel this out by the time the enemy activates.
-			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
-				enemy_ships[enemy_ships.size() - 1]->path_points[i].x += desired_foreground_distance;
-
-			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
-				enemy_templates[enemy_template_index].to_present_up_data,
-				enemy_templates[enemy_template_index].to_present_down_data,
-				enemy_templates[enemy_template_index].to_present_rest_data);
-
-			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
-
-
-
-
-
-			row_count++;
-
-
-
-
-
-
-
-			break;
-		}
-		case SQLITE_DONE:
-		{
-			done = true;
-			break;
-		}
-		default:
-		{
-			done = true;
-			cout << "Failure" << endl;
-			break;
-		}
-		}
-	}
-
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
-}
-
-
-void load_media(const char* level_string)
-{
-	// Load protagonist texture
-	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
-	if (protagonist.tex == 0)
-	{
-		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
-		return;
-	}
-
-	protagonist.x = 200;
-	protagonist.y = 300;
-
-	bullet_template.tex = loadTextureFromFile("media/bullet.png", &bullet_template.width, &bullet_template.height, bullet_template.to_present_data);
-	if (bullet_template.tex == 0)
-	{
-		std::cout << "Warning: Could not load bullet_template sprite" << std::endl;
-		return;
-	}
-
-	game_over_banner.tex = loadTextureFromFile("media/game_over.png", &game_over_banner.width, &game_over_banner.height, game_over_banner.to_present_data);
-	if (game_over_banner.tex == 0)
-	{
-		std::cout << "Warning: Could not load game_over_banner sprite" << std::endl;
-		return;
-	}
-
-	string affix = "media/";
-	affix += level_string;
-	affix += "/";
-
-	string s = affix + "background.png";
-
-	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data);
-	if (background.tex == 0)
-	{
-		std::cout << "Warning: Could not load background sprite" << std::endl;
-		return;
-	}
-
-	s = affix + "foreground.png";
-	if (!chunkForegroundTexture(s.c_str()))
-	{
-		std::cout << "Warning: Could not chunk foreground sprite" << std::endl;
-		return;
-	}
-
-
-
-	// Dynamically load all enemy templates from media directory
-	// Looks for files matching pattern: enemy<N>_up.png, enemy<N>_down.png, enemy<N>_rest.png
-	{
-		std::vector<std::string> enemy_prefixes;
-
-		// Scan media directory for enemy*_up.png files
-
-		string s = "media/";
-		s += level_string;
-
-		for (const auto& entry : fs::directory_iterator(s))
-		{
-			if (!entry.is_regular_file()) continue;
-
-			std::string filename = entry.path().filename().string();
-
-			// Check if file matches pattern enemy*_up.png
-			if (filename.rfind("enemy", 0) == 0 && filename.find("_up.png") != std::string::npos)
-			{
-				// Extract the prefix (e.g., "enemy0" from "enemy0_up.png")
-				std::string prefix = filename.substr(0, filename.find("_up.png"));
-				enemy_prefixes.push_back(prefix);
-			}
-		}
-
-		// Sort prefixes to ensure consistent ordering
-		std::sort(enemy_prefixes.begin(), enemy_prefixes.end());
-
-		// Load each enemy template
-		for (const auto& prefix : enemy_prefixes)
-		{
-			s = affix;
-
-			std::string up_path = s + prefix + "_up.png";
-			std::string down_path = s + prefix + "_down.png";
-			std::string rest_path = s + prefix + "_rest.png";
-
-			// Check that all three files exist
-			if (!fs::exists(up_path) || !fs::exists(down_path) || !fs::exists(rest_path))
-			{
-				std::cout << "Warning: Incomplete enemy template for " << prefix << " (missing _up, _down, or _rest)" << std::endl;
-				continue;
-			}
-
-			enemy_ship new_template;
-			new_template.tex = loadTextureFromFile_Triplet(
-				up_path.c_str(), down_path.c_str(), rest_path.c_str(),
-				&new_template.width, &new_template.height,
-				new_template.to_present_up_data, new_template.to_present_down_data, new_template.to_present_rest_data,
-				new_template);
-
-			if (new_template.tex == 0)
-			{
-				std::cout << "Warning: Could not load " << prefix << " sprite" << std::endl;
-				continue;
-			}
-
-			enemy_templates.push_back(std::move(new_template));
-			std::cout << "Loaded enemy template: " << prefix << std::endl;
-		}
-
-		if (enemy_templates.empty())
-		{
-			std::cout << "Warning: No enemy templates found in media directory" << std::endl;
-			return;
-		}
-
-
-
-		retrieve_level_data("level1.db");
-
-
-
-
-	}
-}
 
 
 
