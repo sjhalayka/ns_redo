@@ -16,6 +16,7 @@ V: Remove selected cannon
 T: Cycle cannon type
 , / .: Decrease cannon fire interval
 S: Save to database file
+A: Save to database file then reload level from scratch
 Shift + arrow keys: Move selected enemy
 Left / Right arrow keys: Move environment
 CTRL + C: Copy path (including speed knots)

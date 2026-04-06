@@ -8152,6 +8152,7 @@ void keyboard(unsigned char key, int x, int y)
 
 	case 'a':
 	case 'A':
+		editorSaveToDatabase("level1.db");
 		reset_game();
 		break;
 
