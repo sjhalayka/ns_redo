@@ -7083,7 +7083,90 @@ void load_media(const char* level_string)
 }
 
 
+void reset_game()
+{
+	// ---- Clear all bullets ----
+	ally_bullets.clear();
+	enemy_bullets.clear();
 
+	// ---- Clear and reload enemy ships from the database ----
+	// retrieve_level_data already calls enemy_ships.clear() internally
+	retrieve_level_data("level1.db");
+
+	// ---- Reset protagonist ----
+	// Delete old texture to avoid leak, then reload from disk to undo blackening
+	if (protagonist.tex) {
+		glDeleteTextures(1, &protagonist.tex);
+		protagonist.tex = 0;
+	}
+	protagonist.tex = loadTextureFromFile_Triplet(
+		"media/protagonist_up.png",
+		"media/protagonist_down.png",
+		"media/protagonist_rest.png",
+		&protagonist.width, &protagonist.height,
+		protagonist.to_present_up_data,
+		protagonist.to_present_down_data,
+		protagonist.to_present_rest_data,
+		protagonist);
+	protagonist.x = 200;
+	protagonist.y = 300;
+	protagonist.vel_x = 0;
+	protagonist.vel_y = 0;
+	protagonist.old_x = protagonist.x;
+	protagonist.old_y = protagonist.y;
+	protagonist.health = 1000.0f;
+	protagonist.max_health = 1000.0f;
+	protagonist.to_be_culled = false;
+	protagonist.under_fire = false;
+	protagonist.last_time_collided = 0;
+	protagonist.blackening_age_map.clear();
+	protagonist.state = REST_STATE;
+	protagonist.update_tex();
+
+	// ---- Re-chunk foreground from disk (resets positions + blackening) ----
+	// Delete old tile textures to avoid leak
+	for (size_t i = 0; i < foreground_chunked.size(); i++) {
+		if (foreground_chunked[i].tex) {
+			glDeleteTextures(1, &foreground_chunked[i].tex);
+		}
+	}
+	chunkForegroundTexture("media/level1/foreground.png");
+
+	// ---- Reset timing ----
+	GLOBAL_TIME = 0;
+	lastDamageTime = -1;
+	lastBulletTime = std::chrono::high_resolution_clock::now();
+
+	// ---- Reset wave events ----
+	for (int i = 0; i < MAX_WAVE_SOURCES; i++) {
+		waveEvents[i] = WaveEvent();
+	}
+	nextWaveSlot = 0;
+
+	// ---- Reset input state ----
+	spacePressed = false;
+	upKeyPressed = false;
+	downKeyPressed = false;
+	leftKeyPressed = false;
+	rightKeyPressed = false;
+
+	// ---- Clear fluid simulation FBOs ----
+	for (int i = 0; i < 2; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, velocityFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, pressureFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, densityFBO[i]);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
+	// ---- Clear obstacles ----
+	glBindFramebuffer(GL_FRAMEBUFFER, obstacleFBO);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	std::cout << "=== GAME RESET ===" << std::endl;
+}
 
 
 bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
@@ -7271,7 +7354,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 
 
 
-		
+
 
 	case '-': case '_':
 		// Decrease selected speed knot value by 0.1 (min 0.1)
@@ -8066,6 +8149,11 @@ void keyboard(unsigned char key, int x, int y)
 		red_mode = !red_mode;
 		break;
 	}
+
+	case 'a':
+	case 'A':
+		reset_game();
+		break;
 
 	case 27:  // ESC
 	case 'q':
