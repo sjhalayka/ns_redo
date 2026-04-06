@@ -7352,7 +7352,13 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		editorSaveToDatabase("level1.db");
 		return true;
 
-
+	case 'a':
+	case 'A':
+		editorSaveToDatabase("level1.db");
+		reset_game();
+		g_editorMode = false;
+		
+		break;
 
 
 
@@ -8150,11 +8156,7 @@ void keyboard(unsigned char key, int x, int y)
 		break;
 	}
 
-	case 'a':
-	case 'A':
-		editorSaveToDatabase("level1.db");
-		reset_game();
-		break;
+
 
 	case 27:  // ESC
 	case 'q':
