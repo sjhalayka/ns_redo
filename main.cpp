@@ -6775,7 +6775,13 @@ vector<float> get_path_speeds(int path_id, sqlite3* (&db))
 	sqlite3_stmt* stmt;
 
 	ostringstream oss;
-	oss << "SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = " << path_id << ";";
+	//oss << "SELECT t.x FROM path_speed ps JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id WHERE ps.path_id = " << path_id << ";";
+
+	oss << "SELECT t.x FROM path_speed ps "
+		"JOIN one_d_location t ON ps.one_d_location_id = t.one_d_location_id "
+		"WHERE ps.path_id = " << path_id << " "
+		"ORDER BY ps.path_speed_id;";
+
 
 	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
@@ -6829,7 +6835,12 @@ vector<glm::vec2> get_path_points(int path_id, sqlite3* (&db))
 	sqlite3_stmt* stmt;
 
 	ostringstream oss;
-	oss << "SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = " << path_id << ";";
+	//oss << "SELECT t.x, t.y FROM path_location pl JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id WHERE pl.path_id = " << path_id << ";";
+
+	oss << "SELECT t.x, t.y FROM path_location pl "
+		"JOIN two_d_location t ON pl.two_d_location_id = t.two_d_location_id "
+		"WHERE pl.path_id = " << path_id << " "
+		"ORDER BY pl.path_location_id;";
 
 	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
@@ -6942,7 +6953,15 @@ vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
 
 	ostringstream oss;
 
-	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+//	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+
+	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y "
+		"FROM enemy_cannon ec "
+		"JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id "
+		"JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id "
+		"WHERE ec.enemy_id = " << enemy_id << " "
+		"ORDER BY ec.enemy_cannon_id;";
+
 
 	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
 
@@ -7063,8 +7082,8 @@ void retrieve_level_data(const string& db_name)
 			}
 
 			// Overwrite .x for first and last path points
-			enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
-			enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
+			//enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
+			//enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
 
 
 			enemy_ships[enemy_ships.size() - 1]->path_speeds =
