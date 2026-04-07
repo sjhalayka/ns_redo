@@ -271,6 +271,10 @@ void main() {
 
 
 float foreground_vel = -50.0f;
+// X position of foreground_chunked[0] at the moment the level was last loaded.
+// Used to measure total world scroll (gameplay + editor) since load, so that
+// editorSaveToDatabase can strip it before writing canonical path positions.
+float g_loadTimeFgX = 0.0f;
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
 float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
@@ -4832,6 +4836,10 @@ bool chunkForegroundTexture(const char* sourceFilename)
 		foreground_chunked[i].vel_y = 0;
 	}
 
+	// Snapshot the initial X of tile 0 so editorSaveToDatabase can measure
+	// total world scroll (gameplay drift + editor scroll) since this load.
+	g_loadTimeFgX = foreground_chunked.empty() ? 0.0f : foreground_chunked[0].x;
+
 	stbi_image_free(srcData);
 
 	std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
@@ -6598,7 +6606,21 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// path control-point locations
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
-			float nx = (e.path_points[j].x - (float)e.path_pixel_delay) / SIM_WIDTH;
+			// path_points[j].x is in "runtime" space:
+			//   canonical_x  +  path_pixel_delay  +  world_scroll_since_load
+			//
+			// We need to remove both offsets so the DB always stores the
+			// canonical (delay-free, scroll-free) normalised position.
+			//
+			// World scroll = how far foreground_chunked[0] has drifted since the
+			// last load.  Both gameplay integration and editor left/right scroll
+			// apply the same delta to path_points and foreground tiles, so this
+			// single reference captures the full accumulated displacement.
+			float fg_scroll = foreground_chunked.empty()
+				? 0.0f
+				: (foreground_chunked[0].x - g_loadTimeFgX);
+
+			float nx = (e.path_points[j].x - (float)e.path_pixel_delay - fg_scroll) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 			int tid = use2D(nx, ny);
 
