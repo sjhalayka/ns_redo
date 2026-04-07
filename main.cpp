@@ -7105,14 +7105,7 @@ void retrieve_level_data(const string& db_name)
 			{
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].x *= SIM_WIDTH;
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].y *= SIM_HEIGHT;
-
-				//enemy_ships[enemy_ships.size() - 1]->path_points[i].x += SIM_WIDTH;
 			}
-
-			// Overwrite .x for first and last path points
-			//enemy_ships[enemy_ships.size() - 1]->path_points[0].x = SIM_WIDTH + half_w;
-			//enemy_ships[enemy_ships.size() - 1]->path_points[enemy_ships[enemy_ships.size() - 1]->path_points.size() - 1].x = -half_w;
-
 
 			enemy_ships[enemy_ships.size() - 1]->path_speeds =
 				get_path_speeds(path_id, db);
