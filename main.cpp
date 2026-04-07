@@ -6727,6 +6727,9 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	//   path_points[0].x    = SIM_WIDTH + half_w  (+ pixel_delay offset)
 	//   path_points[last].x = -half_w             (+ pixel_delay offset)
 	//
+	// path_pixel_delay is anchored to the LEFTMOST (last/exit) knot:
+	//   delay = path_points.back().x - (-half_w)
+	//
 	// If the template size changed we must slide them by the delta so the
 	// enemy still enters and exits fully off-screen.
 	if (e->path_points.size() >= 2)
@@ -6740,9 +6743,10 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 		// Last endpoint moves further left when the sprite is wider.
 		e->path_points.back().x -= delta;
 
-		// Keep path_pixel_delay consistent: it equals
-		// path_points[0].x - (SIM_WIDTH + new_half_w), clamped to >= 0.
-		e->path_pixel_delay = std::max(0, (int)(e->path_points.front().x - (SIM_WIDTH + new_half_w)));
+		// Keep path_pixel_delay consistent: it is anchored to the
+		// leftmost (exit) knot, whose canonical position is -new_half_w.
+		// delay = path_points.back().x - (-new_half_w), clamped to >= 0.
+		e->path_pixel_delay = std::max(0, (int)(e->path_points.back().x + new_half_w));
 	}
 
 	// Always recalculate path_scroll_rate (works for both active and pre-activation enemies).
@@ -6953,7 +6957,7 @@ vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
 
 	ostringstream oss;
 
-//	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
+	//	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y FROM enemy_cannon ec JOIN cannon_type ct ON ec.cannon_type_id = ct.cannon_type_id JOIN two_d_location t ON ec.two_d_location_id = t.two_d_location_id WHERE enemy_id = " << enemy_id << ";";
 
 	oss << "SELECT ec.enemy_id, ec.min_bullet_interval, ct.cannon_type_id, t.x, t.y "
 		"FROM enemy_cannon ec "
@@ -7079,6 +7083,8 @@ void retrieve_level_data(const string& db_name)
 			{
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].x *= SIM_WIDTH;
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].y *= SIM_HEIGHT;
+
+				//enemy_ships[enemy_ships.size() - 1]->path_points[i].x += SIM_WIDTH;
 			}
 
 			// Overwrite .x for first and last path points
@@ -7462,7 +7468,9 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
-			ne->path_pixel_delay = (int)(ne->path_points[0].x - SIM_WIDTH + foreground_scrolled);
+			// Anchor the delay to the leftmost (exit) knot. Canonical
+			// zero-delay position for that knot is -half_w.
+			ne->path_pixel_delay = (int)(ne->path_points.back().x + ne->width * 0.5f + foreground_scrolled);
 
 			ne->to_be_culled = false;
 
