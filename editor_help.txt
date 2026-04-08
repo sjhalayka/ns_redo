@@ -2,25 +2,37 @@ TAB key to toggle editor mode
 
 CTRL + Z: Undo
 CTRL + Y: Redo
+
 [ / ]: Cycle selected enemy
-CTRL + LMB: Select enemy at mouse location
-{ / }: Cycle selected cannon
 N: Spawn new enemy
 E: Cycle enemy type
 D: Remove selected enemy
+
+CTRL + LMB: Select enemy at mouse location
+{ / }: Cycle selected cannon
+
 LMB near a knot: select and drag knot
 LMB on empty space: Insert new knot
 RMB near a knot: Remove knot
+
 SHIFT + LMB to add a speed knot at end
 SHIFT + RMB to remove the selected speed knot, or speed knot at end if none selected
+
 C: Add cannon at mouse location
 V: Remove selected cannon
 T: Cycle cannon type
 , / .: Decrease cannon fire interval
+
+B: Create new enemy power up
+: / ': Cycle selected enemy power up
+F: Delete enemy power up
+Y: Cycle enemy power up type
+
 S: Save to database file
 A: Save to database file then reload level from scratch
 Shift + arrow keys: Move selected enemy
 Left / Right arrow keys: Move environment
+
 CTRL + C: Copy path (including speed knots)
 CTRL + V: Paste path
 CTRL + SHIFT + C: Copy enemy
