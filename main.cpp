@@ -6199,13 +6199,13 @@ static void editorDrawCannons(const enemy_ship& e)
 		float wx = e.x + (float)e.cannons[ci].x;
 		float wy = e.y + (float)e.cannons[ci].y;
 
-		float cr = 1.f, cg = 0.3f, cb = 0.3f;   // LEFT  = red
+		float cr = 1.f, cg = 0.0f, cb = 0.0f;   // LEFT  = red
 		if (e.cannons[ci].cannon_type == CANNON_TYPE_UP_DOWN) { cr = 0.0f; cg = 1.0f; cb = 0.0f; }
 		if (e.cannons[ci].cannon_type == CANNON_TYPE_TRACKING) { cr = 0.0f; cg = 0.0f; cb = 1.0f; }
 		if (e.cannons[ci].cannon_type == CANNON_TYPE_CIRCULAR) { cr = 1.0f; cg = 1.0f; cb = 0.0f; }
 
 		bool sel = ((int)ci == g_selectedCannon);
-		float radius = sel ? 20.f : 14.f;
+		float radius = 20.0f;
 
 		editorDrawCircle(wx, wy, radius, cr, cg, cb, 1.f);
 		editorDrawCross(wx, wy, radius, cr, cg, cb);
@@ -6538,7 +6538,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 		cannon_type_nickname TEXT
 	);)");
 
-	// Populate cannon_type with the same 3 rows used at load time.
+	// Populate cannon_type with the same 4 rows used at load time.
 	// cannon_type_id is 1-based; get_cannons() does cannon_type -= 1 on read.
 	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('left shot');");
 	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('up-down shot');");
