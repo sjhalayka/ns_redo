@@ -6465,8 +6465,6 @@ void renderEditorOverlay()
 			{
 				// Lines prefixed with ">>" are the currently-selected
 				// cannon or power-up — render them in a brighter highlight
-				// color so the user can see which item the editor keys
-				// (T, , . , Y, F, etc.) will act on.
 				bool highlighted = (result[i].find(">>") != std::string::npos);
 				glm::vec4 col = highlighted
 					? glm::vec4(1.f, 1.f, 1.f, 1.f)     // white = selected
@@ -6499,23 +6497,23 @@ void renderEditorOverlay()
 			// ---- Selected speed-knot status line --------------------------------
 			if (g_selectedSpeedKnot >= 0 && g_selectedSpeedKnot < sn)
 			{
-				snprintf(buf, sizeof(buf),
-					"Speed knot [%d/%d] = %.2f   Scroll or -/= to adjust",
-					g_selectedSpeedKnot, sn - 1,
-					e->path_speeds[g_selectedSpeedKnot]);
-				textRenderer->renderText(buf, 10, (float)windowHeight - 60,
-					0.5f, glm::vec4(1.f, 1.f, 0.f, 1.f));
+				//snprintf(buf, sizeof(buf),
+				//	"Speed knot [%d/%d] = %.2f   Scroll or -/= to adjust",
+				//	g_selectedSpeedKnot, sn - 1,
+				//	e->path_speeds[g_selectedSpeedKnot]);
+				//textRenderer->renderText(buf, 10, (float)windowHeight - 60,
+				//	0.5f, glm::vec4(1.f, 1.f, 0.f, 1.f));
 			}
 			else
 			{
 				// Generic speed-knot hint when none is selected
 				if (sn > 0)
 				{
-					snprintf(buf, sizeof(buf),
-						"Speed knots: %d  |  LMB diamond to select  |  Shift+LMB add  |  Shift+RMB remove",
-						sn);
-					textRenderer->renderText(buf, 10, (float)windowHeight - 60,
-						0.45f, glm::vec4(0.6f, 0.9f, 1.f, 0.8f));
+					//snprintf(buf, sizeof(buf),
+					//	"Speed knots: %d  |  LMB diamond to select  |  Shift+LMB add  |  Shift+RMB remove",
+					//	sn);
+					//textRenderer->renderText(buf, 10, (float)windowHeight - 60,
+					//	0.45f, glm::vec4(0.6f, 0.9f, 1.f, 0.8f));
 				}
 			}
 
@@ -6525,23 +6523,23 @@ void renderEditorOverlay()
 			{
 				if (g_selectedCannon >= 0 && g_selectedCannon < cn)
 				{
-					const cannon& sc = e->cannons[g_selectedCannon];
-					const char* typeNames[] = { "LEFT", "UP_DOWN", "TRACKING", "CIRCULAR" };
-					snprintf(buf, sizeof(buf),
-						"Cannon [%d/%d]  type=%s  interval=%.2fs   T=cycle type  ,/.=interval  V=remove",
-						g_selectedCannon, cn - 1,
-						typeNames[sc.cannon_type],
-						sc.min_bullet_interval);
-					textRenderer->renderText(buf, 10, (float)windowHeight - 110,
-						0.45f, glm::vec4(1.f, 0.6f, 0.3f, 1.f));
+					//const cannon& sc = e->cannons[g_selectedCannon];
+					//const char* typeNames[] = { "LEFT", "UP_DOWN", "TRACKING", "CIRCULAR" };
+					//snprintf(buf, sizeof(buf),
+					//	"Cannon [%d/%d]  type=%s  interval=%.2fs   T=cycle type  ,/.=interval  V=remove",
+					//	g_selectedCannon, cn - 1,
+					//	typeNames[sc.cannon_type],
+					//	sc.min_bullet_interval);
+					//textRenderer->renderText(buf, 10, (float)windowHeight - 110,
+					//	0.45f, glm::vec4(1.f, 0.6f, 0.3f, 1.f));
 				}
 				else
 				{
-					snprintf(buf, sizeof(buf),
-						"Cannons: %d  |  { / } to select  |  C=add  V=remove  T=type  ,/.=interval",
-						cn);
-					textRenderer->renderText(buf, 10, (float)windowHeight - 110,
-						0.45f, glm::vec4(1.f, 0.6f, 0.3f, 0.8f));
+					//snprintf(buf, sizeof(buf),
+					//	"Cannons: %d  |  { / } to select  |  C=add  V=remove  T=type  ,/.=interval",
+					//	cn);
+					//textRenderer->renderText(buf, 10, (float)windowHeight - 110,
+					//	0.45f, glm::vec4(1.f, 0.6f, 0.3f, 0.8f));
 				}
 			}
 
@@ -6552,30 +6550,30 @@ void renderEditorOverlay()
 				const char* puNames[] = { "SINUSOIDAL", "X3", "X5" };
 				if (g_selectedPowerUp >= 0 && g_selectedPowerUp < pn)
 				{
-					int t = e->power_ups[g_selectedPowerUp];
-					snprintf(buf, sizeof(buf),
-						"Power-up [%d/%d]  type=%s   Y=cycle type  F=remove  B=add",
-						g_selectedPowerUp, pn - 1,
-						(t >= 0 && t < NUM_POWER_UP_TYPES) ? puNames[t] : "?");
-					textRenderer->renderText(buf, 10, (float)windowHeight - 160,
-						0.45f, glm::vec4(0.6f, 1.f, 0.4f, 1.f));
+					//int t = e->power_ups[g_selectedPowerUp];
+					//snprintf(buf, sizeof(buf),
+					//	"Power-up [%d/%d]  type=%s   Y=cycle type  F=remove  B=add",
+					//	g_selectedPowerUp, pn - 1,
+					//	(t >= 0 && t < NUM_POWER_UP_TYPES) ? puNames[t] : "?");
+					//textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+					//	0.45f, glm::vec4(0.6f, 1.f, 0.4f, 1.f));
 				}
 				else
 				{
-					snprintf(buf, sizeof(buf),
-						"Power-ups: %d  |  : / ' to select  |  B=add  F=remove  Y=type",
-						pn);
-					textRenderer->renderText(buf, 10, (float)windowHeight - 160,
-						0.45f, glm::vec4(0.6f, 1.f, 0.4f, 0.8f));
+					//snprintf(buf, sizeof(buf),
+					//	"Power-ups: %d  |  : / ' to select  |  B=add  F=remove  Y=type",
+					//	pn);
+					//textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+					//	0.45f, glm::vec4(0.6f, 1.f, 0.4f, 0.8f));
 				}
 			}
 			else
 			{
 				// No power-ups yet — show a hint so the user knows the feature exists
-				snprintf(buf, sizeof(buf),
-					"Power-ups: 0  |  B=add a power-up to this enemy");
-				textRenderer->renderText(buf, 10, (float)windowHeight - 160,
-					0.4f, glm::vec4(0.6f, 1.f, 0.4f, 0.6f));
+				//snprintf(buf, sizeof(buf),
+				//	"Power-ups: 0  |  B=add a power-up to this enemy");
+				//textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+				//	0.4f, glm::vec4(0.6f, 1.f, 0.4f, 0.6f));
 			}
 		}
 	}
