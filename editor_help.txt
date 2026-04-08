@@ -20,8 +20,6 @@ B: Create new enemy power up
 F: Delete enemy power up
 Y: Cycle enemy power up type
 
-S: Save to database file
-A: Save to database file then reload level from scratch
 Shift + arrow keys: Move selected enemy
 Left / Right arrow keys: Move environment
 
@@ -29,3 +27,6 @@ CTRL + C: Copy path (including speed knots)
 CTRL + V: Paste path
 CTRL + SHIFT + C: Copy enemy
 CTRL + SHIFT + V: Paste enemy
+
+S: Save to database file
+A: Save to database file then reload level from scratch
