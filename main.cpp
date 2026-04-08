@@ -72,7 +72,7 @@ std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::hig
 
 bool x3_fire = false;
 bool x5_fire = true;
-
+bool sinusoidal_fire = true;
 
 // Window dimensions
 int windowWidth = 1920;
@@ -5031,46 +5031,89 @@ void fireBullet(void)
 
 	lastBulletTime = currentTime;
 
-	sine_bullet s;
 
-	s.tex = bullet_template.tex;
-	s.to_present_data = bullet_template.to_present_data;
 
-	// Position in PIXELS (no normalization)
-	s.x = protagonist.x + protagonist.width;
-	s.y = protagonist.y + protagonist.height / 2.0f;
-	s.width = bullet_template.width;
-	s.height = bullet_template.height;
-
-	static const float pi = 4.0f * atanf(1.0f);
-
-	float angle_start = 0, angle_end = 0;
-	size_t num_streams = 1;
-
-	if (x3_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 3; }
-	if (x5_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 5; }
-
-	float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
-	float angle = angle_start;
-
-	// Bullet speed in PIXELS per second
-	const float BULLET_SPEED = 1600.0;  // Adjust as needed
-
-	for (size_t i = 0; i < num_streams; i++, angle += angle_step)
+	if (sinusoidal_fire)
 	{
-		sine_bullet newBullet = s;
-		newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
-		newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
-		newBullet.sinusoidal_shift = false;
-		newBullet.sinusoidal_amplitude = 600 / DT;  // amplitude in PIXELS
-		newBullet.sinusoidal_frequency = 10;
-		newBullet.birth_time = GLOBAL_TIME;
-		newBullet.death_time = -1;
+		sine_bullet s;
 
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		s.tex = bullet_template.tex;
+		s.to_present_data = bullet_template.to_present_data;
 
-		newBullet.sinusoidal_shift = true;
-		ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		// Position in PIXELS (no normalization)
+		s.x = protagonist.x + protagonist.width;
+		s.y = protagonist.y + protagonist.height / 2.0f;
+		s.width = bullet_template.width;
+		s.height = bullet_template.height;
+
+		static const float pi = 4.0f * atanf(1.0f);
+
+		float angle_start = 0, angle_end = 0;
+		size_t num_streams = 1;
+
+		if (x3_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 3; }
+		if (x5_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 5; }
+
+		float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
+		float angle = angle_start;
+
+		// Bullet speed in PIXELS per second
+		const float BULLET_SPEED = 1600.0;  // Adjust as needed
+
+		for (size_t i = 0; i < num_streams; i++, angle += angle_step)
+		{
+			sine_bullet newBullet = s;
+			newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
+			newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
+			newBullet.sinusoidal_shift = false;
+			newBullet.sinusoidal_amplitude = 600 / DT;  // amplitude in PIXELS
+			newBullet.sinusoidal_frequency = 10;
+			newBullet.birth_time = GLOBAL_TIME;
+			newBullet.death_time = -1;
+
+			ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+
+			newBullet.sinusoidal_shift = true;
+			ally_bullets.push_back(make_unique<sine_bullet>(newBullet));
+		}
+	}
+	else
+	{
+		straight_bullet s;
+
+		s.tex = bullet_template.tex;
+		s.to_present_data = bullet_template.to_present_data;
+
+		// Position in PIXELS (no normalization)
+		s.x = protagonist.x + protagonist.width;
+		s.y = protagonist.y + protagonist.height / 2.0f;
+		s.width = bullet_template.width;
+		s.height = bullet_template.height;
+
+		static const float pi = 4.0f * atanf(1.0f);
+
+		float angle_start = 0, angle_end = 0;
+		size_t num_streams = 1;
+
+		if (x3_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 3; }
+		if (x5_fire) { angle_start = 0.4f; angle_end = -0.4f; num_streams = 5; }
+
+		float angle_step = (num_streams > 1) ? (angle_end - angle_start) / (num_streams - 1) : 0;
+		float angle = angle_start;
+
+		// Bullet speed in PIXELS per second
+		const float BULLET_SPEED = 1600.0;  // Adjust as needed
+
+		for (size_t i = 0; i < num_streams; i++, angle += angle_step)
+		{
+			straight_bullet newBullet = s;
+			newBullet.vel_x = BULLET_SPEED * cos(angle);  // pixels/sec
+			newBullet.vel_y = BULLET_SPEED * sin(angle);  // pixels/sec
+			newBullet.birth_time = GLOBAL_TIME;
+			newBullet.death_time = -1;
+
+			ally_bullets.push_back(make_unique<straight_bullet>(newBullet));
+		}
 	}
 }
 
@@ -6463,6 +6506,111 @@ static int editorFindNearestPoint(const enemy_ship& e, float mx, float my,
 
 // ---- Save to SQLite ---------------------------------------------------------
 
+// Creates the canonical level schema on `db` if it does not already exist,
+// and seeds the static lookup tables (cannon_type, power_up).  Safe to call
+// repeatedly: all CREATE statements use IF NOT EXISTS and all seed INSERTs
+// use OR IGNORE against explicit primary keys, so existing data is preserved.
+static void ensureDatabaseSchema(sqlite3* db)
+{
+	auto exec = [&](const char* sql) {
+		char* err = nullptr;
+		if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK)
+		{
+			std::cerr << "[DB] Schema SQL error (" << sql << "): " << err << "\n";
+			sqlite3_free(err);
+		}
+		};
+
+	exec(R"(CREATE TABLE IF NOT EXISTS one_d_location (
+		one_d_location_id INTEGER PRIMARY KEY NOT NULL,
+		x REAL NOT NULL,
+		UNIQUE (x)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS two_d_location (
+		two_d_location_id INTEGER PRIMARY KEY NOT NULL,
+		x REAL NOT NULL,
+		y REAL NOT NULL,
+		UNIQUE (x, y)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS path (
+		path_id INTEGER PRIMARY KEY NOT NULL,
+		path_animation_length REAL NOT NULL,
+		path_nickname TEXT
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS path_speed (
+		path_speed_id INTEGER PRIMARY KEY NOT NULL,
+		path_id INTEGER NOT NULL,
+		one_d_location_id INTEGER NOT NULL,
+		FOREIGN KEY (path_id) REFERENCES path(path_id),
+		FOREIGN KEY (one_d_location_id) REFERENCES one_d_location(one_d_location_id),
+		UNIQUE (path_speed_id, path_id, one_d_location_id)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS path_location (
+		path_location_id INTEGER PRIMARY KEY NOT NULL,
+		path_id INTEGER NOT NULL,
+		two_d_location_id INTEGER NOT NULL,
+		FOREIGN KEY (path_id) REFERENCES path(path_id),
+		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id),
+		UNIQUE (path_location_id, path_id, two_d_location_id)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS enemy (
+		enemy_id INTEGER PRIMARY KEY NOT NULL,
+		file_template_id INTEGER NOT NULL,
+		path_id INTEGER NOT NULL,
+		path_pixel_delay INTEGER NOT NULL,
+		max_health REAL NOT NULL,
+		enemy_nickname TEXT,
+		FOREIGN KEY (path_id) REFERENCES path(path_id)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS cannon_type (
+		cannon_type_id INTEGER PRIMARY KEY NOT NULL,
+		cannon_type_nickname TEXT
+	);)");
+
+	// Seed cannon_type with the canonical 4 rows.  Explicit IDs + OR IGNORE
+	// make this idempotent; get_cannons() does cannon_type -= 1 on read, so
+	// IDs must remain 1..4.
+	exec("INSERT OR IGNORE INTO cannon_type (cannon_type_id, cannon_type_nickname) VALUES (1, 'left shot');");
+	exec("INSERT OR IGNORE INTO cannon_type (cannon_type_id, cannon_type_nickname) VALUES (2, 'up-down shot');");
+	exec("INSERT OR IGNORE INTO cannon_type (cannon_type_id, cannon_type_nickname) VALUES (3, 'tracking shot');");
+	exec("INSERT OR IGNORE INTO cannon_type (cannon_type_id, cannon_type_nickname) VALUES (4, 'circular shot');");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS enemy_cannon (
+		enemy_cannon_id INTEGER PRIMARY KEY NOT NULL,
+		cannon_type_id INTEGER NOT NULL,	
+		enemy_id INTEGER NOT NULL,
+		two_d_location_id INTEGER NOT NULL,
+		min_bullet_interval REAL NOT NULL,
+		enemy_cannon_nickname TEXT,
+		FOREIGN KEY (cannon_type_id) REFERENCES cannon_type(cannon_type_id),
+		FOREIGN KEY (enemy_id) REFERENCES enemy(enemy_id),
+		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id)
+	);)");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS power_up (
+		power_up_id INTEGER PRIMARY KEY NOT NULL,
+		power_up_nickname TEXT
+	);)");
+
+	exec("INSERT OR IGNORE INTO power_up (power_up_id, power_up_nickname) VALUES (1, 'sinusoidal fire');");
+	exec("INSERT OR IGNORE INTO power_up (power_up_id, power_up_nickname) VALUES (2, 'x3 fire');");
+	exec("INSERT OR IGNORE INTO power_up (power_up_id, power_up_nickname) VALUES (3, 'x5 fire');");
+
+	exec(R"(CREATE TABLE IF NOT EXISTS enemy_power_up (
+		enemy_power_up_id INTEGER PRIMARY KEY NOT NULL,
+		power_up_id INTEGER NOT NULL,
+		enemy_id INTEGER NOT NULL,
+		FOREIGN KEY(power_up_id) REFERENCES power_up(power_up_id),
+		FOREIGN KEY(enemy_id) REFERENCES enemy(enemy_id)
+	);)");
+}
+
 static void editorSaveToDatabase(const std::string& db_name)
 {
 	sqlite3* db = nullptr;
@@ -6477,6 +6625,9 @@ static void editorSaveToDatabase(const std::string& db_name)
 		if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK)
 		{
 			std::cerr << "[Editor] SQL error (" << sql << "): " << err << "\n";
+
+			std::cerr << sql << '\n';
+
 			sqlite3_free(err);
 		}
 		};
@@ -6485,6 +6636,9 @@ static void editorSaveToDatabase(const std::string& db_name)
 
 	// Drop all tables so we always start from the canonical schema,
 	// regardless of what was on disk before.  Order respects FK deps.
+
+	exec("DROP TABLE IF EXISTS enemy_power_up;");
+	exec("DROP TABLE IF EXISTS power_up;");
 	exec("DROP TABLE IF EXISTS enemy_cannon;");
 	exec("DROP TABLE IF EXISTS cannon_type;");
 	exec("DROP TABLE IF EXISTS enemy;");
@@ -6494,77 +6648,16 @@ static void editorSaveToDatabase(const std::string& db_name)
 	exec("DROP TABLE IF EXISTS two_d_location;");
 	exec("DROP TABLE IF EXISTS one_d_location;");
 
-	// Recreate with the exact schema from CREATE_TABLE_enemy.txt
-	exec(R"(CREATE TABLE one_d_location (
-		one_d_location_id INTEGER PRIMARY KEY NOT NULL,
-		x REAL NOT NULL,
-		UNIQUE (x)
-	);)");
 
-	exec(R"(CREATE TABLE two_d_location (
-		two_d_location_id INTEGER PRIMARY KEY NOT NULL,
-		x REAL NOT NULL,
-		y REAL NOT NULL,
-		UNIQUE (x, y)
-	);)");
 
-	exec(R"(CREATE TABLE path (
-		path_id INTEGER PRIMARY KEY NOT NULL,
-		path_animation_length REAL NOT NULL,
-		path_nickname TEXT
-	);)");
+	// Recreate the canonical schema and reseed lookup tables.  Tables were
+	// just dropped above, so IF NOT EXISTS is a no-op on first hit; the same
+	// helper is also called on load to bootstrap an empty database file.
+	ensureDatabaseSchema(db);
 
-	exec(R"(CREATE TABLE path_speed (
-		path_speed_id INTEGER PRIMARY KEY NOT NULL,
-		path_id INTEGER NOT NULL,
-		one_d_location_id INTEGER NOT NULL,
-		FOREIGN KEY (path_id) REFERENCES path(path_id),
-		FOREIGN KEY (one_d_location_id) REFERENCES one_d_location(one_d_location_id),
-		UNIQUE (path_speed_id, path_id, one_d_location_id)
-	);)");
 
-	exec(R"(CREATE TABLE path_location (
-		path_location_id INTEGER PRIMARY KEY NOT NULL,
-		path_id INTEGER NOT NULL,
-		two_d_location_id INTEGER NOT NULL,
-		FOREIGN KEY (path_id) REFERENCES path(path_id),
-		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id),
-		UNIQUE (path_location_id, path_id, two_d_location_id)
-	);)");
 
-	exec(R"(CREATE TABLE enemy (
-		enemy_id INTEGER PRIMARY KEY NOT NULL,
-		file_template_id INTEGER NOT NULL,
-		path_id INTEGER NOT NULL,
-		path_pixel_delay INTEGER NOT NULL,
-		max_health REAL NOT NULL,
-		enemy_nickname TEXT,
-		FOREIGN KEY (path_id) REFERENCES path(path_id)
-	);)");
 
-	exec(R"(CREATE TABLE cannon_type (
-		cannon_type_id INTEGER PRIMARY KEY NOT NULL,
-		cannon_type_nickname TEXT
-	);)");
-
-	// Populate cannon_type with the same 4 rows used at load time.
-	// cannon_type_id is 1-based; get_cannons() does cannon_type -= 1 on read.
-	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('left shot');");
-	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('up-down shot');");
-	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('tracking shot');");
-	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('circular shot');");
-
-	exec(R"(CREATE TABLE enemy_cannon (
-		enemy_cannon_id INTEGER PRIMARY KEY NOT NULL,
-		cannon_type_id INTEGER NOT NULL,
-		enemy_id INTEGER NOT NULL,
-		two_d_location_id INTEGER NOT NULL,
-		min_bullet_interval REAL NOT NULL,
-		enemy_cannon_nickname TEXT,
-		FOREIGN KEY (cannon_type_id) REFERENCES cannon_type(cannon_type_id),
-		FOREIGN KEY (enemy_id) REFERENCES enemy(enemy_id),
-		FOREIGN KEY (two_d_location_id) REFERENCES two_d_location(two_d_location_id)
-	);)");
 
 	int path_id = 0;
 	int path_location_id = 0;
@@ -7079,6 +7172,10 @@ void retrieve_level_data(const string& db_name)
 		std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
 		return;
 	}
+
+	// Bootstrap the schema so a brand-new or empty level file loads cleanly
+	// instead of failing the SELECT below with "no such table: enemy".
+	ensureDatabaseSchema(db);
 
 	rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
 
