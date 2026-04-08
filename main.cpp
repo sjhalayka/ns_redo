@@ -976,6 +976,13 @@ public:
 #define CANNON_TYPE_TRACKING 2
 #define CANNON_TYPE_CIRCULAR 3
 
+// Power-up types. IDs are 0-based in memory; DB stores them 1-based
+// (see power_up seed rows in ensureDatabaseSchema).
+#define POWER_UP_TYPE_SINUSOIDAL 0
+#define POWER_UP_TYPE_X3         1
+#define POWER_UP_TYPE_X5         2
+#define NUM_POWER_UP_TYPES       3
+
 
 class cannon
 {
@@ -1004,6 +1011,10 @@ public:
 	vector<glm::vec2> path_points;
 	vector<float> path_speeds;
 	vector<cannon> cannons;
+	// List of power-up types owned by this enemy. Each entry is a
+	// POWER_UP_TYPE_* constant (0-based). Persisted via the
+	// enemy_power_up table.
+	vector<int> power_ups;
 	int path_pixel_delay = 0;
 	float path_scroll_rate = 0.0f; // computed at activation
 
@@ -1745,6 +1756,31 @@ FontAtlas initFontAtlas(const char* filename) {
 }
 
 
+
+
+
+
+
+bool g_editorMode = false;
+float g_editorFgScrollSpeed = 600.0f; // pixels per second when arrow key held
+
+int  g_selectedEnemy = 0;
+int  g_selectedPoint = -1;
+bool g_draggingPoint = false;
+int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
+int  g_selectedCannon = -1;      // index into selected enemy's cannons, -1 = none
+int  g_selectedPowerUp = -1;     // index into selected enemy's power_ups, -1 = none
+int  g_spawnTemplateIdx = 0;
+bool g_dragUndoPushed = false;   // true once editorPushUndo has been called for the current drag
+
+// Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
+std::vector<glm::vec2> g_clipboard_path_points;
+std::vector<float>     g_clipboard_path_speeds;
+bool                   g_clipboard_has_data = false;
+
+
+
+
 class TextRenderer {
 private:
 	FontAtlas atlas;
@@ -1904,6 +1940,18 @@ public:
 	}
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 	void renderText(const std::string& text, float x, float y, float scale, glm::vec4 color, bool centered = false) {
 		glUseProgram(shaderProgram);
 
@@ -2033,12 +2081,18 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 		oss << "Enemy " << i << ":\n";
 		oss << "  Path points (" << e.path_points.size() << "):\n";
 		for (size_t j = 0; j < e.path_points.size(); ++j)
-			oss << "    [" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
-			<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
+		{
+			const char* marker = ((int)j == g_selectedPoint) ? ">> " : "   ";
+			oss << "  " << marker << "[" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
+				<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
+		}
 
 		oss << "  Speed knots (" << e.path_speeds.size() << "):\n";
 		for (size_t j = 0; j < e.path_speeds.size(); ++j)
-			oss << "    [" << j << "] " << e.path_speeds[j] << "\n";
+		{
+			const char* marker = ((int)j == g_selectedSpeedKnot) ? ">> " : "   ";
+			oss << "  " << marker << "[" << j << "] " << e.path_speeds[j] << "\n";
+		}
 
 		oss << "  Cannons (" << e.cannons.size() << "):\n";
 		for (size_t j = 0; j < e.cannons.size(); ++j)
@@ -2047,10 +2101,24 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 			if (e.cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
 			if (e.cannons[j].cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
 			if (e.cannons[j].cannon_type == CANNON_TYPE_CIRCULAR) tname = "CIRCULAR";
-			oss << "    [" << j << "] type=" << tname
+			// Selected cannon gets a ">>" marker so renderEditorOverlay can
+			// highlight that line in a different color.
+			const char* marker = ((int)j == g_selectedCannon) ? ">> " : "   ";
+			oss << "  " << marker << "[" << j << "] type=" << tname
 				<< " x=" << e.cannons[j].x / std::max(1, e.width - 1) << " (norm)"
 				<< " y=" << e.cannons[j].y / std::max(1, e.height - 1) << " (norm)"
 				<< " interval=" << e.cannons[j].min_bullet_interval << "s\n";
+		}
+
+		oss << "  Power-ups (" << e.power_ups.size() << "):\n";
+		for (size_t j = 0; j < e.power_ups.size(); ++j)
+		{
+			const char* pname = "SINUSOIDAL";
+			if (e.power_ups[j] == POWER_UP_TYPE_X3) pname = "X3";
+			if (e.power_ups[j] == POWER_UP_TYPE_X5) pname = "X5";
+			// Selected power-up gets a ">>" marker.
+			const char* marker = ((int)j == g_selectedPowerUp) ? ">> " : "   ";
+			oss << "  " << marker << "[" << j << "] type=" << pname << "\n";
 		}
 	}
 	oss << "==================================\n\n";
@@ -5918,21 +5986,6 @@ void simulate()
 //  Ctrl+Y            Redo last undone action
 // =============================================================================
 
-bool g_editorMode = false;
-float g_editorFgScrollSpeed = 600.0f; // pixels per second when arrow key held
-
-int  g_selectedEnemy = 0;
-int  g_selectedPoint = -1;
-bool g_draggingPoint = false;
-int  g_selectedSpeedKnot = -1;   // index into path_speeds, -1 = none
-int  g_selectedCannon = -1;      // index into selected enemy's cannons, -1 = none
-int  g_spawnTemplateIdx = 0;
-bool g_dragUndoPushed = false;   // true once editorPushUndo has been called for the current drag
-
-// Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
-std::vector<glm::vec2> g_clipboard_path_points;
-std::vector<float>     g_clipboard_path_speeds;
-bool                   g_clipboard_has_data = false;
 
 // Clipboard for copy/paste of entire enemy (Ctrl+Shift+C / Ctrl+Shift+V)
 struct EnemyClipboard {
@@ -5940,6 +5993,7 @@ struct EnemyClipboard {
 	std::vector<glm::vec2> path_points;
 	std::vector<float>     path_speeds;
 	std::vector<cannon>    cannons;
+	std::vector<int>       power_ups;
 	float                  path_animation_length = 0;
 	float                  health = 0;
 	float                  max_health = 0;
@@ -5968,6 +6022,7 @@ struct EnemySnapshot {
 	std::vector<glm::vec2>    path_points;
 	std::vector<float>        path_speeds;
 	std::vector<CannonSnapshot> cannons;
+	std::vector<int> power_ups;
 	float path_animation_length;
 	float health, max_health;
 	int   path_pixel_delay;
@@ -6010,6 +6065,7 @@ static EditorUndoState editorCaptureState()
 			cs.y = c.y;
 			snap.cannons.push_back(cs);
 		}
+		snap.power_ups = e.power_ups;
 		state.enemies.push_back(std::move(snap));
 	}
 	return state;
@@ -6077,6 +6133,9 @@ static void editorRestoreState(const EditorUndoState& state)
 			e->cannons[j].x = snap.cannons[j].x;
 			e->cannons[j].y = snap.cannons[j].y;
 		}
+
+		// Restore power_ups
+		e->power_ups = snap.power_ups;
 	}
 
 	// Clamp selection indices so nothing is out-of-bounds
@@ -6087,6 +6146,7 @@ static void editorRestoreState(const EditorUndoState& state)
 	g_selectedPoint = -1;
 	g_selectedSpeedKnot = -1;
 	g_selectedCannon = -1;
+	g_selectedPowerUp = -1;
 	g_draggingPoint = false;
 }
 
@@ -6402,7 +6462,17 @@ void renderEditorOverlay()
 			}
 
 			for (size_t i = 0; i < result.size(); i++)
-				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50, 0.5f, glm::vec4(1, 1, 0, 1));
+			{
+				// Lines prefixed with ">>" are the currently-selected
+				// cannon or power-up — render them in a brighter highlight
+				// color so the user can see which item the editor keys
+				// (T, , . , Y, F, etc.) will act on.
+				bool highlighted = (result[i].find(">>") != std::string::npos);
+				glm::vec4 col = highlighted
+					? glm::vec4(1.f, 1.f, 1.f, 1.f)     // white = selected
+					: glm::vec4(1.f, 1.f, 0.f, 1.f);    // yellow = normal
+				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50, 0.5f, col);
+			}
 
 			// ---- Speed-knot value labels (drawn next to each diamond marker) ----
 			int sn = (int)e->path_speeds.size();
@@ -6473,6 +6543,39 @@ void renderEditorOverlay()
 					textRenderer->renderText(buf, 10, (float)windowHeight - 110,
 						0.45f, glm::vec4(1.f, 0.6f, 0.3f, 0.8f));
 				}
+			}
+
+			// ---- Selected power-up status line ----------------------------------
+			int pn = (int)e->power_ups.size();
+			if (pn > 0)
+			{
+				const char* puNames[] = { "SINUSOIDAL", "X3", "X5" };
+				if (g_selectedPowerUp >= 0 && g_selectedPowerUp < pn)
+				{
+					int t = e->power_ups[g_selectedPowerUp];
+					snprintf(buf, sizeof(buf),
+						"Power-up [%d/%d]  type=%s   Y=cycle type  F=remove  B=add",
+						g_selectedPowerUp, pn - 1,
+						(t >= 0 && t < NUM_POWER_UP_TYPES) ? puNames[t] : "?");
+					textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+						0.45f, glm::vec4(0.6f, 1.f, 0.4f, 1.f));
+				}
+				else
+				{
+					snprintf(buf, sizeof(buf),
+						"Power-ups: %d  |  : / ' to select  |  B=add  F=remove  Y=type",
+						pn);
+					textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+						0.45f, glm::vec4(0.6f, 1.f, 0.4f, 0.8f));
+				}
+			}
+			else
+			{
+				// No power-ups yet — show a hint so the user knows the feature exists
+				snprintf(buf, sizeof(buf),
+					"Power-ups: 0  |  B=add a power-up to this enemy");
+				textRenderer->renderText(buf, 10, (float)windowHeight - 160,
+					0.4f, glm::vec4(0.6f, 1.f, 0.4f, 0.6f));
 			}
 		}
 	}
@@ -6666,6 +6769,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 	int loc1d_id = 0;
 	int enemy_id = 0;
 	int cannon_id = 0;
+	int enemy_power_up_id = 0;
 
 	// Returns the two_d_location_id for (x,y), inserting a new row only when
 	// that coordinate pair is not already present (satisfies UNIQUE(x,y)).
@@ -6801,6 +6905,20 @@ static void editorSaveToDatabase(const std::string& db_name)
 				c.cannon_type + 1,  // back to 1-based
 				tid,
 				c.min_bullet_interval);
+			exec(sql);
+		}
+
+		// power-ups
+		for (size_t j = 0; j < e.power_ups.size(); ++j)
+		{
+			enemy_power_up_id++;
+			char sql[256];
+			snprintf(sql, sizeof(sql),
+				"INSERT INTO enemy_power_up(enemy_power_up_id,power_up_id,enemy_id)"
+				" VALUES(%d,%d,%d);",
+				enemy_power_up_id,
+				e.power_ups[j] + 1,  // back to 1-based
+				enemy_id);
 			exec(sql);
 		}
 	}
@@ -7156,6 +7274,56 @@ vector<cannon> get_cannons(int enemy_id, sqlite3* (&db))
 	return cannons;
 }
 
+vector<int> get_power_ups(int enemy_id, sqlite3* (&db))
+{
+	vector<int> power_ups;
+
+	sqlite3_stmt* stmt;
+
+	ostringstream oss;
+	oss << "SELECT power_up_id FROM enemy_power_up "
+		"WHERE enemy_id = " << enemy_id << " "
+		"ORDER BY enemy_power_up_id;";
+
+	int rc = sqlite3_prepare_v2(db, oss.str().c_str(), -1, &stmt, nullptr);
+
+	if (rc != SQLITE_OK)
+	{
+		std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+		return power_ups;
+	}
+
+	bool done = false;
+
+	while (!done)
+	{
+		switch (sqlite3_step(stmt))
+		{
+		case SQLITE_ROW:
+		{
+			// DB stores power_up_id as 1-based; convert to 0-based in memory
+			int pid = sqlite3_column_int(stmt, 0) - 1;
+			power_ups.push_back(pid);
+			break;
+		}
+		case SQLITE_DONE:
+		{
+			done = true;
+			break;
+		}
+		default:
+		{
+			done = true;
+			cout << "Failure" << endl;
+			break;
+		}
+		}
+	}
+
+	sqlite3_finalize(stmt);
+	return power_ups;
+}
+
 void retrieve_level_data(const string& db_name)
 {
 	enemy_ships.clear();
@@ -7210,6 +7378,8 @@ void retrieve_level_data(const string& db_name)
 
 			// Note: enemy_id is 1-based (SQLite's default behaviour)
 			enemy_ships[enemy_ships.size() - 1]->cannons = get_cannons(static_cast<int>(enemy_ships.size()), db);
+
+			enemy_ships[enemy_ships.size() - 1]->power_ups = get_power_ups(static_cast<int>(enemy_ships.size()), db);
 
 			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->cannons.size(); i++)
 			{
@@ -7547,6 +7717,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		g_selectedPoint = -1;
 		g_selectedSpeedKnot = -1;
 		g_selectedCannon = -1;
+		g_selectedPowerUp = -1;
 		return true;
 
 	case ']':
@@ -7555,6 +7726,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		g_selectedPoint = -1;
 		g_selectedSpeedKnot = -1;
 		g_selectedCannon = -1;
+		g_selectedPowerUp = -1;
 		return true;
 
 	case '{':
@@ -7701,9 +7873,76 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		}
 		return true;
 
-	case 's': case 'S':
-		editorSaveToDatabase("level1.db");
+	case 'b': case 'B':
+		// Add a new power-up to the selected enemy (default: sinusoidal)
+		if (e)
+		{
+			editorPushUndo();
+			e->power_ups.push_back(POWER_UP_TYPE_SINUSOIDAL);
+			g_selectedPowerUp = (int)e->power_ups.size() - 1;
+			const char* names[] = { "SINUSOIDAL", "X3", "X5" };
+			std::cout << "[Editor] Added power-up " << g_selectedPowerUp
+				<< " type=" << names[e->power_ups[g_selectedPowerUp]] << "\n";
+		}
 		return true;
+
+	case ':':
+		// Select previous power-up on the selected enemy
+		if (e && !e->power_ups.empty())
+		{
+			if (g_selectedPowerUp < 0)
+				g_selectedPowerUp = (int)e->power_ups.size() - 1;
+			else
+				g_selectedPowerUp = (g_selectedPowerUp - 1 + (int)e->power_ups.size()) % (int)e->power_ups.size();
+			const char* names[] = { "SINUSOIDAL", "X3", "X5" };
+			std::cout << "[Editor] Selected power-up " << g_selectedPowerUp
+				<< " / " << (int)e->power_ups.size() - 1
+				<< "  type=" << names[e->power_ups[g_selectedPowerUp]] << "\n";
+		}
+		return true;
+
+	case '\'':
+		// Select next power-up on the selected enemy
+		if (e && !e->power_ups.empty())
+		{
+			g_selectedPowerUp = (std::max(0, g_selectedPowerUp) + 1) % (int)e->power_ups.size();
+			const char* names[] = { "SINUSOIDAL", "X3", "X5" };
+			std::cout << "[Editor] Selected power-up " << g_selectedPowerUp
+				<< " / " << (int)e->power_ups.size() - 1
+				<< "  type=" << names[e->power_ups[g_selectedPowerUp]] << "\n";
+		}
+		return true;
+
+	case 'f': case 'F':
+		// Delete the selected power-up (or last if none selected)
+		if (e && !e->power_ups.empty())
+		{
+			editorPushUndo();
+			int removeIdx = (g_selectedPowerUp >= 0 && g_selectedPowerUp < (int)e->power_ups.size())
+				? g_selectedPowerUp : (int)e->power_ups.size() - 1;
+			e->power_ups.erase(e->power_ups.begin() + removeIdx);
+			if (e->power_ups.empty())
+				g_selectedPowerUp = -1;
+			else
+				g_selectedPowerUp = std::min(removeIdx, (int)e->power_ups.size() - 1);
+			std::cout << "[Editor] Removed power-up " << removeIdx << "\n";
+		}
+		return true;
+
+	case 'y': case 'Y':
+		// Cycle the type of the selected power-up
+		// NOTE: case 25 below handles Ctrl+Y for redo; plain 'y' is 121, no collision.
+		if (e && !e->power_ups.empty())
+		{
+			editorPushUndo();
+			int idx = (g_selectedPowerUp >= 0 && g_selectedPowerUp < (int)e->power_ups.size())
+				? g_selectedPowerUp : (int)e->power_ups.size() - 1;
+			e->power_ups[idx] = (e->power_ups[idx] + 1) % NUM_POWER_UP_TYPES;
+			const char* names[] = { "SINUSOIDAL", "X3", "X5" };
+			std::cout << "[Editor] Power-up " << idx << " type -> " << names[e->power_ups[idx]] << "\n";
+		}
+		return true;
+
 
 	case 'a':
 	case 'A':
@@ -7757,6 +7996,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				g_enemy_clipboard.path_points = e->path_points;
 				g_enemy_clipboard.path_speeds = e->path_speeds;
 				g_enemy_clipboard.cannons = e->cannons;
+				g_enemy_clipboard.power_ups = e->power_ups;
 				g_enemy_clipboard.path_animation_length = e->path_animation_length;
 				g_enemy_clipboard.health = e->health;
 				g_enemy_clipboard.max_health = e->max_health;
@@ -7830,6 +8070,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			e->path_points = g_enemy_clipboard.path_points;
 			e->path_speeds = g_enemy_clipboard.path_speeds;
 			e->cannons = g_enemy_clipboard.cannons;
+			e->power_ups = g_enemy_clipboard.power_ups;
 			e->path_animation_length = g_enemy_clipboard.path_animation_length;
 			e->health = g_enemy_clipboard.health;
 			e->max_health = g_enemy_clipboard.max_health;
@@ -7838,6 +8079,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			g_selectedPoint = -1;
 			g_selectedSpeedKnot = -1;
 			g_selectedCannon = -1;
+			g_selectedPowerUp = -1;
 			g_draggingPoint = false;
 
 			// Recalculate scroll rate
