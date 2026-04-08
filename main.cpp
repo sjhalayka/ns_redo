@@ -974,6 +974,7 @@ public:
 #define CANNON_TYPE_LEFT 0
 #define CANNON_TYPE_UP_DOWN 1
 #define CANNON_TYPE_TRACKING 2
+#define CANNON_TYPE_CIRCULAR 3
 
 
 class cannon
@@ -2045,6 +2046,7 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 			const char* tname = "LEFT";
 			if (e.cannons[j].cannon_type == CANNON_TYPE_UP_DOWN)  tname = "UP_DOWN";
 			if (e.cannons[j].cannon_type == CANNON_TYPE_TRACKING) tname = "TRACKING";
+			if (e.cannons[j].cannon_type == CANNON_TYPE_CIRCULAR) tname = "CIRCULAR";
 			oss << "    [" << j << "] type=" << tname
 				<< " x=" << e.cannons[j].x / std::max(1, e.width - 1) << " (norm)"
 				<< " y=" << e.cannons[j].y / std::max(1, e.height - 1) << " (norm)"
@@ -5264,7 +5266,19 @@ void simulate()
 
 				enemy_bullets.push_back(make_unique<straight_bullet>(s));
 			}
+			else if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_CIRCULAR)
+			{
+				//glm::vec2 aim;
+				//aim.x = (protagonist.x + protagonist.width * 0.5) - s.x;
+				//aim.y = (protagonist.y + protagonist.height * 0.5) - s.y;
 
+				//aim = normalize(aim) * BULLET_SPEED;
+
+				//s.vel_x = aim.x;
+				//s.vel_y = aim.y;
+
+				//enemy_bullets.push_back(make_unique<straight_bullet>(s));
+			}
 			//cout << "shoot" << endl;
 		}
 
@@ -6186,8 +6200,9 @@ static void editorDrawCannons(const enemy_ship& e)
 		float wy = e.y + (float)e.cannons[ci].y;
 
 		float cr = 1.f, cg = 0.3f, cb = 0.3f;   // LEFT  = red
-		if (e.cannons[ci].cannon_type == CANNON_TYPE_UP_DOWN) { cr = 0.3f; cg = 1.f; cb = 0.3f; }  // green
-		if (e.cannons[ci].cannon_type == CANNON_TYPE_TRACKING) { cr = 0.3f; cg = 0.3f; cb = 1.f; }  // blue
+		if (e.cannons[ci].cannon_type == CANNON_TYPE_UP_DOWN) { cr = 0.0f; cg = 1.0f; cb = 0.0f; }
+		if (e.cannons[ci].cannon_type == CANNON_TYPE_TRACKING) { cr = 0.0f; cg = 0.0f; cb = 1.0f; }
+		if (e.cannons[ci].cannon_type == CANNON_TYPE_CIRCULAR) { cr = 1.0f; cg = 1.0f; cb = 0.0f; }
 
 		bool sel = ((int)ci == g_selectedCannon);
 		float radius = sel ? 20.f : 14.f;
@@ -6389,7 +6404,7 @@ void renderEditorOverlay()
 				if (g_selectedCannon >= 0 && g_selectedCannon < cn)
 				{
 					const cannon& sc = e->cannons[g_selectedCannon];
-					const char* typeNames[] = { "LEFT", "UP_DOWN", "TRACKING" };
+					const char* typeNames[] = { "LEFT", "UP_DOWN", "TRACKING", "CIRCULAR" };
 					snprintf(buf, sizeof(buf),
 						"Cannon [%d/%d]  type=%s  interval=%.2fs   T=cycle type  ,/.=interval  V=remove",
 						g_selectedCannon, cn - 1,
@@ -6528,6 +6543,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('left shot');");
 	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('up-down shot');");
 	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('tracking shot');");
+	exec("INSERT INTO cannon_type (cannon_type_nickname) VALUES ('circular shot');");
 
 	exec(R"(CREATE TABLE enemy_cannon (
 		enemy_cannon_id INTEGER PRIMARY KEY NOT NULL,
@@ -7550,8 +7566,8 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			int idx = (g_selectedCannon >= 0 && g_selectedCannon < (int)e->cannons.size())
 				? g_selectedCannon : (int)e->cannons.size() - 1;
 			cannon& lc = e->cannons[idx];
-			lc.cannon_type = (lc.cannon_type + 1) % 3;
-			const char* names[] = { "LEFT", "UP_DOWN", "TRACKING" };
+			lc.cannon_type = (lc.cannon_type + 1) % 4;
+			const char* names[] = { "LEFT", "UP_DOWN", "TRACKING", "CIRCULAR" };
 			std::cout << "[Editor] Cannon " << idx << " type -> " << names[lc.cannon_type] << "\n";
 		}
 		return true;
