@@ -5275,17 +5275,17 @@ void simulate()
 				{
 					float angle = (TWO_PI / NUM_BULLETS) * k;
 
-					straight_bullet s;
-					s.tex = s.tex;
-					s.to_present_data = s.to_present_data;
-					s.width = s.width;
-					s.height = s.height;
-					s.x = s.x;
-					s.y = s.y;
-					s.vel_x = BULLET_SPEED * cos(angle);
-					s.vel_y = BULLET_SPEED * sin(angle);
+					straight_bullet sb;
+					sb.tex = s.tex;
+					sb.to_present_data = s.to_present_data;
+					sb.width = s.width;
+					sb.height = s.height;
+					sb.x = s.x;
+					sb.y = s.y;
+					sb.vel_x = BULLET_SPEED * cos(angle);
+					sb.vel_y = BULLET_SPEED * sin(angle);
 
-					enemy_bullets.push_back(make_unique<straight_bullet>(s));
+					enemy_bullets.push_back(make_unique<straight_bullet>(sb));
 				}
 			}
 			//cout << "shoot" << endl;
