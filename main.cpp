@@ -5268,16 +5268,25 @@ void simulate()
 			}
 			else if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_CIRCULAR)
 			{
-				//glm::vec2 aim;
-				//aim.x = (protagonist.x + protagonist.width * 0.5) - s.x;
-				//aim.y = (protagonist.y + protagonist.height * 0.5) - s.y;
+				const int NUM_BULLETS = 12; // adjust for denser/sparser spread
+				const float TWO_PI = 2.0f * (4.0f * atanf(1.0f));
 
-				//aim = normalize(aim) * BULLET_SPEED;
+				for (int k = 0; k < NUM_BULLETS; k++)
+				{
+					float angle = (TWO_PI / NUM_BULLETS) * k;
 
-				//s.vel_x = aim.x;
-				//s.vel_y = aim.y;
+					straight_bullet s;
+					s.tex = s.tex;
+					s.to_present_data = s.to_present_data;
+					s.width = s.width;
+					s.height = s.height;
+					s.x = s.x;
+					s.y = s.y;
+					s.vel_x = BULLET_SPEED * cos(angle);
+					s.vel_y = BULLET_SPEED * sin(angle);
 
-				//enemy_bullets.push_back(make_unique<straight_bullet>(s));
+					enemy_bullets.push_back(make_unique<straight_bullet>(s));
+				}
 			}
 			//cout << "shoot" << endl;
 		}
