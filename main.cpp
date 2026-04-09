@@ -928,26 +928,54 @@ class power_up : public sprite
 {
 public:
 
+	// Sinusoidal wave motion state. wave_time accumulates per-instance so each
+	// power-up has its own phase. Frequency is in radians/sec, amplitude in pixels.
+	float wave_time = 0.0f;
+	float wave_frequency = 6.0f;
+	float wave_amplitude = 40.0f;
+
+	power_up()
+	{
+		// Randomize the starting phase so multiple power-ups spawned from the
+		// same enemy at the same instant don't trace identical paths. We seed
+		// wave_time with a value in [0, 2*PI / wave_frequency), which covers a
+		// full period of the sine wave.
+		const float TWO_PI = 8.0f*atan(1.0f);
+		wave_time = dis_real(generator_real) * (TWO_PI / wave_frequency);
+	}
+
 	virtual void integrate(float dt)
 	{
 		old_x = x;
 		old_y = y;
 
-		// Store the original direction vector
-		float dirX = vel_x * dt;
-		float dirY = vel_y * dt;
-
-		// Normalize the direction vector
+		// Compute the unit direction of travel from the velocity vector.
+		float dirX = vel_x;
+		float dirY = vel_y;
 		float dirLength = sqrt(dirX * dirX + dirY * dirY);
-		if (dirLength > 0) {
+		if (dirLength > 0.0f) {
 			dirX /= dirLength;
 			dirY /= dirLength;
 		}
 
 		// Move forward along original path
-		float forwardSpeed = dirLength; // Original velocity magnitude
-		x += dirX * forwardSpeed;
-		y += dirY * forwardSpeed;
+		x += vel_x * dt;
+		y += vel_y * dt;
+
+		// Apply sinusoidal motion perpendicular to the direction of travel.
+		// We add the *delta* of the sine wave between this frame and the last,
+		// so the perpendicular offset accumulates correctly on top of forward
+		// motion without snapping back to a baseline each frame.
+		float perpX = -dirY;
+		float perpY = dirX;
+
+		float prevSin = sin(wave_time * wave_frequency);
+		wave_time += dt;
+		float currSin = sin(wave_time * wave_frequency);
+		float waveDelta = (currSin - prevSin) * wave_amplitude;
+
+		x += perpX * waveDelta;
+		y += perpY * waveDelta;
 	}
 
 
@@ -5862,7 +5890,7 @@ void simulate()
 	{
 		if (p->to_be_culled)
 			continue;
-		
+
 		p->integrate(DT);
 
 		if (!p->isOnscreen())
