@@ -70,9 +70,10 @@ const float PROTAGONIST_MIN_BULLET_INTERVAL = 0.5f;
 // Add a variable to track the time of the last fired bullet
 std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
 
+bool sinusoidal_fire = false;
 bool x3_fire = false;
-bool x5_fire = true;
-bool sinusoidal_fire = true;
+bool x5_fire = false;
+
 
 // Window dimensions
 int windowWidth = 1920;
@@ -921,6 +922,56 @@ public:
 
 
 
+
+
+class power_up : public sprite
+{
+public:
+
+	void integrate(float dt)
+	{
+		old_x = x;
+		old_y = y;
+
+		// Store the original direction vector
+		float dirX = vel_x * dt;
+		float dirY = vel_y * dt;
+
+		// Normalize the direction vector
+		float dirLength = sqrt(dirX * dirX + dirY * dirY);
+		if (dirLength > 0) {
+			dirX /= dirLength;
+			dirY /= dirLength;
+		}
+
+		// Move forward along original path
+		float forwardSpeed = dirLength; // Original velocity magnitude
+		x += dirX * forwardSpeed;
+		y += dirY * forwardSpeed;
+	}
+
+
+};
+
+class sinusoidal_fire_power_up : public power_up
+{
+public:
+};
+
+class x3_fire_power_up : public power_up
+{
+public:
+};
+
+class x5_fire_power_up : public power_up
+{
+public:
+};
+
+
+
+
+
 class ship : public tri_sprite
 {
 public:
@@ -1015,10 +1066,58 @@ public:
 	// POWER_UP_TYPE_* constant (0-based). Persisted via the
 	// enemy_power_up table.
 	vector<int> power_ups;
+
+	vector<unique_ptr<power_up>> power_ups_vector;
+
 	int path_pixel_delay = 0;
 	float path_scroll_rate = 0.0f; // computed at activation
 
 	float path_t = -1.0f;
+
+	enemy_ship() = default;
+
+	// Custom copy ctor: vector<unique_ptr<power_up>> is non-copyable, so the
+	// implicit copy ctor is deleted. Spawned ships start with no live
+	// power-up sprites, so power_ups_vector is intentionally left empty in
+	// the copy. Everything else is copied normally.
+	enemy_ship(const enemy_ship& other)
+		: ship(other),
+		template_idx(other.template_idx),
+		appearance_time(other.appearance_time),
+		path_animation_length(other.path_animation_length),
+		path_points(other.path_points),
+		path_speeds(other.path_speeds),
+		cannons(other.cannons),
+		power_ups(other.power_ups),
+		// power_ups_vector intentionally left empty
+		path_pixel_delay(other.path_pixel_delay),
+		path_scroll_rate(other.path_scroll_rate),
+		path_t(other.path_t)
+	{
+	}
+
+	enemy_ship& operator=(const enemy_ship& other)
+	{
+		if (this != &other)
+		{
+			ship::operator=(other);
+			template_idx = other.template_idx;
+			appearance_time = other.appearance_time;
+			path_animation_length = other.path_animation_length;
+			path_points = other.path_points;
+			path_speeds = other.path_speeds;
+			cannons = other.cannons;
+			power_ups = other.power_ups;
+			power_ups_vector.clear();
+			path_pixel_delay = other.path_pixel_delay;
+			path_scroll_rate = other.path_scroll_rate;
+			path_t = other.path_t;
+		}
+		return *this;
+	}
+
+	enemy_ship(enemy_ship&&) = default;
+	enemy_ship& operator=(enemy_ship&&) = default;
 
 	void integrate(float dt)
 	{
@@ -1223,14 +1322,6 @@ public:
 
 
 
-
-
-
-
-
-
-
-
 inline float pixelToNormX(float px) { return px / (float)SIM_WIDTH; }
 inline float pixelToNormY(float py) { return 1.0f - py / (float)SIM_HEIGHT; }  // Flip Y
 
@@ -1240,6 +1331,9 @@ inline float velPixelToNormY(float vy) { return -vy / (float)SIM_HEIGHT; }
 
 vector<unique_ptr<bullet>> ally_bullets;
 vector<unique_ptr<bullet>> enemy_bullets;
+
+
+
 
 
 vector<unique_ptr<enemy_ship>> enemy_ships;
@@ -6071,6 +6165,10 @@ static EditorUndoState editorCaptureState()
 	return state;
 }
 
+
+
+
+
 static void editorRestoreState(const EditorUndoState& state)
 {
 	// Shrink: remove excess enemies
@@ -7762,7 +7860,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->template_idx = tIdx;
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
-			ne->health = ne->max_health = 10000.f;
+			ne->health = ne->max_health = 1000.f;
 			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
