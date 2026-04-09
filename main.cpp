@@ -932,7 +932,7 @@ public:
 	// power-up has its own phase. Frequency is in radians/sec, amplitude in pixels.
 	float wave_time = 0.0f;
 	float wave_frequency = 6.0f;
-	float wave_amplitude = 40.0f;
+	float wave_amplitude = 50.0f;
 
 	power_up()
 	{
@@ -940,8 +940,10 @@ public:
 		// same enemy at the same instant don't trace identical paths. We seed
 		// wave_time with a value in [0, 2*PI / wave_frequency), which covers a
 		// full period of the sine wave.
-		const float TWO_PI = 8.0f*atan(1.0f);
+		static const float TWO_PI = 8.0f*atan(1.0f);
 		wave_time = dis_real(generator_real) * (TWO_PI / wave_frequency);
+		wave_amplitude = 50.0f + dis_real(generator_real) * 50.0f;
+		wave_frequency = 6.0f;
 	}
 
 	virtual void integrate(float dt)
@@ -1095,8 +1097,6 @@ public:
 	// enemy_power_up table.
 	vector<int> power_ups;
 
-	vector<unique_ptr<power_up>> power_ups_vector;
-
 	int path_pixel_delay = 0;
 	float path_scroll_rate = 0.0f; // computed at activation
 
@@ -1117,7 +1117,6 @@ public:
 		path_speeds(other.path_speeds),
 		cannons(other.cannons),
 		power_ups(other.power_ups),
-		// power_ups_vector intentionally left empty
 		path_pixel_delay(other.path_pixel_delay),
 		path_scroll_rate(other.path_scroll_rate),
 		path_t(other.path_t)
@@ -1136,7 +1135,6 @@ public:
 			path_speeds = other.path_speeds;
 			cannons = other.cannons;
 			power_ups = other.power_ups;
-			power_ups_vector.clear();
 			path_pixel_delay = other.path_pixel_delay;
 			path_scroll_rate = other.path_scroll_rate;
 			path_t = other.path_t;
