@@ -5860,11 +5860,35 @@ void simulate()
 	// Integrate live power-ups and flag off-screen ones for culling
 	for (auto& p : power_ups_alive)
 	{
-		if (p->to_be_culled) continue;
+		if (p->to_be_culled) 
+			continue;
+		
 		p->integrate(DT);
+
 		if (!p->isOnscreen())
 			p->to_be_culled = true;
+
+		if (detectTriSpriteToSpriteOverlap(protagonist, *p, 1))
+		{
+			if (dynamic_cast<sinusoidal_fire_power_up*>(p.get()))
+			{
+				sinusoidal_fire = true;
+			}
+			else if (dynamic_cast<x3_fire_power_up*>(p.get()))
+			{
+				x3_fire = true;
+			}
+			else if (dynamic_cast<x5_fire_power_up*>(p.get()))
+			{
+				x5_fire = true;
+			}
+
+			p->to_be_culled = true;
+		}
+
 	}
+
+
 
 	// NEW: Build batched splats
 	std::vector<Splat> densitySplats;
@@ -5971,10 +5995,22 @@ void simulate()
 				else if (pu_type == POWER_UP_TYPE_X5)    tmpl = &power_up_template_x5;
 				if (!tmpl || tmpl->tex == 0) continue;
 
-				auto p = make_unique<power_up>();
+				std::unique_ptr<power_up> p;
+				if (pu_type == POWER_UP_TYPE_SINUSOIDAL)
+					p = make_unique<sinusoidal_fire_power_up>();
+				else if (pu_type == POWER_UP_TYPE_X3)
+					p = make_unique<x3_fire_power_up>();
+				else if (pu_type == POWER_UP_TYPE_X5)
+					p = make_unique<x5_fire_power_up>();
+				else
+					p = make_unique<power_up>();
 				p->tex = tmpl->tex;
 				p->width = tmpl->width;
 				p->height = tmpl->height;
+				p->to_present_data = tmpl->to_present_data;
+				p->to_present_data_pointers.clear();
+				if (!p->to_present_data.empty())
+					p->to_present_data_pointers.push_back(p->to_present_data.data());
 				// Center on the dying enemy
 				p->x = enemy_ships[i]->x + (enemy_ships[i]->width - p->width) / 2.0f;
 				p->y = enemy_ships[i]->y + (enemy_ships[i]->height - p->height) / 2.0f;
