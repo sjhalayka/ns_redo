@@ -1332,7 +1332,15 @@ inline float velPixelToNormY(float vy) { return -vy / (float)SIM_HEIGHT; }
 vector<unique_ptr<bullet>> ally_bullets;
 vector<unique_ptr<bullet>> enemy_bullets;
 
+// Power-up templates (one per type). Only their tex/width/height are used as a
+// blueprint when we spawn a live power_up into the world.
+sprite power_up_template_sinusoidal;
+sprite power_up_template_x3;
+sprite power_up_template_x5;
 
+// All power-ups currently alive in the world. Spawned when an enemy carrying
+// power-ups dies; integrated, drawn, and culled each frame.
+vector<unique_ptr<power_up>> power_ups_alive;
 
 
 
@@ -5849,6 +5857,15 @@ void simulate()
 
 
 
+	// Integrate live power-ups and flag off-screen ones for culling
+	for (auto& p : power_ups_alive)
+	{
+		if (p->to_be_culled) continue;
+		p->integrate(DT);
+		if (!p->isOnscreen())
+			p->to_be_culled = true;
+	}
+
 	// NEW: Build batched splats
 	std::vector<Splat> densitySplats;
 	std::vector<Splat> velocitySplats;
@@ -5944,6 +5961,29 @@ void simulate()
 			// ============== END WAVE TRIGGER ==============
 
 			make_dying_bullets(*(enemy_ships[i]), true);
+
+			// spawn power ups here
+			for (int pu_type : enemy_ships[i]->power_ups)
+			{
+				sprite* tmpl = nullptr;
+				if (pu_type == POWER_UP_TYPE_SINUSOIDAL) tmpl = &power_up_template_sinusoidal;
+				else if (pu_type == POWER_UP_TYPE_X3)    tmpl = &power_up_template_x3;
+				else if (pu_type == POWER_UP_TYPE_X5)    tmpl = &power_up_template_x5;
+				if (!tmpl || tmpl->tex == 0) continue;
+
+				auto p = make_unique<power_up>();
+				p->tex = tmpl->tex;
+				p->width = tmpl->width;
+				p->height = tmpl->height;
+				// Center on the dying enemy
+				p->x = enemy_ships[i]->x + (enemy_ships[i]->width - p->width) / 2.0f;
+				p->y = enemy_ships[i]->y + (enemy_ships[i]->height - p->height) / 2.0f;
+				// Drift left with the world so it appears stationary in world space
+				p->vel_x = foreground_vel;
+				p->vel_y = 0.0f;
+				power_ups_alive.push_back(std::move(p));
+			}
+
 			enemy_ships[i]->to_be_culled = true;
 		}
 	}
@@ -7591,6 +7631,26 @@ void load_media(const char* level_string)
 		return;
 	}
 
+	// Power-up textures. Warn (don't return) so the level still loads if art
+	// assets are missing. Rename these paths to match your actual files.
+	power_up_template_sinusoidal.tex = loadTextureFromFile("media/sinusoidal_fire.png",
+		&power_up_template_sinusoidal.width, &power_up_template_sinusoidal.height,
+		power_up_template_sinusoidal.to_present_data);
+	if (power_up_template_sinusoidal.tex == 0)
+		std::cout << "Warning: Could not load sinusoidal_fire.png" << std::endl;
+
+	power_up_template_x3.tex = loadTextureFromFile("media/x3_fire.png",
+		&power_up_template_x3.width, &power_up_template_x3.height,
+		power_up_template_x3.to_present_data);
+	if (power_up_template_x3.tex == 0)
+		std::cout << "Warning: Could not load x3_fire.png" << std::endl;
+
+	power_up_template_x5.tex = loadTextureFromFile("media/x5_fire.png",
+		&power_up_template_x5.width, &power_up_template_x5.height,
+		power_up_template_x5.to_present_data);
+	if (power_up_template_x5.tex == 0)
+		std::cout << "Warning: Could not load x5_fire.png" << std::endl;
+
 	string affix = "media/";
 	affix += level_string;
 	affix += "/";
@@ -7696,6 +7756,7 @@ void reset_game()
 	// ---- Clear all bullets ----
 	ally_bullets.clear();
 	enemy_bullets.clear();
+	power_ups_alive.clear();
 
 	// ---- Clear and reload enemy ships from the database ----
 	// retrieve_level_data already calls enemy_ships.clear() internally
@@ -7860,7 +7921,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->template_idx = tIdx;
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
-			ne->health = ne->max_health = 1000.f;
+			ne->health = ne->max_health = 100.f;
 			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
@@ -8607,6 +8668,18 @@ void display()
 		}
 	}
 
+	// Draw live power-ups
+	for (size_t i = 0; i < power_ups_alive.size(); i++)
+	{
+		if (power_ups_alive[i]->tex != 0 && !power_ups_alive[i]->to_be_culled)
+		{
+			drawSprite(power_ups_alive[i]->tex,
+				static_cast<int>(power_ups_alive[i]->x),
+				static_cast<int>(power_ups_alive[i]->y),
+				power_ups_alive[i]->width, power_ups_alive[i]->height, false);
+		}
+	}
+
 
 
 
@@ -8829,6 +8902,14 @@ void display()
 		}
 		else
 			it++;
+	}
+
+	for (auto it = power_ups_alive.begin(); it != power_ups_alive.end();)
+	{
+		if ((*it)->to_be_culled)
+			it = power_ups_alive.erase(it);
+		else
+			++it;
 	}
 
 	//for (auto it = enemy_ships.begin(); it != enemy_ships.end();)
