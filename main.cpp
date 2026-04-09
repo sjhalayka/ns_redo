@@ -2208,8 +2208,8 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 	{
 		const enemy_ship& e = *enemy_ships[i];
 		oss << "Enemy " << i << ":\n";
-		oss << "  max_health = " << e.max_health << "  (h/H -/+100)\n";
-		oss << "  path_animation_length = " << e.path_animation_length << "s  (j/J -/+1.0)\n";
+		oss << "  max_health = " << e.max_health << "\n";
+		oss << "  path_animation_length = " << e.path_animation_length << "s\n";
 		oss << "  Path points (" << e.path_points.size() << "):\n";
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
