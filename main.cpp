@@ -940,7 +940,7 @@ public:
 		// same enemy at the same instant don't trace identical paths. We seed
 		// wave_time with a value in [0, 2*PI / wave_frequency), which covers a
 		// full period of the sine wave.
-		static const float TWO_PI = 8.0f*atan(1.0f);
+		static const float TWO_PI = 8.0f * atan(1.0f);
 		wave_time = dis_real(generator_real) * (TWO_PI / wave_frequency);
 		wave_amplitude = 50.0f + dis_real(generator_real) * 50.0f;
 		wave_frequency = 6.0f;
@@ -2208,6 +2208,8 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 	{
 		const enemy_ship& e = *enemy_ships[i];
 		oss << "Enemy " << i << ":\n";
+		oss << "  max_health = " << e.max_health << "  (h/H -/+100)\n";
+		oss << "  path_animation_length = " << e.path_animation_length << "s  (j/J -/+1.0)\n";
 		oss << "  Path points (" << e.path_points.size() << "):\n";
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
@@ -6164,6 +6166,9 @@ void simulate()
 //  T                 Cycle cannon type of selected cannon: LEFT -> UP_DOWN -> TRACKING
 //  , / .             Decrease / increase fire interval of selected cannon
 //
+//  h / H             Decrease / increase selected enemy max_health by 100
+//  j / J             Decrease / increase selected enemy path_animation_length by 1.0s
+//
 //  Shift+LMB         Add a speed knot (default value 1.0)
 //  Shift+RMB         Remove last speed knot
 //  LMB near diamond  Select that speed knot (shown in yellow)
@@ -8194,6 +8199,64 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			e->path_speeds[g_selectedSpeedKnot] += 0.1f;
 			std::cout << "[Editor] Speed knot " << g_selectedSpeedKnot
 				<< " -> " << e->path_speeds[g_selectedSpeedKnot] << "\n";
+		}
+		return true;
+
+	case 'h':
+		// Decrease selected enemy's max_health by 100 (min 100)
+		if (e)
+		{
+			editorPushUndo();
+			e->max_health = std::max(100.0f, e->max_health - 100.0f);
+			e->health = std::min(e->health, e->max_health);
+			std::cout << "[Editor] Enemy " << g_selectedEnemy
+				<< " max_health -> " << e->max_health << "\n";
+		}
+		return true;
+
+	case 'H':
+		// Increase selected enemy's max_health by 100
+		if (e)
+		{
+			editorPushUndo();
+			e->max_health += 100.0f;
+			e->health = e->max_health;
+			std::cout << "[Editor] Enemy " << g_selectedEnemy
+				<< " max_health -> " << e->max_health << "\n";
+		}
+		return true;
+
+	case 'j':
+		// Decrease selected enemy's path_animation_length by 1.0 (min 0.1)
+		if (e)
+		{
+			editorPushUndo();
+			e->path_animation_length = std::max(0.1f, e->path_animation_length - 1.0f);
+			if (e->path_animation_length > 0.0f && e->path_points.size() >= 2)
+			{
+				float actual_duration = calculate_actual_path_duration(
+					e->path_points, e->path_speeds, e->path_animation_length);
+				e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
+			}
+			std::cout << "[Editor] Enemy " << g_selectedEnemy
+				<< " path_animation_length -> " << e->path_animation_length << "s\n";
+		}
+		return true;
+
+	case 'J':
+		// Increase selected enemy's path_animation_length by 1.0
+		if (e)
+		{
+			editorPushUndo();
+			e->path_animation_length += 1.0f;
+			if (e->path_animation_length > 0.0f && e->path_points.size() >= 2)
+			{
+				float actual_duration = calculate_actual_path_duration(
+					e->path_points, e->path_speeds, e->path_animation_length);
+				e->path_scroll_rate = -(e->width * 0.5f) / actual_duration;
+			}
+			std::cout << "[Editor] Enemy " << g_selectedEnemy
+				<< " path_animation_length -> " << e->path_animation_length << "s\n";
 		}
 		return true;
 
