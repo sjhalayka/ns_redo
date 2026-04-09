@@ -928,7 +928,7 @@ class power_up : public sprite
 {
 public:
 
-	void integrate(float dt)
+	virtual void integrate(float dt)
 	{
 		old_x = x;
 		old_y = y;
@@ -5860,7 +5860,7 @@ void simulate()
 	// Integrate live power-ups and flag off-screen ones for culling
 	for (auto& p : power_ups_alive)
 	{
-		if (p->to_be_culled) 
+		if (p->to_be_culled)
 			continue;
 		
 		p->integrate(DT);
@@ -8943,7 +8943,10 @@ void display()
 	for (auto it = power_ups_alive.begin(); it != power_ups_alive.end();)
 	{
 		if ((*it)->to_be_culled)
+		{
+			cout << "culling power up" << endl;
 			it = power_ups_alive.erase(it);
+		}
 		else
 			++it;
 	}
