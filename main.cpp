@@ -1092,6 +1092,7 @@ public:
 	vector<glm::vec2> path_points;
 	vector<float> path_speeds;
 	vector<cannon> cannons;
+
 	// List of power-up types owned by this enemy. Each entry is a
 	// POWER_UP_TYPE_* constant (0-based). Persisted via the
 	// enemy_power_up table.
