@@ -823,13 +823,16 @@ public:
 		to_present_data(other.to_present_data)
 	{
 		to_present_data_pointers.clear();
-		to_present_data_pointers.push_back(&to_present_data[0]);
+		if (!to_present_data.empty())
+			to_present_data_pointers.push_back(to_present_data.data());
 	}
 
 	sprite(void)
 	{
-		to_present_data_pointers.push_back(&to_present_data[0]);
+		// Leave to_present_data_pointers empty until data is loaded.
+		// Whatever code populates to_present_data should also push the pointer.
 	}
+
 
 	void update_tex(void)
 	{
@@ -9396,6 +9399,9 @@ void keyboardup(unsigned char key, int x, int y) {
 
 int main(int argc, char** argv)
 {
+	cout << "Test" << endl;
+
+
 	// Initialize GLUT
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
