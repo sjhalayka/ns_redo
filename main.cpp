@@ -1078,19 +1078,19 @@ public:
 		}
 		else if (vel_y < 0)
 		{
-			// Upward: map to frames [0 .. half-1], 0 = strongest
-			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
-			int offset = static_cast<int>(t * half + 0.5f);
-			if (offset > half) offset = half;
-			state = half - offset;
-		}
-		else if (vel_y > 0)
-		{
 			// Downward: map to frames [half+1 .. n-1], n-1 = strongest
 			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
 			int offset = static_cast<int>(t * half + 0.5f);
 			if (offset > half) offset = half;
 			state = half + offset;
+		}
+		else if (vel_y > 0)
+		{
+			// Upward: map to frames [0 .. half-1], 0 = strongest
+			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
+			int offset = static_cast<int>(t * half + 0.5f);
+			if (offset > half) offset = half;
+			state = half - offset;
 		}
 		else
 		{
@@ -1232,7 +1232,7 @@ public:
 			int offset = static_cast<int>(t * half + 0.5f);
 			if (offset < 1) offset = 1;
 			if (offset > half) offset = half;
-			state = half - offset;
+			state = half + offset;
 		}
 		else if (vel_y > dead_zone)
 		{
@@ -1240,7 +1240,7 @@ public:
 			int offset = static_cast<int>(t * half + 0.5f);
 			if (offset < 1) offset = 1;
 			if (offset > half) offset = half;
-			state = half + offset;
+			state = half - offset;
 		}
 		else
 		{
