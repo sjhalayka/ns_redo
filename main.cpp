@@ -843,47 +843,63 @@ public:
 
 
 
-//const int UP_STATE = 0;
-//const int DOWN_STATE = 1;
+const int UP_STATE = 0;
+const int DOWN_STATE = 1;
 const int REST_STATE = 2;
 
 class tri_sprite : public pre_sprite
 {
 public:
 
+	// n-sprite frames: index 0 = most "up", index n/2 = rest, index n-1 = most "down".
+	// n must be odd so there is always a clear centre/rest frame.
+	std::vector<std::vector<unsigned char>> sprite_frames;
 
-	std::vector<unsigned char> to_present_up_data;
-	std::vector<unsigned char> to_present_down_data;
-	std::vector<unsigned char> to_present_rest_data;
+	int state = 0; // will be set to rest_state_index() after frames are loaded
 
-	int state = REST_STATE;
+	// Legacy accessors -- return references into sprite_frames for the three
+	// canonical roles (up = first, down = last, rest = middle).
+	std::vector<unsigned char>& get_up_data() { return sprite_frames.front(); }
+	std::vector<unsigned char>& get_down_data() { return sprite_frames.back(); }
+	std::vector<unsigned char>& get_rest_data() { return sprite_frames[sprite_frames.size() / 2]; }
+
+	const std::vector<unsigned char>& get_up_data()   const { return sprite_frames.front(); }
+	const std::vector<unsigned char>& get_down_data() const { return sprite_frames.back(); }
+	const std::vector<unsigned char>& get_rest_data() const { return sprite_frames[sprite_frames.size() / 2]; }
+
+	int rest_state_index() const { return static_cast<int>(sprite_frames.size()) / 2; }
+	int num_frames()       const { return static_cast<int>(sprite_frames.size()); }
 
 	void rebuild_pointers()
 	{
 		to_present_data_pointers.clear();
-		to_present_data_pointers.push_back(&to_present_up_data[0]);
-		to_present_data_pointers.push_back(&to_present_down_data[0]);
-		to_present_data_pointers.push_back(&to_present_rest_data[0]);
+		for (size_t i = 0; i < sprite_frames.size(); i++)
+			to_present_data_pointers.push_back(sprite_frames[i].data());
 	}
 
 	tri_sprite(void)
 	{
-
+		// Start with 3 empty frames so legacy code that checks .empty() works
+		// before real data is loaded.
+		sprite_frames.resize(3);
+		state = rest_state_index();
 	}
 
+	// Accept an arbitrary number of frames (must be odd).
 	void manually_update_data(
-		const std::vector<unsigned char>& src_to_present_up_data,
-		const std::vector<unsigned char>& src_to_present_down_data,
-		const std::vector<unsigned char>& src_to_present_rest_data)
+		const std::vector<std::vector<unsigned char>>& src_frames)
 	{
-		if (src_to_present_up_data.size() > 0)
-			to_present_up_data = src_to_present_up_data;
+		// Resize our frame vector to match.
+		if (sprite_frames.size() != src_frames.size())
+			sprite_frames.resize(src_frames.size());
 
-		if (src_to_present_down_data.size() > 0)
-			to_present_down_data = src_to_present_down_data;
+		for (size_t i = 0; i < src_frames.size(); i++)
+		{
+			if (!src_frames[i].empty())
+				sprite_frames[i] = src_frames[i];
+		}
 
-		if (src_to_present_rest_data.size() > 0)
-			to_present_rest_data = src_to_present_rest_data;
+		state = rest_state_index();
 
 		// Create a unique OpenGL texture for this instance so that
 		// multiple sprites cloned from the same template do not
@@ -897,6 +913,19 @@ public:
 		update_tex();
 	}
 
+	// Legacy 3-argument overload for call sites that still pass three vectors.
+	void manually_update_data(
+		const std::vector<unsigned char>& src_to_present_up_data,
+		const std::vector<unsigned char>& src_to_present_down_data,
+		const std::vector<unsigned char>& src_to_present_rest_data)
+	{
+		std::vector<std::vector<unsigned char>> frames(3);
+		frames[0] = src_to_present_up_data;
+		frames[1] = src_to_present_rest_data;
+		frames[2] = src_to_present_down_data;
+		manually_update_data(frames);
+	}
+
 
 
 	//----------------------------------------------------------------------
@@ -904,22 +933,23 @@ public:
 	//----------------------------------------------------------------------
 	void update_tex()
 	{
+		if (sprite_frames.empty()) return;
+
+		// Clamp state into valid range.
+		int idx = state;
+		if (idx < 0) idx = 0;
+		if (idx >= (int)sprite_frames.size()) idx = (int)sprite_frames.size() - 1;
+
 		glBindTexture(GL_TEXTURE_2D, tex);
 
-		//if (state == UP_STATE)
-		//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-		//		GL_RGBA, GL_UNSIGNED_BYTE,
-		//		to_present_up_data.data());
-
-		//else if (state == DOWN_STATE)
-		//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-		//		GL_RGBA, GL_UNSIGNED_BYTE,
-		//		to_present_down_data.data());
-
-		//else// if (state == REST_STATE)
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-			GL_RGBA, GL_UNSIGNED_BYTE,
-			to_present_rest_data.data());
+		if (!sprite_frames[idx].empty())
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				sprite_frames[idx].data());
+		else if (!sprite_frames[rest_state_index()].empty())
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				sprite_frames[rest_state_index()].data());
 	}
 };
 
@@ -1035,18 +1065,37 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		//if (vel_y < 0)
-		//{
-		//	state = UP_STATE;
-		//}
-		//else if (vel_y > 0)
-		//{
-		//	state = DOWN_STATE;
-		//}
-		//else
-		//{
-		state = REST_STATE;
-		//}
+		// Map y-velocity to one of n sprite frames.
+		// Frame 0 = strongest upward, rest_state_index() = no vertical,
+		// num_frames()-1 = strongest downward.
+		const int n = num_frames();
+		const int half = n / 2; // rest index
+		const float max_vel = 0.5f * SIM_HEIGHT; // velocity that saturates to the extreme frame
+
+		if (n <= 1)
+		{
+			state = 0;
+		}
+		else if (vel_y < 0)
+		{
+			// Upward: map to frames [0 .. half-1], 0 = strongest
+			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
+			int offset = static_cast<int>(t * half + 0.5f);
+			if (offset > half) offset = half;
+			state = half - offset;
+		}
+		else if (vel_y > 0)
+		{
+			// Downward: map to frames [half+1 .. n-1], n-1 = strongest
+			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
+			int offset = static_cast<int>(t * half + 0.5f);
+			if (offset > half) offset = half;
+			state = half + offset;
+		}
+		else
+		{
+			state = half;
+		}
 
 		update_tex();
 	}
@@ -1167,18 +1216,36 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		//if (vel_y < -0.01 * SIM_HEIGHT)
-		//{
-		//	state = UP_STATE;
-		//}
-		//else if (vel_y > 0.01 * SIM_HEIGHT)
-		//{
-		//	state = DOWN_STATE;
-		//}
-		//else
-		//{
-		state = REST_STATE;
-		//}
+		// Map y-velocity to one of n sprite frames.
+		const int n = num_frames();
+		const int half = n / 2;
+		const float dead_zone = 0.01f * SIM_HEIGHT;
+		const float max_vel = 0.5f * SIM_HEIGHT;
+
+		if (n <= 1)
+		{
+			state = 0;
+		}
+		else if (vel_y < -dead_zone)
+		{
+			float t = std::min(1.0f, (std::abs(vel_y) - dead_zone) / (max_vel - dead_zone));
+			int offset = static_cast<int>(t * half + 0.5f);
+			if (offset < 1) offset = 1;
+			if (offset > half) offset = half;
+			state = half - offset;
+		}
+		else if (vel_y > dead_zone)
+		{
+			float t = std::min(1.0f, (std::abs(vel_y) - dead_zone) / (max_vel - dead_zone));
+			int offset = static_cast<int>(t * half + 0.5f);
+			if (offset < 1) offset = 1;
+			if (offset > half) offset = half;
+			state = half + offset;
+		}
+		else
+		{
+			state = half;
+		}
 
 		update_tex();
 	}
@@ -1382,7 +1449,7 @@ vector<unique_ptr<enemy_ship>> enemy_ships;
 friendly_ship protagonist;
 background_tile background;
 bullet bullet_template;
-vector<enemy_ship> enemy_templates;  // Automatically populated from media/enemy*_up.png files
+vector<enemy_ship> enemy_templates;  // Automatically populated from media/enemy_<N>_<frame>.png files
 boss_ship boss_template;
 
 
@@ -1554,13 +1621,22 @@ bool detectSpriteOverlap(const pre_sprite& sprA, const pre_sprite& sprB, unsigne
  */
 const unsigned char* getTriSpriteActiveData(const tri_sprite& spr)
 {
-	/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
-			return spr.to_present_up_data.data();
-		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
-			return spr.to_present_down_data.data();
-		else */if (!spr.to_present_rest_data.empty())
-			return spr.to_present_rest_data.data();
+	if (spr.sprite_frames.empty())
 		return nullptr;
+
+	int idx = spr.state;
+	if (idx < 0) idx = 0;
+	if (idx >= (int)spr.sprite_frames.size()) idx = (int)spr.sprite_frames.size() - 1;
+
+	if (!spr.sprite_frames[idx].empty())
+		return spr.sprite_frames[idx].data();
+
+	// Fallback to rest frame
+	int rest = (int)spr.sprite_frames.size() / 2;
+	if (!spr.sprite_frames[rest].empty())
+		return spr.sprite_frames[rest].data();
+
+	return nullptr;
 }
 
 bool detectTriSpriteToSpriteOverlap(
@@ -4151,25 +4227,30 @@ bool isPixelInsideTriSpriteAndTransparent(
 
 	unsigned char* data_ptr = 0;
 
-	/*	if (spr.state == UP_STATE && !spr.to_present_up_data.empty())
-			data_ptr = spr.to_present_up_data.data();
-		else if (spr.state == DOWN_STATE && !spr.to_present_down_data.empty())
-			data_ptr = spr.to_present_down_data.data();
-		else */if (!spr.to_present_rest_data.empty())
-			data_ptr = spr.to_present_rest_data.data();
+	// Use the active frame based on current state (n-sprite aware)
+	{
+		int idx = spr.state;
+		if (idx < 0) idx = 0;
+		if (idx >= (int)spr.sprite_frames.size()) idx = (int)spr.sprite_frames.size() - 1;
+
+		if (!spr.sprite_frames.empty() && !spr.sprite_frames[idx].empty())
+			data_ptr = const_cast<unsigned char*>(spr.sprite_frames[idx].data());
+		else if (!spr.sprite_frames.empty() && !spr.sprite_frames[spr.rest_state_index()].empty())
+			data_ptr = const_cast<unsigned char*>(spr.sprite_frames[spr.rest_state_index()].data());
+	}
 
 
 
-		// 4. Index into pixel buffer
-		int idx = (texY * sprW + texX) * 4;
-		unsigned char a = data_ptr[idx + 3];  // ALPHA
+	// 4. Index into pixel buffer
+	int idx = (texY * sprW + texX) * 4;
+	unsigned char a = data_ptr[idx + 3];  // ALPHA
 
-		// 5. Transparent?
-		outTransparent = (a < alphaThreshold);
+	// 5. Transparent?
+	outTransparent = (a < alphaThreshold);
 
-		hit = glm::vec2(localX, localY);
+	hit = glm::vec2(localX, localY);
 
-		return true;
+	return true;
 }
 
 
@@ -4831,6 +4912,90 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, 
 
 
 
+// Load n sprite frame files into a tri_sprite. The filenames vector must have
+// an odd number of entries, ordered from the "most up" frame to the "most down"
+// frame, with the middle entry being the rest frame.
+GLuint loadTextureFromFile_NSprite(
+	const std::vector<std::string>& filenames,
+	int* outWidth, int* outHeight,
+	tri_sprite& t)
+{
+	if (filenames.empty() || filenames.size() % 2 == 0)
+	{
+		std::cerr << "loadTextureFromFile_NSprite: need an odd number of frame files (got "
+			<< filenames.size() << ")" << std::endl;
+		if (outWidth) *outWidth = 0;
+		if (outHeight) *outHeight = 0;
+		return 0;
+	}
+
+	int width = 0, height = 0, channels = 0;
+
+	t.sprite_frames.clear();
+	t.sprite_frames.resize(filenames.size());
+
+	stbi_set_flip_vertically_on_load(0);
+
+	unsigned char* rest_raw = nullptr; // we keep a pointer to the rest frame for the initial texture upload
+
+	for (size_t f = 0; f < filenames.size(); f++)
+	{
+		int w, h, c;
+		unsigned char* data = stbi_load(filenames[f].c_str(), &w, &h, &c, 4);
+		if (!data)
+		{
+			std::cerr << "Failed to load texture: " << filenames[f] << std::endl;
+			std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
+			// Free any rest_raw we were keeping
+			// (all previous frames already copied & freed)
+			if (outWidth) *outWidth = 0;
+			if (outHeight) *outHeight = 0;
+			return 0;
+		}
+
+		if (f == 0)
+		{
+			width = w;
+			height = h;
+			channels = 4; // forced RGBA
+		}
+
+		t.sprite_frames[f].assign(data, data + (size_t)w * h * 4);
+
+		// Keep the rest frame raw pointer for the initial GL upload, free later
+		if ((int)f == (int)filenames.size() / 2)
+		{
+			rest_raw = data; // don't free yet
+		}
+		else
+		{
+			stbi_image_free(data);
+		}
+	}
+
+	// Create GL texture using the rest frame
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rest_raw);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	stbi_image_free(rest_raw);
+
+	if (outWidth) *outWidth = width;
+	if (outHeight) *outHeight = height;
+
+	t.state = t.rest_state_index();
+	t.rebuild_pointers();
+
+	return tex;
+}
+
+// Legacy wrapper: load exactly 3 files (up, down, rest) in the old calling convention.
+// Internally reorders to n-sprite order: [up, rest, down] (indices 0, 1, 2).
 GLuint loadTextureFromFile_Triplet(
 	const char* up_filename,
 	const char* down_filename,
@@ -4841,73 +5006,21 @@ GLuint loadTextureFromFile_Triplet(
 	vector<unsigned char>& out_rest_data,
 	tri_sprite& t)
 {
-	int width, height, channels;
+	std::vector<std::string> filenames = {
+		up_filename,
+		rest_filename,
+		down_filename
+	};
 
-	out_up_data.clear();
-	out_down_data.clear();
-	out_rest_data.clear();
+	GLuint tex = loadTextureFromFile_NSprite(filenames, outWidth, outHeight, t);
 
-	// stb_image loads with (0,0) at top-left, which matches our coordinate system
-	stbi_set_flip_vertically_on_load(0);  // Don't flip - we handle it in the shader
-
-
-	unsigned char* up_data = stbi_load(up_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!up_data) {
-		std::cerr << "Failed to load texture: " << up_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
+	// Copy frame data back to the legacy output vectors for callers that still need them.
+	if (tex != 0 && t.sprite_frames.size() == 3)
+	{
+		out_up_data = t.sprite_frames[0];
+		out_rest_data = t.sprite_frames[1];
+		out_down_data = t.sprite_frames[2];
 	}
-
-	unsigned char* down_data = stbi_load(down_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!down_data) {
-		std::cerr << "Failed to load texture: " << down_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
-	}
-
-	unsigned char* rest_data = stbi_load(rest_filename, &width, &height, &channels, 4);  // Force RGBA
-	if (!rest_data) {
-		std::cerr << "Failed to load texture: " << rest_filename << std::endl;
-		std::cerr << "stb_image error: " << stbi_failure_reason() << std::endl;
-		if (outWidth) *outWidth = 0;
-		if (outHeight) *outHeight = 0;
-		return 0;
-	}
-
-	GLuint tex;
-	glGenTextures(1, &tex);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rest_data);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-
-
-	for (size_t i = 0; i < width * height * channels; i++)
-		out_up_data.push_back(up_data[i]);
-
-	stbi_image_free(up_data);
-
-	for (size_t i = 0; i < width * height * channels; i++)
-		out_down_data.push_back(down_data[i]);
-
-	stbi_image_free(down_data);
-
-	for (size_t i = 0; i < width * height * channels; i++)
-		out_rest_data.push_back(rest_data[i]);
-
-	stbi_image_free(rest_data);
-
-	if (outWidth) *outWidth = width;
-	if (outHeight) *outHeight = height;
-
-	t.rebuild_pointers();
 
 	return tex;
 }
@@ -5451,10 +5564,15 @@ void simulate()
 				{
 					transparent = true;
 				}
-				else if (!enemy_ships[i]->to_present_rest_data.empty())
+				else
 				{
-					size_t index = (static_cast<size_t>(py) * enemy_ships[i]->width + px) * 4 + 3;
-					transparent = (enemy_ships[i]->to_present_rest_data[index] == 0);
+					// Use the current active frame data for transparency check
+					const unsigned char* frame_data = getTriSpriteActiveData(*enemy_ships[i]);
+					if (frame_data)
+					{
+						size_t index = (static_cast<size_t>(py) * enemy_ships[i]->width + px) * 4 + 3;
+						transparent = (frame_data[index] == 0);
+					}
 				}
 
 				if (transparent)
@@ -6294,10 +6412,7 @@ static void editorRestoreState(const EditorUndoState& state)
 		enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
 		enemy_ship* ne = enemy_ships.back().get();
 		ne->to_be_culled = false;
-		ne->manually_update_data(
-			enemy_templates[tIdx].to_present_up_data,
-			enemy_templates[tIdx].to_present_down_data,
-			enemy_templates[tIdx].to_present_rest_data);
+		ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
 	}
 
 	// Restore every enemy's editable fields
@@ -6316,10 +6431,7 @@ static void editorRestoreState(const EditorUndoState& state)
 				e->template_idx = tIdx;
 				e->width = tmpl.width;
 				e->height = tmpl.height;
-				e->manually_update_data(
-					tmpl.to_present_up_data,
-					tmpl.to_present_down_data,
-					tmpl.to_present_rest_data);
+				e->manually_update_data(tmpl.sprite_frames);
 			}
 		}
 
@@ -7169,10 +7281,7 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	e->tex = tmpl.tex;
 	e->width = tmpl.width;
 	e->height = tmpl.height;
-	e->manually_update_data(
-		tmpl.to_present_up_data,
-		tmpl.to_present_down_data,
-		tmpl.to_present_rest_data);
+	e->manually_update_data(tmpl.sprite_frames);
 
 	// Re-centre the sprite on screen
 	e->x = cx - e->width * 0.5f;
@@ -7635,9 +7744,7 @@ void retrieve_level_data(const string& db_name)
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].x += desired_foreground_distance;
 
 			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
-				enemy_templates[enemy_template_index].to_present_up_data,
-				enemy_templates[enemy_template_index].to_present_down_data,
-				enemy_templates[enemy_template_index].to_present_rest_data);
+				enemy_templates[enemy_template_index].sprite_frames);
 
 			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
 
@@ -7677,8 +7784,32 @@ void retrieve_level_data(const string& db_name)
 
 void load_media(const char* level_string)
 {
-	// Load protagonist texture
-	protagonist.tex = loadTextureFromFile_Triplet("media/protagonist_up.png", "media/protagonist_down.png", "media/protagonist_rest.png", &protagonist.width, &protagonist.height, protagonist.to_present_up_data, protagonist.to_present_down_data, protagonist.to_present_rest_data, protagonist);
+	// Load protagonist texture -- scan for protagonist0.png, protagonist1.png, ...
+	// The number of files must be odd (e.g. 3, 5, 7).
+	{
+		std::vector<std::string> proto_files;
+		for (int i = 0; ; i++)
+		{
+			std::string path = "media/protagonist" + std::to_string(i) + ".png";
+			if (!fs::exists(path)) break;
+			proto_files.push_back(path);
+		}
+
+		if (proto_files.empty())
+		{
+			std::cout << "Warning: No protagonist sprite files found (expected media/protagonist0.png ...)" << std::endl;
+			return;
+		}
+		if (proto_files.size() % 2 == 0)
+		{
+			std::cout << "Warning: Protagonist has " << proto_files.size()
+				<< " frames but needs an odd number. Dropping the last frame." << std::endl;
+			proto_files.pop_back();
+		}
+
+		protagonist.tex = loadTextureFromFile_NSprite(proto_files,
+			&protagonist.width, &protagonist.height, protagonist);
+	}
 	if (protagonist.tex == 0)
 	{
 		std::cout << "Warning: Could not load protagonist sprite" << std::endl;
@@ -7744,12 +7875,14 @@ void load_media(const char* level_string)
 
 
 
-	// Dynamically load all enemy templates from media directory
-	// Looks for files matching pattern: enemy<N>_up.png, enemy<N>_down.png, enemy<N>_rest.png
+	// Dynamically load all enemy templates from the level's media directory.
+	// New naming convention: enemy_<enemyIdx>_<frameIdx>.png
+	// e.g. enemy_0_0.png, enemy_0_1.png, ..., enemy_0_4.png (5 frames for enemy 0)
+	//      enemy_1_0.png, enemy_1_1.png, ...                  (frames for enemy 1)
+	// Frame count per enemy must be odd.
 	{
-		std::vector<std::string> enemy_prefixes;
-
-		// Scan media directory for enemy*_up.png files
+		// First, discover which enemy indices exist by scanning for enemy_*_0.png
+		std::vector<int> enemy_indices;
 
 		string s = "media/";
 		s += level_string;
@@ -7760,49 +7893,64 @@ void load_media(const char* level_string)
 
 			std::string filename = entry.path().filename().string();
 
-			// Check if file matches pattern enemy*_up.png
-			if (filename.rfind("enemy", 0) == 0 && filename.find("_up.png") != std::string::npos)
+			// Match pattern: enemy_<N>_0.png  (the first frame of each enemy)
+			if (filename.rfind("enemy_", 0) == 0 && filename.find("_0.png") != std::string::npos)
 			{
-				// Extract the prefix (e.g., "enemy0" from "enemy0_up.png")
-				std::string prefix = filename.substr(0, filename.find("_up.png"));
-				enemy_prefixes.push_back(prefix);
+				// Extract the enemy index between the two underscores
+				// "enemy_X_0.png" -> X
+				size_t first_us = filename.find('_');       // after "enemy"
+				size_t second_us = filename.find('_', first_us + 1); // before "0.png"
+				if (first_us != std::string::npos && second_us != std::string::npos)
+				{
+					std::string idx_str = filename.substr(first_us + 1, second_us - first_us - 1);
+					try { enemy_indices.push_back(std::stoi(idx_str)); }
+					catch (...) { /* not a number, skip */ }
+				}
 			}
 		}
 
-		// Sort prefixes to ensure consistent ordering
-		std::sort(enemy_prefixes.begin(), enemy_prefixes.end());
+		std::sort(enemy_indices.begin(), enemy_indices.end());
 
 		// Load each enemy template
-		for (const auto& prefix : enemy_prefixes)
+		for (int enemyIdx : enemy_indices)
 		{
-			s = affix;
-
-			std::string up_path = s + prefix + "_up.png";
-			std::string down_path = s + prefix + "_down.png";
-			std::string rest_path = s + prefix + "_rest.png";
-
-			// Check that all three files exist
-			if (!fs::exists(up_path) || !fs::exists(down_path) || !fs::exists(rest_path))
+			// Collect all frame files for this enemy index
+			std::vector<std::string> frame_files;
+			for (int f = 0; ; f++)
 			{
-				std::cout << "Warning: Incomplete enemy template for " << prefix << " (missing _up, _down, or _rest)" << std::endl;
+				std::string path = affix + "enemy_" + std::to_string(enemyIdx) + "_" + std::to_string(f) + ".png";
+				if (!fs::exists(path)) break;
+				frame_files.push_back(path);
+			}
+
+			if (frame_files.empty())
+			{
+				std::cout << "Warning: No frames found for enemy_" << enemyIdx << std::endl;
 				continue;
 			}
 
+			if (frame_files.size() % 2 == 0)
+			{
+				std::cout << "Warning: enemy_" << enemyIdx << " has " << frame_files.size()
+					<< " frames but needs an odd number. Dropping the last frame." << std::endl;
+				frame_files.pop_back();
+			}
+
 			enemy_ship new_template;
-			new_template.tex = loadTextureFromFile_Triplet(
-				up_path.c_str(), down_path.c_str(), rest_path.c_str(),
+			new_template.tex = loadTextureFromFile_NSprite(
+				frame_files,
 				&new_template.width, &new_template.height,
-				new_template.to_present_up_data, new_template.to_present_down_data, new_template.to_present_rest_data,
 				new_template);
 
 			if (new_template.tex == 0)
 			{
-				std::cout << "Warning: Could not load " << prefix << " sprite" << std::endl;
+				std::cout << "Warning: Could not load enemy_" << enemyIdx << " sprite" << std::endl;
 				continue;
 			}
 
 			enemy_templates.push_back(std::move(new_template));
-			std::cout << "Loaded enemy template: " << prefix << std::endl;
+			std::cout << "Loaded enemy template: enemy_" << enemyIdx
+				<< " (" << frame_files.size() << " frames)" << std::endl;
 		}
 
 		if (enemy_templates.empty())
@@ -7839,15 +7987,21 @@ void reset_game()
 		glDeleteTextures(1, &protagonist.tex);
 		protagonist.tex = 0;
 	}
-	protagonist.tex = loadTextureFromFile_Triplet(
-		"media/protagonist_up.png",
-		"media/protagonist_down.png",
-		"media/protagonist_rest.png",
-		&protagonist.width, &protagonist.height,
-		protagonist.to_present_up_data,
-		protagonist.to_present_down_data,
-		protagonist.to_present_rest_data,
-		protagonist);
+	// Reload protagonist frames: protagonist0.png, protagonist1.png, ...
+	{
+		std::vector<std::string> proto_files;
+		for (int i = 0; ; i++)
+		{
+			std::string path = "media/protagonist" + std::to_string(i) + ".png";
+			if (!fs::exists(path)) break;
+			proto_files.push_back(path);
+		}
+		if (proto_files.size() % 2 == 0 && !proto_files.empty())
+			proto_files.pop_back();
+
+		protagonist.tex = loadTextureFromFile_NSprite(proto_files,
+			&protagonist.width, &protagonist.height, protagonist);
+	}
 	protagonist.x = 200;
 	protagonist.y = 300;
 	protagonist.vel_x = 0;
@@ -7860,7 +8014,7 @@ void reset_game()
 	protagonist.under_fire = false;
 	protagonist.last_time_collided = 0;
 	protagonist.blackening_age_map.clear();
-	protagonist.state = REST_STATE;
+	protagonist.state = protagonist.rest_state_index();
 	protagonist.update_tex();
 
 	// ---- Re-chunk foreground from disk (resets positions + blackening) ----
@@ -8011,10 +8165,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 
 			ne->to_be_culled = false;
 
-			ne->manually_update_data(
-				enemy_templates[tIdx].to_present_up_data,
-				enemy_templates[tIdx].to_present_down_data,
-				enemy_templates[tIdx].to_present_rest_data);
+			ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
 
 			g_selectedEnemy = (int)enemy_ships.size() - 1;
 			g_spawnTemplateIdx++;
@@ -8337,10 +8488,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 				ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
 				ne->to_be_culled = false;
-				ne->manually_update_data(
-					enemy_templates[tIdx].to_present_up_data,
-					enemy_templates[tIdx].to_present_down_data,
-					enemy_templates[tIdx].to_present_rest_data);
+				ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
 
 				g_selectedEnemy = (int)enemy_ships.size() - 1;
 				e = enemy_ships.back().get();
