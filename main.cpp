@@ -1333,8 +1333,6 @@ public:
 			state = half;
 		}
 
-		cout << state << endl;
-
 		update_tex();
 	}
 
