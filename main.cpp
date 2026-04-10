@@ -724,7 +724,7 @@ public:
 		y = y + vel_y * dt;
 	}
 
-	void animate_blackening(const vector<glm::vec2>& locations)
+	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
@@ -733,10 +733,97 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
+
+		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
+		{
+			glm::vec2 point(ci->first.x, ci->first.y);
+
+			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+			const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
+
+			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
+			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
+			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
+			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
+
+			bool transparent = false;
+
+			// Do erosion
+			if (dis_real(generator_real) > 0.9999)
+				transparent = true;
+
+			for (int y = minY; y <= maxY; ++y)
+			{
+				for (int x = minX; x <= maxX; ++x)
+				{
+					glm::vec2 diff(x - point.x, y - point.y);
+					float distSq = diff.x * diff.x + diff.y * diff.y;
+
+					if (distSq < BRUSH_RADIUS_SQUARED)
+					{
+						const size_t index = (y * width + x) * 4;
+
+						const float duration = glut_curr_time - ci->second;
+
+						const float animation_length = 5.0;
+
+						if (duration >= animation_length)
+						{
+							to_present_data_pointers[state][index + 0] = 0;
+							to_present_data_pointers[state][index + 1] = 0;
+							to_present_data_pointers[state][index + 2] = 0;
+						}
+						else
+						{
+							//glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
+
+							// From JoeJ on gamedev.net
+							float t = 1 - duration / animation_length;
+							float t2 = t * t;
+							float t4 = t2 * t2;
+							float r = 255.0f * min(1.f, t * 1.8f);
+							float g = 255.0f * min(1.f, t2 * 1.5f);
+							float b = 255.0f * t4;
+
+							to_present_data_pointers[state][index + 0] = static_cast<unsigned int>(r);
+							to_present_data_pointers[state][index + 1] = static_cast<unsigned int>(g);
+							to_present_data_pointers[state][index + 2] = static_cast<unsigned int>(b);
+
+							if (transparent && duration / animation_length < 0.001)
+							{
+								to_present_data_pointers[state][index + 3] = 0;
+								continue;
+							}
+						}
+					}
+				}
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 		for (size_t i = 0; i < to_present_data_pointers.size(); i++)
 		{
 			if (to_present_data_pointers[i] == 0)
 				continue;
+
+			if (i == state)
+			{
+				continue;
+			}
 
 			for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
 			{
@@ -765,6 +852,9 @@ public:
 
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
+							// to do:
+							// transform from current state to all other states
+
 							const size_t index = (y * width + x) * 4;
 
 							const float duration = glut_curr_time - ci->second;
@@ -851,21 +941,9 @@ class tri_sprite : public pre_sprite
 {
 public:
 
-	// n-sprite frames: index 0 = most "up", index n/2 = rest, index n-1 = most "down".
-	// n must be odd so there is always a clear centre/rest frame.
 	std::vector<std::vector<unsigned char>> sprite_frames;
 
 	int state = 0; // will be set to rest_state_index() after frames are loaded
-
-	// Legacy accessors -- return references into sprite_frames for the three
-	// canonical roles (up = first, down = last, rest = middle).
-	std::vector<unsigned char>& get_up_data() { return sprite_frames.front(); }
-	std::vector<unsigned char>& get_down_data() { return sprite_frames.back(); }
-	std::vector<unsigned char>& get_rest_data() { return sprite_frames[sprite_frames.size() / 2]; }
-
-	const std::vector<unsigned char>& get_up_data()   const { return sprite_frames.front(); }
-	const std::vector<unsigned char>& get_down_data() const { return sprite_frames.back(); }
-	const std::vector<unsigned char>& get_rest_data() const { return sprite_frames[sprite_frames.size() / 2]; }
 
 	int rest_state_index() const { return static_cast<int>(sprite_frames.size()) / 2; }
 	int num_frames()       const { return static_cast<int>(sprite_frames.size()); }
@@ -1083,6 +1161,8 @@ public:
 			int offset = static_cast<int>(t * half + 0.5f);
 			if (offset > half) offset = half;
 			state = half + offset;
+
+			//cout << state << endl;
 		}
 		else if (vel_y > 0)
 		{
@@ -1091,10 +1171,16 @@ public:
 			int offset = static_cast<int>(t * half + 0.5f);
 			if (offset > half) offset = half;
 			state = half - offset;
+
+			//cout << state << endl;
 		}
 		else
 		{
 			state = half;
+
+			//cout << state << endl;
+
+
 		}
 
 		update_tex();
@@ -1246,6 +1332,8 @@ public:
 		{
 			state = half;
 		}
+
+		cout << state << endl;
 
 		update_tex();
 	}
@@ -4449,7 +4537,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			protagonist.animate_blackening(protagonist_blackening_points);
+			protagonist.animate_blackening(protagonist_blackening_points, protagonist.state);
 		}
 
 		for (size_t h = 0; h < foreground_chunked.size(); h++)
@@ -4491,7 +4579,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			foreground_chunked[h].animate_blackening(blackening_points);
+			foreground_chunked[h].animate_blackening(blackening_points, 0);
 		}
 
 
@@ -4537,7 +4625,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			enemy_ships[h]->animate_blackening(blackening_points);
+			enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
 		}
 	}
 }
@@ -5716,16 +5804,17 @@ void simulate()
 			enemy_ships[i]->y = pos.y - enemy_ships[i]->height * 0.5f;
 
 
-			enemy_ships[i]->vel_x = 0;
-			enemy_ships[i]->vel_y = 0;
+			//enemy_ships[i]->vel_x = 0;
+			//enemy_ships[i]->vel_y = 0;
+			
 
+			glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
+			float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
+			float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
+			enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
+			enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
 
-			// Calculate velocity for visual effects/physics (optional)
-			//glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
-			//float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
-			//float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
-			//enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
-			//enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
+			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
 		}
 		else if (enemy_ships[i]->isOnscreen())
 		{
