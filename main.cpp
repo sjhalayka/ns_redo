@@ -741,7 +741,7 @@ public:
 		{
 			glm::vec2 point(ci->first.x, ci->first.y);
 
-			const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+			const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
 			const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
