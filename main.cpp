@@ -829,13 +829,62 @@ public:
 			{
 				glm::vec2 point(ci->first.x, ci->first.y);
 
+				// Transform point from current state to target state i.
+				// For the column at point.x, find the first and last non-transparent
+				// rows in both the source state and target state. These define a
+				// vertical gradient (0 at top, 1 at bottom). The point's relative
+				// position within the source extent maps to the same relative
+				// position in the target extent.
+
+				int col = (int)(point.x + 0.5f);
+				if (col < 0) col = 0;
+				if (col >= width) col = width - 1;
+
+				// Find first and last non-transparent rows in the source (current) state
+				int src_first = -1, src_last = -1;
+				for (int row = 0; row < height; ++row)
+				{
+					unsigned char alpha = to_present_data_pointers[state][(row * width + col) * 4 + 3];
+					if (alpha > 0)
+					{
+						if (src_first == -1) src_first = row;
+						src_last = row;
+					}
+				}
+
+				// Find first and last non-transparent rows in the target state i
+				int dst_first = -1, dst_last = -1;
+				for (int row = 0; row < height; ++row)
+				{
+					unsigned char alpha = to_present_data_pointers[i][(row * width + col) * 4 + 3];
+					if (alpha > 0)
+					{
+						if (dst_first == -1) dst_first = row;
+						dst_last = row;
+					}
+				}
+
+				// Skip if either state has no visible pixels in this column
+				if (src_first == -1 || dst_first == -1)
+					continue;
+
+				// Compute normalized position of point.y within the source extent
+				float t_norm = 0.5f; // default to midpoint if source extent is zero-height
+				if (src_last > src_first)
+					t_norm = (point.y - (float)src_first) / (float)(src_last - src_first);
+
+				// Map to target extent
+				float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
+
+				glm::vec2 mapped_point(point.x, mapped_y);
+
 				const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
 				const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
-				int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
-				int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
-				int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
-				int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
+				int minX = std::max(0, (int)(mapped_point.x - BRUSH_RADIUS - 1));
+				int maxX = std::min(width - 1, (int)(mapped_point.x + BRUSH_RADIUS + 1));
+				int minY = std::max(0, (int)(mapped_point.y - BRUSH_RADIUS - 1));
+				int maxY = std::min(height - 1, (int)(mapped_point.y + BRUSH_RADIUS + 1));
 
 				bool transparent = false;
 
@@ -847,14 +896,11 @@ public:
 				{
 					for (int x = minX; x <= maxX; ++x)
 					{
-						glm::vec2 diff(x - point.x, y - point.y);
+						glm::vec2 diff(x - mapped_point.x, y - mapped_point.y);
 						float distSq = diff.x * diff.x + diff.y * diff.y;
 
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
-							// to do:
-							// transform from current state to all other states
-
 							const size_t index = (y * width + x) * 4;
 
 							const float duration = glut_curr_time - ci->second;
@@ -869,8 +915,6 @@ public:
 							}
 							else
 							{
-								//glm::vec3 red_colour = hsbToRgb(60 - 60 * duration / animation_length, duration / animation_length, powf(1.0f - duration / animation_length, 0.25));
-
 								// From JoeJ on gamedev.net
 								float t = 1 - duration / animation_length;
 								float t2 = t * t;
