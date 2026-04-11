@@ -996,7 +996,7 @@ const int REST_STATE = 2;
 class tri_sprite : public pre_sprite
 {
 public:
-		
+
 	std::vector<std::vector<unsigned char>> sprite_frames;
 	std::vector<std::vector<unsigned char>> original_sprite_frames;
 
@@ -1205,49 +1205,11 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		// Map y-velocity to one of n sprite frames.
-		// Frame 0 = strongest upward, rest_state_index() = no vertical,
-		// num_frames()-1 = strongest downward.
 		const int n = num_frames();
-		const int half = n / 2; // rest index
-		const float max_vel = 0.5f * SIM_HEIGHT; // velocity that saturates to the extreme frame
-
-		if (n <= 1)
-		{
-			state = 0;
-		}
-		else if (vel_y < 0)
-		{
-			// Downward: map to frames [half+1 .. n-1], n-1 = strongest
-			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
-			int offset = static_cast<int>(t * half + 0.5f);
-			if (offset > half) offset = half;
-			state = half + offset;
-
-			//cout << state << endl;
-		}
-		else if (vel_y > 0)
-		{
-			// Upward: map to frames [0 .. half-1], 0 = strongest
-			float t = std::min(1.0f, std::abs(vel_y) / max_vel);
-			int offset = static_cast<int>(t * half + 0.5f);
-			if (offset > half) offset = half;
-			state = half - offset;
-
-			//cout << state << endl;
-		}
-		else
-		{
-			state = half;
-
-			//cout << state << endl;
-
-
-		}
+		state = n / 2;
 
 		update_tex();
 	}
-
 };
 
 
@@ -1302,6 +1264,7 @@ public:
 	float path_scroll_rate = 0.0f; // computed at activation
 
 	float path_t = -1.0f;
+	float y_vel_nonzero_duration = 0.0f;  // Tracks how long y velocity has been non-zero
 
 	enemy_ship() = default;
 
@@ -1320,7 +1283,8 @@ public:
 		power_ups(other.power_ups),
 		path_pixel_delay(other.path_pixel_delay),
 		path_scroll_rate(other.path_scroll_rate),
-		path_t(other.path_t)
+		path_t(other.path_t),
+		y_vel_nonzero_duration(other.y_vel_nonzero_duration)
 	{
 	}
 
@@ -1339,6 +1303,7 @@ public:
 			path_pixel_delay = other.path_pixel_delay;
 			path_scroll_rate = other.path_scroll_rate;
 			path_t = other.path_t;
+			y_vel_nonzero_duration = other.y_vel_nonzero_duration;
 		}
 		return *this;
 	}
@@ -1364,36 +1329,8 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		// Map y-velocity to one of n sprite frames.
 		const int n = num_frames();
-		const int half = n / 2;
-		const float dead_zone = 0.01f * SIM_HEIGHT;
-		const float max_vel = 0.5f * SIM_HEIGHT;
-
-		if (n <= 1)
-		{
-			state = 0;
-		}
-		else if (vel_y < -dead_zone)
-		{
-			float t = std::min(1.0f, (std::abs(vel_y) - dead_zone) / (max_vel - dead_zone));
-			int offset = static_cast<int>(t * half + 0.5f);
-			if (offset < 1) offset = 1;
-			if (offset > half) offset = half;
-			state = half + offset;
-		}
-		else if (vel_y > dead_zone)
-		{
-			float t = std::min(1.0f, (std::abs(vel_y) - dead_zone) / (max_vel - dead_zone));
-			int offset = static_cast<int>(t * half + 0.5f);
-			if (offset < 1) offset = 1;
-			if (offset > half) offset = half;
-			state = half - offset;
-		}
-		else
-		{
-			state = half;
-		}
+		state = n / 2;
 
 		update_tex();
 	}
@@ -5143,37 +5080,37 @@ GLuint loadTextureFromFile_NSprite(
 
 	return tex;
 }
-
-// Legacy wrapper: load exactly 3 files (up, down, rest) in the old calling convention.
-// Internally reorders to n-sprite order: [up, rest, down] (indices 0, 1, 2).
-GLuint loadTextureFromFile_Triplet(
-	const char* up_filename,
-	const char* down_filename,
-	const char* rest_filename,
-	int* outWidth, int* outHeight,
-	vector<unsigned char>& out_up_data,
-	vector<unsigned char>& out_down_data,
-	vector<unsigned char>& out_rest_data,
-	tri_sprite& t)
-{
-	std::vector<std::string> filenames = {
-		up_filename,
-		rest_filename,
-		down_filename
-	};
-
-	GLuint tex = loadTextureFromFile_NSprite(filenames, outWidth, outHeight, t);
-
-	// Copy frame data back to the legacy output vectors for callers that still need them.
-	if (tex != 0 && t.sprite_frames.size() == 3)
-	{
-		out_up_data = t.sprite_frames[0];
-		out_rest_data = t.sprite_frames[1];
-		out_down_data = t.sprite_frames[2];
-	}
-
-	return tex;
-}
+//
+//// Legacy wrapper: load exactly 3 files (up, down, rest) in the old calling convention.
+//// Internally reorders to n-sprite order: [up, rest, down] (indices 0, 1, 2).
+//GLuint loadTextureFromFile_Triplet(
+//	const char* up_filename,
+//	const char* down_filename,
+//	const char* rest_filename,
+//	int* outWidth, int* outHeight,
+//	vector<unsigned char>& out_up_data,
+//	vector<unsigned char>& out_down_data,
+//	vector<unsigned char>& out_rest_data,
+//	tri_sprite& t)
+//{
+//	std::vector<std::string> filenames = {
+//		up_filename,
+//		rest_filename,
+//		down_filename
+//	};
+//
+//	GLuint tex = loadTextureFromFile_NSprite(filenames, outWidth, outHeight, t);
+//
+//	// Copy frame data back to the legacy output vectors for callers that still need them.
+//	if (tex != 0 && t.sprite_frames.size() == 3)
+//	{
+//		out_up_data = t.sprite_frames[0];
+//		out_rest_data = t.sprite_frames[1];
+//		out_down_data = t.sprite_frames[2];
+//	}
+//
+//	return tex;
+//}
 
 
 
@@ -5739,7 +5676,7 @@ void simulate()
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
 
-
+	protagonist.set_velocity(protagonist.vel_x, protagonist.vel_y);
 
 
 
