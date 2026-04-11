@@ -674,6 +674,7 @@ struct EqualVec2
 };
 
 
+// to do: move cannons based on state
 
 class pre_sprite
 {
@@ -5663,7 +5664,59 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 	//}
 }
 
+// Returns cannon local (x, y) remapped from the rest state to the current state.
+// Cannon positions are defined in editor mode (rest state); this maps them so
+// they track the ship's visual body when the sprite tilts.
+static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
+{
+	const int rest = e.rest_state_index();
+	const int cur = e.state;
 
+	// No remapping needed: already at rest, or only one frame
+	if (cur == rest || e.num_frames() <= 1 ||
+		cur < 0 || cur >= (int)e.to_present_data_pointers.size() ||
+		rest < 0 || rest >= (int)e.to_present_data_pointers.size())
+		return glm::vec2((float)c.x, (float)c.y);
+
+	const unsigned char* rest_data = e.to_present_data_pointers[rest];
+	const unsigned char* cur_data = e.to_present_data_pointers[cur];
+	if (!rest_data || !cur_data)
+		return glm::vec2((float)c.x, (float)c.y);
+
+	int col = std::max(0, std::min((int)(c.x + 0.5), e.width - 1));
+
+	// Find vertical extent of visible pixels in the rest state at this column
+	int src_first = -1, src_last = -1;
+	for (int row = 0; row < e.height; ++row)
+	{
+		if (rest_data[(row * e.width + col) * 4 + 3] > 0)
+		{
+			if (src_first == -1) src_first = row;
+			src_last = row;
+		}
+	}
+	if (src_first == -1 || src_last == src_first)
+		return glm::vec2((float)c.x, (float)c.y);  // degenerate, can't remap
+
+	// Normalize cannon.y within the rest-state extent
+	float t_norm = ((float)c.y - (float)src_first) / (float)(src_last - src_first);
+
+	// Find vertical extent in the current state at the same column
+	int dst_first = -1, dst_last = -1;
+	for (int row = 0; row < e.height; ++row)
+	{
+		if (cur_data[(row * e.width + col) * 4 + 3] > 0)
+		{
+			if (dst_first == -1) dst_first = row;
+			dst_last = row;
+		}
+	}
+	if (dst_first == -1 || dst_last == dst_first)
+		return glm::vec2((float)c.x, (float)c.y);
+
+	float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
+	return glm::vec2((float)c.x, mapped_y);
+}
 
 
 void simulate()
@@ -5690,8 +5743,12 @@ void simulate()
 		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
 		{
 
-			double x = enemy_ships[i]->cannons[j].x;
+/*			double x = enemy_ships[i]->cannons[j].x;
 			double y = enemy_ships[i]->cannons[j].y;
+		*/	
+			glm::vec2 local = getCannonLocalPos(*enemy_ships[i], enemy_ships[i]->cannons[j]);
+			double x = local.x;
+			double y = local.y;
 
 			// Skip firing if the cannon location is transparent in the sprite
 			{
@@ -5738,9 +5795,10 @@ void simulate()
 			s.width = bullet_template.width;
 			s.height = bullet_template.height;
 
-			s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
-			s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
-
+			//s.x = enemy_ships[i]->x + enemy_ships[i]->cannons[j].x;
+			//s.y = enemy_ships[i]->y + enemy_ships[i]->cannons[j].y;
+			s.x = enemy_ships[i]->x + local.x;   // was cannons[j].x
+			s.y = enemy_ships[i]->y + local.y;   // was cannons[j].y
 
 			const float BULLET_SPEED = 1600.0;  // Adjust as needed
 
@@ -8212,7 +8270,17 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		g_editorMode = !g_editorMode;
 		g_selectedPoint = -1;
 		g_draggingPoint = false;
-		if (g_editorMode) editorResetUndoHistory();
+		if (g_editorMode)
+		{
+			editorResetUndoHistory();
+			// Snap all enemies to their rest state so cannon positions
+			// displayed in the editor match the frame they were defined on
+			for (auto& es : enemy_ships)
+			{
+				es->state = es->rest_state_index();
+				es->update_tex();
+			}
+		}
 		std::cout << "[Editor] " << (g_editorMode ? "ON" : "OFF") << "\n";
 		return true;
 	}
