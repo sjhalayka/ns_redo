@@ -1195,7 +1195,7 @@ public:
 	float last_time_collided = 0;
 
 	friendly_ship() : ship()
-	{
+	{ 
 		health = 1000.0f;
 		max_health = 1000.0f;
 	}
@@ -1210,6 +1210,10 @@ public:
 
 		update_tex();
 	}
+
+
+
+
 };
 
 
@@ -1266,50 +1270,50 @@ public:
 	float path_t = -1.0f;
 	float y_vel_nonzero_duration = 0.0f;  // Tracks how long y velocity has been non-zero
 
-	enemy_ship() = default;
+	//enemy_ship() = default;
 
-	// Custom copy ctor: vector<unique_ptr<power_up>> is non-copyable, so the
-	// implicit copy ctor is deleted. Spawned ships start with no live
-	// power-up sprites, so power_ups_vector is intentionally left empty in
-	// the copy. Everything else is copied normally.
-	enemy_ship(const enemy_ship& other)
-		: ship(other),
-		template_idx(other.template_idx),
-		appearance_time(other.appearance_time),
-		path_animation_length(other.path_animation_length),
-		path_points(other.path_points),
-		path_speeds(other.path_speeds),
-		cannons(other.cannons),
-		power_ups(other.power_ups),
-		path_pixel_delay(other.path_pixel_delay),
-		path_scroll_rate(other.path_scroll_rate),
-		path_t(other.path_t),
-		y_vel_nonzero_duration(other.y_vel_nonzero_duration)
-	{
-	}
+	//// Custom copy ctor: vector<unique_ptr<power_up>> is non-copyable, so the
+	//// implicit copy ctor is deleted. Spawned ships start with no live
+	//// power-up sprites, so power_ups_vector is intentionally left empty in
+	//// the copy. Everything else is copied normally.
+	//enemy_ship(const enemy_ship& other)
+	//	: ship(other),
+	//	template_idx(other.template_idx),
+	//	appearance_time(other.appearance_time),
+	//	path_animation_length(other.path_animation_length),
+	//	path_points(other.path_points),
+	//	path_speeds(other.path_speeds),
+	//	cannons(other.cannons),
+	//	power_ups(other.power_ups),
+	//	path_pixel_delay(other.path_pixel_delay),
+	//	path_scroll_rate(other.path_scroll_rate),
+	//	path_t(other.path_t),
+	//	y_vel_nonzero_duration(other.y_vel_nonzero_duration)
+	//{
+	//}
 
-	enemy_ship& operator=(const enemy_ship& other)
-	{
-		if (this != &other)
-		{
-			ship::operator=(other);
-			template_idx = other.template_idx;
-			appearance_time = other.appearance_time;
-			path_animation_length = other.path_animation_length;
-			path_points = other.path_points;
-			path_speeds = other.path_speeds;
-			cannons = other.cannons;
-			power_ups = other.power_ups;
-			path_pixel_delay = other.path_pixel_delay;
-			path_scroll_rate = other.path_scroll_rate;
-			path_t = other.path_t;
-			y_vel_nonzero_duration = other.y_vel_nonzero_duration;
-		}
-		return *this;
-	}
+	//enemy_ship& operator=(const enemy_ship& other)
+	//{
+	//	if (this != &other)
+	//	{
+	//		ship::operator=(other);
+	//		template_idx = other.template_idx;
+	//		appearance_time = other.appearance_time;
+	//		path_animation_length = other.path_animation_length;
+	//		path_points = other.path_points;
+	//		path_speeds = other.path_speeds;
+	//		cannons = other.cannons;
+	//		power_ups = other.power_ups;
+	//		path_pixel_delay = other.path_pixel_delay;
+	//		path_scroll_rate = other.path_scroll_rate;
+	//		path_t = other.path_t;
+	//		y_vel_nonzero_duration = other.y_vel_nonzero_duration;
+	//	}
+	//	return *this;
+	//}
 
-	enemy_ship(enemy_ship&&) = default;
-	enemy_ship& operator=(enemy_ship&&) = default;
+	//enemy_ship(enemy_ship&&) = default;
+	//enemy_ship& operator=(enemy_ship&&) = default;
 
 	void integrate(float dt)
 	{
