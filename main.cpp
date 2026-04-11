@@ -911,8 +911,8 @@ public:
 
 							// Skip pixels that are already fully transparent in the
 							// target state -- don't paint blackening onto empty space
-							if (to_present_data_pointers[i][index + 3] == 0)
-								continue;
+							//if (to_present_data_pointers[i][index + 3] == 0)
+							//	continue;
 
 							const float duration = glut_curr_time - ci->second;
 
