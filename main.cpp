@@ -891,7 +891,7 @@ public:
 
 				glm::vec2 mapped_point(point.x, mapped_y);
 
-				const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+				const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
 				const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 				int minX = std::max(0, (int)(mapped_point.x - BRUSH_RADIUS - 1));
@@ -996,8 +996,11 @@ const int REST_STATE = 2;
 class tri_sprite : public pre_sprite
 {
 public:
-
+		
 	std::vector<std::vector<unsigned char>> sprite_frames;
+	std::vector<std::vector<unsigned char>> original_sprite_frames;
+
+
 
 	int state = 0; // will be set to rest_state_index() after frames are loaded
 
@@ -1017,6 +1020,7 @@ public:
 		// before real data is loaded.
 		sprite_frames.resize(3);
 		state = rest_state_index();
+		original_sprite_frames = sprite_frames;
 	}
 
 	// Accept an arbitrary number of frames (must be odd).
@@ -1032,6 +1036,8 @@ public:
 			if (!src_frames[i].empty())
 				sprite_frames[i] = src_frames[i];
 		}
+
+		original_sprite_frames = sprite_frames;
 
 		state = rest_state_index();
 
@@ -5115,6 +5121,8 @@ GLuint loadTextureFromFile_NSprite(
 		}
 	}
 
+	t.original_sprite_frames = t.sprite_frames;
+
 	// Create GL texture using the rest frame
 	GLuint tex;
 	glGenTextures(1, &tex);
@@ -5672,16 +5680,16 @@ static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
 	const int rest = e.rest_state_index();
 	const int cur = e.state;
 
-	// No remapping needed: already at rest, or only one frame
 	if (cur == rest || e.num_frames() <= 1 ||
-		cur < 0 || cur >= (int)e.to_present_data_pointers.size() ||
-		rest < 0 || rest >= (int)e.to_present_data_pointers.size())
+		cur < 0 || cur >= (int)e.original_sprite_frames.size() ||
+		rest < 0 || rest >= (int)e.original_sprite_frames.size())
 		return glm::vec2((float)c.x, (float)c.y);
 
-	const unsigned char* rest_data = e.to_present_data_pointers[rest];
-	const unsigned char* cur_data = e.to_present_data_pointers[cur];
+	const unsigned char* rest_data = e.original_sprite_frames[rest].data();
+	const unsigned char* cur_data = e.original_sprite_frames[cur].data();
 	if (!rest_data || !cur_data)
 		return glm::vec2((float)c.x, (float)c.y);
+
 
 	int col = std::max(0, std::min((int)(c.x + 0.5), e.width - 1));
 
@@ -5700,6 +5708,8 @@ static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
 
 	// Normalize cannon.y within the rest-state extent
 	float t_norm = ((float)c.y - (float)src_first) / (float)(src_last - src_first);
+
+	t_norm = std::max(0.0f, std::min(1.0f, t_norm));  // clamp!
 
 	// Find vertical extent in the current state at the same column
 	int dst_first = -1, dst_last = -1;
@@ -5743,9 +5753,9 @@ void simulate()
 		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
 		{
 
-/*			double x = enemy_ships[i]->cannons[j].x;
-			double y = enemy_ships[i]->cannons[j].y;
-		*/	
+			/*			double x = enemy_ships[i]->cannons[j].x;
+						double y = enemy_ships[i]->cannons[j].y;
+					*/
 			glm::vec2 local = getCannonLocalPos(*enemy_ships[i], enemy_ships[i]->cannons[j]);
 			double x = local.x;
 			double y = local.y;
@@ -5774,7 +5784,10 @@ void simulate()
 				}
 
 				if (transparent)
+				{
+					cout << "skipping cannon " << j << endl;
 					continue;
+				}
 			}
 
 
@@ -5917,7 +5930,7 @@ void simulate()
 
 			//enemy_ships[i]->vel_x = 0;
 			//enemy_ships[i]->vel_y = 0;
-			
+
 
 			glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
 			float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
@@ -8270,6 +8283,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		g_editorMode = !g_editorMode;
 		g_selectedPoint = -1;
 		g_draggingPoint = false;
+
 		if (g_editorMode)
 		{
 			editorResetUndoHistory();
@@ -8281,6 +8295,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				es->update_tex();
 			}
 		}
+
 		std::cout << "[Editor] " << (g_editorMode ? "ON" : "OFF") << "\n";
 		return true;
 	}
