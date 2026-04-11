@@ -724,6 +724,7 @@ public:
 		y = y + vel_y * dt;
 	}
 
+
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -733,6 +734,7 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
+		bool transparent = false;
 
 		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
 		{
@@ -746,10 +748,10 @@ public:
 			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
 			int maxY = std::min(height - 1, (int)(point.y + BRUSH_RADIUS + 1));
 
-			bool transparent = false;
+
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.9999)
+			if (dis_real(generator_real) > 0.9)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
@@ -835,6 +837,11 @@ public:
 				// vertical gradient (0 at top, 1 at bottom). The point's relative
 				// position within the source extent maps to the same relative
 				// position in the target extent.
+				//
+				// To avoid drift from erosion (which sets alpha=0 and shrinks the
+				// detected extent over time), we also skip target pixels that are
+				// already fully transparent -- only paint onto pixels that still
+				// have substance.
 
 				int col = (int)(point.x + 0.5f);
 				if (col < 0) col = 0;
@@ -852,20 +859,23 @@ public:
 					}
 				}
 
-				// Find first and last non-transparent rows in the target state i
-				int dst_first = -1, dst_last = -1;
-				for (int row = 0; row < height; ++row)
-				{
-					unsigned char alpha = to_present_data_pointers[i][(row * width + col) * 4 + 3];
-					if (alpha > 0)
-					{
-						if (dst_first == -1) dst_first = row;
-						dst_last = row;
-					}
-				}
+				// Find first and last non-transparent rows in the target state i,
+				// but also consider blackened (RGB=0) pixels with alpha>0 as valid
+				// -- only truly transparent (alpha==0) pixels that were ORIGINALLY
+				// transparent are excluded. We detect original transparency by
+				// checking if the pixel is alpha==0 AND rgb==0 (eroded) vs
+				// alpha==0 from the original image. Since eroded pixels had their
+				// alpha set to 0 by this code, and original transparent pixels also
+				// have alpha==0, we can't distinguish them after the fact.
+				//
+				// Instead, use the source state's extent as the stable reference
+				// for the target too. The source extent is where the hit actually
+				// landed, so it's the most reliable anchor.
+				int dst_first = src_first;
+				int dst_last = src_last;
 
-				// Skip if either state has no visible pixels in this column
-				if (src_first == -1 || dst_first == -1)
+				// Skip if source has no visible pixels in this column
+				if (src_first == -1)
 					continue;
 
 				// Compute normalized position of point.y within the source extent
@@ -873,7 +883,9 @@ public:
 				if (src_last > src_first)
 					t_norm = (point.y - (float)src_first) / (float)(src_last - src_first);
 
-				// Map to target extent
+				// Map to target extent (same as source, so mapped_y == point.y
+				// when extents match, but this keeps the framework in place for
+				// future refinement with original-extent caching)
 				float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
 
 				glm::vec2 mapped_point(point.x, mapped_y);
@@ -886,12 +898,6 @@ public:
 				int minY = std::max(0, (int)(mapped_point.y - BRUSH_RADIUS - 1));
 				int maxY = std::min(height - 1, (int)(mapped_point.y + BRUSH_RADIUS + 1));
 
-				bool transparent = false;
-
-				// Do erosion
-				if (dis_real(generator_real) > 0.9999)
-					transparent = true;
-
 				for (int y = minY; y <= maxY; ++y)
 				{
 					for (int x = minX; x <= maxX; ++x)
@@ -902,6 +908,11 @@ public:
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
 							const size_t index = (y * width + x) * 4;
+
+							// Skip pixels that are already fully transparent in the
+							// target state -- don't paint blackening onto empty space
+							if (to_present_data_pointers[i][index + 3] == 0)
+								continue;
 
 							const float duration = glut_curr_time - ci->second;
 
