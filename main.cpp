@@ -752,7 +752,7 @@ public:
 
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.9)
+			if (dis_real(generator_real) > 0.999)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
@@ -5785,7 +5785,7 @@ void simulate()
 
 				if (transparent)
 				{
-					cout << "skipping cannon " << j << endl;
+					//cout << "skipping cannon " << j << endl;
 					continue;
 				}
 			}
