@@ -1188,17 +1188,14 @@ public:
 
 
 
-class friendly_ship : public ship
-{
+class friendly_ship : public ship {
 public:
-
 	float last_time_collided = 0;
+	float y_vel_nonzero_duration = 0.0f;
+	float prev_vel_y = 0.0f;
+	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
 
-	friendly_ship() : ship()
-	{ 
-		health = 1000.0f;
-		max_health = 1000.0f;
-	}
+	friendly_ship() : ship() { health = 1000.0f; max_health = 1000.0f; }
 
 	void set_velocity(const float src_x, const float src_y)
 	{
@@ -1206,14 +1203,47 @@ public:
 		vel_y = src_y;
 
 		const int n = num_frames();
-		state = n / 2;
+		const int rest = n / 2;
+
+		// Reset the timer whenever vertical motion changes character.
+		// (sign change, or transition to/from zero)
+		bool sign_changed =
+			(prev_vel_y > 0.0f && src_y <= 0.0f) ||
+			(prev_vel_y < 0.0f && src_y >= 0.0f) ||
+			(prev_vel_y == 0.0f && src_y != 0.0f);
+
+		if (sign_changed)
+			y_vel_nonzero_duration = 0.0f;
+
+		if (src_y != 0.0f)
+			y_vel_nonzero_duration += DT;
+		else
+			y_vel_nonzero_duration = 0.0f;
+
+		prev_vel_y = src_y;
+
+		if (src_y == 0.0f)
+		{
+			state = rest;
+		}
+		else
+		{
+			// How many frames of tilt to apply, capped at the extreme.
+			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
+			int max_offset = rest; // frames available on each side of rest
+
+			if (steps > max_offset) steps = max_offset;
+
+			// src_y < 0 means moving up the screen (y decreasing) -> "up" frames
+			// which live at indices < rest in your loader (frame 0 = most up).
+			if (src_y < 0.0f)
+				state = rest - steps;
+			else
+				state = rest + steps;
+		}
 
 		update_tex();
 	}
-
-
-
-
 };
 
 
@@ -1268,52 +1298,11 @@ public:
 	float path_scroll_rate = 0.0f; // computed at activation
 
 	float path_t = -1.0f;
-	float y_vel_nonzero_duration = 0.0f;  // Tracks how long y velocity has been non-zero
 
-	//enemy_ship() = default;
+	float y_vel_nonzero_duration = 0.0f;
+	float prev_vel_y = 0.0f;
+	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
 
-	//// Custom copy ctor: vector<unique_ptr<power_up>> is non-copyable, so the
-	//// implicit copy ctor is deleted. Spawned ships start with no live
-	//// power-up sprites, so power_ups_vector is intentionally left empty in
-	//// the copy. Everything else is copied normally.
-	//enemy_ship(const enemy_ship& other)
-	//	: ship(other),
-	//	template_idx(other.template_idx),
-	//	appearance_time(other.appearance_time),
-	//	path_animation_length(other.path_animation_length),
-	//	path_points(other.path_points),
-	//	path_speeds(other.path_speeds),
-	//	cannons(other.cannons),
-	//	power_ups(other.power_ups),
-	//	path_pixel_delay(other.path_pixel_delay),
-	//	path_scroll_rate(other.path_scroll_rate),
-	//	path_t(other.path_t),
-	//	y_vel_nonzero_duration(other.y_vel_nonzero_duration)
-	//{
-	//}
-
-	//enemy_ship& operator=(const enemy_ship& other)
-	//{
-	//	if (this != &other)
-	//	{
-	//		ship::operator=(other);
-	//		template_idx = other.template_idx;
-	//		appearance_time = other.appearance_time;
-	//		path_animation_length = other.path_animation_length;
-	//		path_points = other.path_points;
-	//		path_speeds = other.path_speeds;
-	//		cannons = other.cannons;
-	//		power_ups = other.power_ups;
-	//		path_pixel_delay = other.path_pixel_delay;
-	//		path_scroll_rate = other.path_scroll_rate;
-	//		path_t = other.path_t;
-	//		y_vel_nonzero_duration = other.y_vel_nonzero_duration;
-	//	}
-	//	return *this;
-	//}
-
-	//enemy_ship(enemy_ship&&) = default;
-	//enemy_ship& operator=(enemy_ship&&) = default;
 
 	void integrate(float dt)
 	{
@@ -1334,7 +1323,44 @@ public:
 		vel_y = src_y;
 
 		const int n = num_frames();
-		state = n / 2;
+		const int rest = n / 2;
+
+		// Reset the timer whenever vertical motion changes character.
+		// (sign change, or transition to/from zero)
+		bool sign_changed =
+			(prev_vel_y > 0.0f && src_y <= 0.0f) ||
+			(prev_vel_y < 0.0f && src_y >= 0.0f) ||
+			(prev_vel_y == 0.0f && src_y != 0.0f);
+
+		if (sign_changed)
+			y_vel_nonzero_duration = 0.0f;
+
+		if (src_y != 0.0f)
+			y_vel_nonzero_duration += DT;
+		else
+			y_vel_nonzero_duration = 0.0f;
+
+		prev_vel_y = src_y;
+
+		if (src_y == 0.0f)
+		{
+			state = rest;
+		}
+		else
+		{
+			// How many frames of tilt to apply, capped at the extreme.
+			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
+			int max_offset = rest; // frames available on each side of rest
+
+			if (steps > max_offset) steps = max_offset;
+
+			// src_y < 0 means moving up the screen (y decreasing) -> "up" frames
+			// which live at indices < rest in your loader (frame 0 = most up).
+			if (src_y < 0.0f)
+				state = rest - steps;
+			else
+				state = rest + steps;
+		}
 
 		update_tex();
 	}
