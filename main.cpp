@@ -1203,73 +1203,64 @@ public:
 
 	friendly_ship() : ship() { health = 1000.0f; max_health = 1000.0f; }
 
+
+
+
+
+
+
 	void set_velocity(const float src_x, const float src_y)
 	{
 		vel_x = src_x;
 		vel_y = src_y;
 
+		updateTilt();   // Always call it here
+	}
+
+	void updateTilt()
+	{
 		const int n = num_frames();
 		const int rest = n / 2;
 
-		// Reset the timer whenever vertical motion changes character.
-		// (sign change, or transition to/from zero)
-		bool sign_changed =
-			(prev_vel_y > 0.0f && src_y <= 0.0f) ||
-			(prev_vel_y < 0.0f && src_y >= 0.0f) ||
-			(prev_vel_y == 0.0f && src_y != 0.0f);
+		// Small deadzone to prevent floating-point noise
+		const float DEADZONE = 0.01f;
+		bool moving = std::abs(vel_y) > DEADZONE;
 
-		if (sign_changed)
-			y_vel_nonzero_duration = 0.0f;
-
-		if (src_y != 0.0f)
+		if (moving)
 		{
 			y_vel_nonzero_duration += DT;
-			y_vel_zero_duration = 0.0f; // reset ease-out timer while moving
+			y_vel_zero_duration = 0.0f;
+
+			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
+			if (steps > rest) steps = rest;
+
+			state = (vel_y < 0.0f) ? (rest - steps) : (rest + steps);
 		}
-		else
+		else // not moving
 		{
-			// Capture the peak tilt on the first frame of zero velocity
-			if (prev_vel_y != 0.0f)
+			// Capture peak tilt on the FIRST frame we go to zero
+			if (prev_vel_y != 0.0f && y_vel_nonzero_duration > 0.0f)
 			{
 				int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-				int max_offset = rest;
-				if (steps > max_offset) steps = max_offset;
+				if (steps > rest) steps = rest;
+
 				ease_out_peak_steps = steps;
 				ease_out_direction = (prev_vel_y < 0.0f) ? -1 : 1;
+				y_vel_zero_duration = 0.0f;
 			}
-			y_vel_nonzero_duration = 0.0f;
+
 			y_vel_zero_duration += DT;
-		}
+			y_vel_nonzero_duration = 0.0f;
 
-		prev_vel_y = src_y;
-
-		if (src_y == 0.0f)
-		{
-			// Ease out: gradually step back toward rest
 			int remaining = ease_out_peak_steps - (int)(y_vel_zero_duration / frame_step_seconds);
+
 			if (remaining <= 0)
-			{
 				state = rest;
-			}
 			else
-			{
 				state = rest + ease_out_direction * remaining;
-			}
-		}
-		else
-		{
-			// Ease in: gradually step away from rest
-			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-			int max_offset = rest;
-
-			if (steps > max_offset) steps = max_offset;
-
-			if (src_y < 0.0f)
-				state = rest - steps;
-			else
-				state = rest + steps;
 		}
 
+		prev_vel_y = vel_y;        // Update at the end
 		update_tex();
 	}
 };
@@ -5757,12 +5748,13 @@ void simulate()
 	if (spacePressed)
 		fireBullet();
 
+
+	protagonist.updateTilt(); 
 	protagonist.integrate(DT);
 
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
 
-	protagonist.set_velocity(protagonist.vel_x, protagonist.vel_y);
 
 
 
@@ -9795,9 +9787,6 @@ void keyboardup(unsigned char key, int x, int y) {
 
 int main(int argc, char** argv)
 {
-	cout << "Test" << endl;
-
-
 	// Initialize GLUT
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
@@ -9862,10 +9851,12 @@ int main(int argc, char** argv)
 	glutSpecialFunc(specialKeyboard);
 	glutSpecialUpFunc(specialKeyboardUp);
 	glutKeyboardUpFunc(keyboardup);
-
+	glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
 	glutFullScreen();
 
 	// Main loop
+
+
 	glutMainLoop();
 
 	return 0;
