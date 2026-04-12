@@ -28,10 +28,6 @@ using namespace std;
 namespace fs = std::filesystem;
 
 
-// to do: Enemy cannon type can be straight ahead (left), sideways (up and down), random direction, tracking, circular spread
-
-// to do: make sure enemy bullets are culled when they hit the foreground
-
 
 
 std::mt19937 generator_real(static_cast<unsigned>(0));
@@ -1242,24 +1238,23 @@ public:
 	void updateTilt()
 	{
 		const int n = num_frames();
-		if (n < 3) {
+		if (n < 3)
+		{
 			state = rest_state_index();
 			update_tex();
 			return;
 		}
 
-		const int rest_idx = rest_state_index();
-
-		// Smoothly move current_tilt toward target_tilt
+		// Use different speeds for going out vs returning
 		float speed = (target_tilt == 0.0f) ? ease_out_speed : tilt_speed;
 
-		current_tilt = current_tilt + (target_tilt - current_tilt) * speed * DT;
+		current_tilt += (target_tilt - current_tilt) * speed * DT;
 
 		// Clamp
 		current_tilt = std::clamp(current_tilt, -1.0f, 1.0f);
 
-		// Map -1...1 to frame index (0 = full up, rest_idx = center, n-1 = full down)
-		float normalized = (current_tilt + 1.0f) * 0.5f;           // 0 to 1
+		// Map to frame
+		float normalized = (current_tilt + 1.0f) * 0.5f;           // 0..1
 		int target_frame = static_cast<int>(normalized * (n - 1) + 0.5f);
 
 		state = std::clamp(target_frame, 0, n - 1);
@@ -5685,10 +5680,10 @@ void simulate()
 
 
 
+	protagonist.updateTiltFromInput();
+
 	protagonist.integrate(DT);
 
-
-	protagonist.updateTiltFromInput();
 
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
@@ -9832,8 +9827,6 @@ void keyboardup(unsigned char key, int x, int y) {
 	case ' ': // Space bar
 
 		spacePressed = false;
-
-
 
 
 		break;
