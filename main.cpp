@@ -1191,9 +1191,10 @@ public:
 class friendly_ship : public ship {
 public:
 	float last_time_collided = 0;
+
 	float y_vel_nonzero_duration = 0.0f;
 	float prev_vel_y = 0.0f;
-	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
+	float frame_step_seconds = 0.05f; // tune: how long to hold each tilt frame
 
 	// Ease-out state: when velocity drops to zero, gradually return to rest
 	float y_vel_zero_duration = 0.0f;
@@ -1328,6 +1329,7 @@ public:
 
 	float y_vel_nonzero_duration = 0.0f;
 	float prev_vel_y = 0.0f;
+
 	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
 
 	// Ease-out state: when velocity drops to zero, gradually return to rest
