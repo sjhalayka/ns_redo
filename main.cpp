@@ -1221,19 +1221,20 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-			//// Determine desired tilt
-			//if (src_y < -10.0f) {           // Moving up
-			//	target_tilt = -1.0f;
-			//}
-			//else if (src_y > 10.0f) {       // Moving down
-			//	target_tilt = 1.0f;
-			//}
-			//else {
-			//	target_tilt = 0.0f;         // No vertical input → return to center
-			//}
+		//// Determine desired tilt
+		//if (src_y < -10.0f) {           // Moving up
+		//	target_tilt = -1.0f;
+		//}
+		//else if (src_y > 10.0f) {       // Moving down
+		//	target_tilt = 1.0f;
+		//}
+		//else {
+		//	target_tilt = 0.0f;         // No vertical input → return to center
+		//}
 
-			//updateTilt();
+		//updateTilt();
 	}
+
 
 	void updateTilt()
 	{
@@ -1245,22 +1246,30 @@ public:
 			return;
 		}
 
-		// Use different speeds for going out vs returning
+		// Ease towards target tilt
 		float speed = (target_tilt == 0.0f) ? ease_out_speed : tilt_speed;
+		float delta = (target_tilt - current_tilt) * speed * DT;
 
-		current_tilt += (target_tilt - current_tilt) * speed * DT;
+		if (std::abs(delta) > std::abs(target_tilt - current_tilt))
+			current_tilt = target_tilt;
+		else
+			current_tilt += delta;
 
-		// Clamp
 		current_tilt = std::clamp(current_tilt, -1.0f, 1.0f);
 
-		// Map to frame
-		float normalized = (current_tilt + 1.0f) * 0.5f;           // 0..1
-		int target_frame = static_cast<int>(normalized * (n - 1) + 0.5f);
+		const float normalize_current_tilt = (current_tilt + 1.0f) / 2.0f;
 
-		state = std::clamp(target_frame, 0, n - 1);
+		// Map tilt [-1, 1] to frame [0, n-1]
+		int target_frame = (int)std::round((n - 1) * normalize_current_tilt);
 
+		// Clamp to valid range
+		target_frame = std::clamp(target_frame, 0, n - 1);
+
+		state = target_frame;
 		update_tex();
 	}
+
+
 };
 
 
