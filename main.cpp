@@ -1203,23 +1203,40 @@ public:
 		max_health = 1000.0f;
 	}
 
+
+	void updateTiltFromInput()
+	{
+		if (upKeyPressed) {
+			target_tilt = -1.0f;
+		}
+		else if (downKeyPressed) {
+			target_tilt = 1.0f;
+		}
+		else {
+			target_tilt = 0.0f;
+		}
+
+		updateTilt();
+	}
+
+
 	void set_velocity(const float src_x, const float src_y)
 	{
 		vel_x = src_x;
 		vel_y = src_y;
 
-		// Determine desired tilt
-		if (src_y < -10.0f) {           // Moving up
-			target_tilt = -1.0f;
-		}
-		else if (src_y > 10.0f) {       // Moving down
-			target_tilt = 1.0f;
-		}
-		else {
-			target_tilt = 0.0f;         // No vertical input → return to center
-		}
+			//// Determine desired tilt
+			//if (src_y < -10.0f) {           // Moving up
+			//	target_tilt = -1.0f;
+			//}
+			//else if (src_y > 10.0f) {       // Moving down
+			//	target_tilt = 1.0f;
+			//}
+			//else {
+			//	target_tilt = 0.0f;         // No vertical input → return to center
+			//}
 
-		updateTilt();
+			//updateTilt();
 	}
 
 	void updateTilt()
@@ -5671,7 +5688,7 @@ void simulate()
 	protagonist.integrate(DT);
 
 
-	protagonist.updateTilt();
+	protagonist.updateTiltFromInput();
 
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
