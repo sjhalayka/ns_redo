@@ -9519,13 +9519,139 @@ void keyboard(unsigned char key, int x, int y)
 }
 
 void specialKeys(int key, int x, int y) {
-	if (glutGetModifiers() & GLUT_ACTIVE_SHIFT) {
-		shiftDown = true;
+
+	bool shiftHeld = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
+
+	// In editor mode, Shift+Arrow nudges the selected enemy AND its path points.
+	// We handle this here as a discrete step and return early so the foreground
+	// scroll logic (which runs continuously in the display loop) is not triggered.
+	if (g_editorMode && shiftHeld)
+	{
+		enemy_ship* e = editorSelected();
+		if (e)
+		{
+			const float NUDGE = 5.0f; // pixels per key-press; increase for coarser steps
+			float dx = 0.0f, dy = 0.0f;
+			switch (key)
+			{
+			case GLUT_KEY_UP:    dy = -NUDGE; break;
+			case GLUT_KEY_DOWN:  dy = NUDGE; break;
+			case GLUT_KEY_LEFT:  dx = -NUDGE; break;
+			case GLUT_KEY_RIGHT: dx = NUDGE; break;
+			}
+			if (dx != 0.0f || dy != 0.0f)
+			{
+				editorPushUndo();
+				// Move the sprite position
+				e->x += dx;
+				e->y += dy;
+				// Move every path control point so the spline travels with the enemy
+				for (auto& pt : e->path_points)
+				{
+					pt.x += dx;
+					pt.y += dy;
+				}
+				std::cout << "[Editor] Nudged enemy " << g_selectedEnemy
+					<< " by (" << dx << ", " << dy << ")  "
+					<< "pos=(" << e->x << ", " << e->y << ")\n";
+			}
+		}
+		return; // do NOT set key flags — foreground scrolls only on plain Arrow
 	}
+
+	switch (key) {
+	case GLUT_KEY_UP:
+		upKeyPressed = true;
+		break;
+	case GLUT_KEY_DOWN:
+		downKeyPressed = true;
+		break;
+	case GLUT_KEY_LEFT:
+		leftKeyPressed = true;
+		break;
+	case GLUT_KEY_RIGHT:
+		rightKeyPressed = true;
+		break;
+	}
+
+	// In editor mode, left/right scroll the foreground (handled in display loop)
+	if (g_editorMode) return;
+
+	float local_vel_x = 0;
+	float local_vel_y = 0;
+
+	// Combine key states to allow diagonal movement
+	if (upKeyPressed) {
+		local_vel_y = -1;
+	}
+	if (downKeyPressed) {
+		local_vel_y = 1;
+	}
+	if (leftKeyPressed) {
+		local_vel_x = -1;
+	}
+	if (rightKeyPressed) {
+		local_vel_x = 1;
+	}
+
+	float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+
+	if (vel_length > 0)
+	{
+		local_vel_x /= vel_length * 2;
+		local_vel_y /= vel_length * 2;
+	}
+
+	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 void specialKeysUp(int key, int x, int y) {
-	shiftDown = false;
+	switch (key) {
+	case GLUT_KEY_UP:
+		upKeyPressed = false;
+		break;
+	case GLUT_KEY_DOWN:
+		downKeyPressed = false;
+		break;
+	case GLUT_KEY_LEFT:
+		leftKeyPressed = false;
+		break;
+	case GLUT_KEY_RIGHT:
+		rightKeyPressed = false;
+		break;
+
+
+	}
+
+	// In editor mode, left/right scroll the foreground (handled in display loop)
+	if (g_editorMode) return;
+
+	float local_vel_x = 0;
+	float local_vel_y = 0;
+
+	// Combine key states to allow diagonal movement
+	if (upKeyPressed) {
+		local_vel_y = -1;
+	}
+	if (downKeyPressed) {
+		local_vel_y = 1;
+	}
+	if (leftKeyPressed) {
+		local_vel_x = -1;
+	}
+	if (rightKeyPressed) {
+		local_vel_x = 1;
+	}
+
+	float vel_length = sqrt(local_vel_x * local_vel_x + local_vel_y * local_vel_y);
+
+	if (vel_length > 0)
+	{
+		local_vel_x /= vel_length * 2;
+		local_vel_y /= vel_length * 2;
+	}
+
+	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 void mouse(int button, int state, int x, int y) {
@@ -9780,15 +9906,12 @@ int main(int argc, char** argv)
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
+	glutKeyboardUpFunc(keyboardup);
 	glutSpecialFunc(specialKeys);
 	glutSpecialUpFunc(specialKeysUp);
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 	glutPassiveMotionFunc(passiveMotion);
-
-	glutSpecialFunc(specialKeyboard);
-	glutSpecialUpFunc(specialKeyboardUp);
-	glutKeyboardUpFunc(keyboardup);
 	glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
 	glutFullScreen();
 
