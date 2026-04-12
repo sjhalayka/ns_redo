@@ -1187,80 +1187,66 @@ public:
 
 
 
-
 class friendly_ship : public ship {
 public:
 	float last_time_collided = 0;
 
-	float y_vel_nonzero_duration = 0.0f;
-	float prev_vel_y = 0.0f;
-	float frame_step_seconds = 0.05f; // tune: how long to hold each tilt frame
+	// Tilt animation state
+	float current_tilt = 0.0f;      // -1.0 = full up, +1.0 = full down, 0 = rest
+	float target_tilt = 0.0f;       // What the player is currently trying to do
 
-	// Ease-out state: when velocity drops to zero, gradually return to rest
-	float y_vel_zero_duration = 0.0f;
-	int   ease_out_peak_steps = 0;
-	int   ease_out_direction = 0; // -1 = was tilting up, +1 = was tilting down
+	float tilt_speed = 6.0f;        // How fast we approach target (higher = snappier)
+	float ease_out_speed = 6.0f;    // How fast we return to center when no input
 
-	friendly_ship() : ship() { health = 1000.0f; max_health = 1000.0f; }
-
-
-
-
-
-
+	friendly_ship() : ship() {
+		health = 1000.0f;
+		max_health = 1000.0f;
+	}
 
 	void set_velocity(const float src_x, const float src_y)
 	{
 		vel_x = src_x;
 		vel_y = src_y;
 
-		updateTilt();   // Always call it here
+		// Determine desired tilt
+		if (src_y < -10.0f) {           // Moving up
+			target_tilt = -1.0f;
+		}
+		else if (src_y > 10.0f) {       // Moving down
+			target_tilt = 1.0f;
+		}
+		else {
+			target_tilt = 0.0f;         // No vertical input → return to center
+		}
+
+		updateTilt();
 	}
 
 	void updateTilt()
 	{
 		const int n = num_frames();
-		const int rest = n / 2;
-
-		// Small deadzone to prevent floating-point noise
-		const float DEADZONE = 0.01f;
-		bool moving = std::abs(vel_y) > DEADZONE;
-
-		if (moving)
-		{
-			y_vel_nonzero_duration += DT;
-			y_vel_zero_duration = 0.0f;
-
-			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-			if (steps > rest) steps = rest;
-
-			state = (vel_y < 0.0f) ? (rest - steps) : (rest + steps);
-		}
-		else // not moving
-		{
-			// Capture peak tilt on the FIRST frame we go to zero
-			if (prev_vel_y != 0.0f && y_vel_nonzero_duration > 0.0f)
-			{
-				int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-				if (steps > rest) steps = rest;
-
-				ease_out_peak_steps = steps;
-				ease_out_direction = (prev_vel_y < 0.0f) ? -1 : 1;
-				y_vel_zero_duration = 0.0f;
-			}
-
-			y_vel_zero_duration += DT;
-			y_vel_nonzero_duration = 0.0f;
-
-			int remaining = ease_out_peak_steps - (int)(y_vel_zero_duration / frame_step_seconds);
-
-			if (remaining <= 0)
-				state = rest;
-			else
-				state = rest + ease_out_direction * remaining;
+		if (n < 3) {
+			state = rest_state_index();
+			update_tex();
+			return;
 		}
 
-		prev_vel_y = vel_y;        // Update at the end
+		const int rest_idx = rest_state_index();
+
+		// Smoothly move current_tilt toward target_tilt
+		float speed = (target_tilt == 0.0f) ? ease_out_speed : tilt_speed;
+
+		current_tilt = current_tilt + (target_tilt - current_tilt) * speed * DT;
+
+		// Clamp
+		current_tilt = std::clamp(current_tilt, -1.0f, 1.0f);
+
+		// Map -1...1 to frame index (0 = full up, rest_idx = center, n-1 = full down)
+		float normalized = (current_tilt + 1.0f) * 0.5f;           // 0 to 1
+		int target_frame = static_cast<int>(normalized * (n - 1) + 0.5f);
+
+		state = std::clamp(target_frame, 0, n - 1);
+
 		update_tex();
 	}
 };
@@ -1318,17 +1304,6 @@ public:
 
 	float path_t = -1.0f;
 
-	float y_vel_nonzero_duration = 0.0f;
-	float prev_vel_y = 0.0f;
-
-	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
-
-	// Ease-out state: when velocity drops to zero, gradually return to rest
-	float y_vel_zero_duration = 0.0f;
-	int   ease_out_peak_steps = 0;
-	int   ease_out_direction = 0; // -1 = was tilting up, +1 = was tilting down
-
-
 	void integrate(float dt)
 	{
 		if (to_be_culled)
@@ -1347,69 +1322,12 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		const int n = num_frames();
-		const int rest = n / 2;
+		//const int n = num_frames();
+		//const int rest = n / 2;
 
-		// Reset the timer whenever vertical motion changes character.
-		// (sign change, or transition to/from zero)
-		bool sign_changed =
-			(prev_vel_y > 0.0f && src_y <= 0.0f) ||
-			(prev_vel_y < 0.0f && src_y >= 0.0f) ||
-			(prev_vel_y == 0.0f && src_y != 0.0f);
+		//state = rest;
 
-		if (sign_changed)
-			y_vel_nonzero_duration = 0.0f;
-
-		if (src_y != 0.0f)
-		{
-			y_vel_nonzero_duration += DT;
-			y_vel_zero_duration = 0.0f; // reset ease-out timer while moving
-		}
-		else
-		{
-			// Capture the peak tilt on the first frame of zero velocity
-			if (prev_vel_y != 0.0f)
-			{
-				int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-				int max_offset = rest;
-				if (steps > max_offset) steps = max_offset;
-				ease_out_peak_steps = steps;
-				ease_out_direction = (prev_vel_y < 0.0f) ? -1 : 1;
-			}
-			y_vel_nonzero_duration = 0.0f;
-			y_vel_zero_duration += DT;
-		}
-
-		prev_vel_y = src_y;
-
-		if (src_y == 0.0f)
-		{
-			// Ease out: gradually step back toward rest
-			int remaining = ease_out_peak_steps - (int)(y_vel_zero_duration / frame_step_seconds);
-			if (remaining <= 0)
-			{
-				state = rest;
-			}
-			else
-			{
-				state = rest + ease_out_direction * remaining;
-			}
-		}
-		else
-		{
-			// Ease in: gradually step away from rest
-			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-			int max_offset = rest;
-
-			if (steps > max_offset) steps = max_offset;
-
-			if (src_y < 0.0f)
-				state = rest - steps;
-			else
-				state = rest + steps;
-		}
-
-		update_tex();
+		//update_tex();
 	}
 
 
@@ -5749,8 +5667,11 @@ void simulate()
 		fireBullet();
 
 
-	protagonist.updateTilt(); 
+
 	protagonist.integrate(DT);
+
+
+	protagonist.updateTilt();
 
 	protagonist.x = std::max(0.0f, std::min(protagonist.x, (float)(SIM_WIDTH - protagonist.width)));
 	protagonist.y = std::max(0.0f, std::min(protagonist.y, (float)(SIM_HEIGHT - protagonist.height)));
