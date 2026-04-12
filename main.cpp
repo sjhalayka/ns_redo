@@ -1195,6 +1195,11 @@ public:
 	float prev_vel_y = 0.0f;
 	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
 
+	// Ease-out state: when velocity drops to zero, gradually return to rest
+	float y_vel_zero_duration = 0.0f;
+	int   ease_out_peak_steps = 0;
+	int   ease_out_direction = 0; // -1 = was tilting up, +1 = was tilting down
+
 	friendly_ship() : ship() { health = 1000.0f; max_health = 1000.0f; }
 
 	void set_velocity(const float src_x, const float src_y)
@@ -1216,26 +1221,48 @@ public:
 			y_vel_nonzero_duration = 0.0f;
 
 		if (src_y != 0.0f)
+		{
 			y_vel_nonzero_duration += DT;
+			y_vel_zero_duration = 0.0f; // reset ease-out timer while moving
+		}
 		else
+		{
+			// Capture the peak tilt on the first frame of zero velocity
+			if (prev_vel_y != 0.0f)
+			{
+				int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
+				int max_offset = rest;
+				if (steps > max_offset) steps = max_offset;
+				ease_out_peak_steps = steps;
+				ease_out_direction = (prev_vel_y < 0.0f) ? -1 : 1;
+			}
 			y_vel_nonzero_duration = 0.0f;
+			y_vel_zero_duration += DT;
+		}
 
 		prev_vel_y = src_y;
 
 		if (src_y == 0.0f)
 		{
-			state = rest;
+			// Ease out: gradually step back toward rest
+			int remaining = ease_out_peak_steps - (int)(y_vel_zero_duration / frame_step_seconds);
+			if (remaining <= 0)
+			{
+				state = rest;
+			}
+			else
+			{
+				state = rest + ease_out_direction * remaining;
+			}
 		}
 		else
 		{
-			// How many frames of tilt to apply, capped at the extreme.
+			// Ease in: gradually step away from rest
 			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-			int max_offset = rest; // frames available on each side of rest
+			int max_offset = rest;
 
 			if (steps > max_offset) steps = max_offset;
 
-			// src_y < 0 means moving up the screen (y decreasing) -> "up" frames
-			// which live at indices < rest in your loader (frame 0 = most up).
 			if (src_y < 0.0f)
 				state = rest - steps;
 			else
@@ -1303,6 +1330,11 @@ public:
 	float prev_vel_y = 0.0f;
 	float frame_step_seconds = 0.5f; // tune: how long to hold each tilt frame
 
+	// Ease-out state: when velocity drops to zero, gradually return to rest
+	float y_vel_zero_duration = 0.0f;
+	int   ease_out_peak_steps = 0;
+	int   ease_out_direction = 0; // -1 = was tilting up, +1 = was tilting down
+
 
 	void integrate(float dt)
 	{
@@ -1336,26 +1368,48 @@ public:
 			y_vel_nonzero_duration = 0.0f;
 
 		if (src_y != 0.0f)
+		{
 			y_vel_nonzero_duration += DT;
+			y_vel_zero_duration = 0.0f; // reset ease-out timer while moving
+		}
 		else
+		{
+			// Capture the peak tilt on the first frame of zero velocity
+			if (prev_vel_y != 0.0f)
+			{
+				int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
+				int max_offset = rest;
+				if (steps > max_offset) steps = max_offset;
+				ease_out_peak_steps = steps;
+				ease_out_direction = (prev_vel_y < 0.0f) ? -1 : 1;
+			}
 			y_vel_nonzero_duration = 0.0f;
+			y_vel_zero_duration += DT;
+		}
 
 		prev_vel_y = src_y;
 
 		if (src_y == 0.0f)
 		{
-			state = rest;
+			// Ease out: gradually step back toward rest
+			int remaining = ease_out_peak_steps - (int)(y_vel_zero_duration / frame_step_seconds);
+			if (remaining <= 0)
+			{
+				state = rest;
+			}
+			else
+			{
+				state = rest + ease_out_direction * remaining;
+			}
 		}
 		else
 		{
-			// How many frames of tilt to apply, capped at the extreme.
+			// Ease in: gradually step away from rest
 			int steps = (int)(y_vel_nonzero_duration / frame_step_seconds) + 1;
-			int max_offset = rest; // frames available on each side of rest
+			int max_offset = rest;
 
 			if (steps > max_offset) steps = max_offset;
 
-			// src_y < 0 means moving up the screen (y decreasing) -> "up" frames
-			// which live at indices < rest in your loader (frame 0 = most up).
 			if (src_y < 0.0f)
 				state = rest - steps;
 			else
