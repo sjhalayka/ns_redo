@@ -1246,6 +1246,8 @@ public:
 			return;
 		}
 
+		cout << n << endl;
+
 		// Ease towards target tilt
 		float speed = (target_tilt == 0.0f) ? ease_out_speed : tilt_speed;
 		float delta = (target_tilt - current_tilt) * speed * DT;
