@@ -727,12 +727,8 @@ public:
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-		//		blackening_age_map.clear();
-
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
-
-
 
 		// Remove blackening_age_map entries where the pixel at (x, y) is now transparent
 		for (map<glm::vec2, float>::iterator it = blackening_age_map.begin(); it != blackening_age_map.end(); )
@@ -778,7 +774,7 @@ public:
 
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.999)
+			if (dis_real(generator_real) > 0.9)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
@@ -942,8 +938,8 @@ public:
 
 							// Skip pixels that are already fully transparent in the
 							// target state -- don't paint blackening onto empty space
-							//if (to_present_data_pointers[i][index + 3] == 0)
-							//	continue;
+							if (to_present_data_pointers[i][index + 3] == 0)
+								continue;
 
 							const float duration = glut_curr_time - ci->second;
 
