@@ -722,29 +722,48 @@ public:
 	}
 
 
-
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
-		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+		const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
+		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
-		// Remove blackening_age_map entries where the pixel at (x, y) is now transparent
+		// Remove blackening_age_map entries where the circular brush area is now fully transparent
 		for (map<glm::vec2, float>::iterator it = blackening_age_map.begin(); it != blackening_age_map.end(); )
 		{
-			int px = (int)(it->first.x + 0.5f);
-			int py = (int)(it->first.y + 0.5f);
+			glm::vec2 centre = it->first;
 
-			if (px >= 0 && px < width && py >= 0 && py < height)
+			int minX = std::max(0, (int)(centre.x - BRUSH_RADIUS - 1));
+			int maxX = std::min(width - 1, (int)(centre.x + BRUSH_RADIUS + 1));
+			int minY = std::max(0, (int)(centre.y - BRUSH_RADIUS - 1));
+			int maxY = std::min(height - 1, (int)(centre.y + BRUSH_RADIUS + 1));
+
+			bool all_transparent = true;
+
+			for (int y = minY; y <= maxY && all_transparent; ++y)
 			{
-				const size_t index = (py * width + px) * 4 + 3;
-
-				if (to_present_data_pointers[state][index] == 0)
+				for (int x = minX; x <= maxX && all_transparent; ++x)
 				{
-					it = blackening_age_map.erase(it);
-					continue;
+					glm::vec2 diff(x - centre.x, y - centre.y);
+					float distSq = diff.x * diff.x + diff.y * diff.y;
+
+					if (distSq < BRUSH_RADIUS_SQUARED)
+					{
+						const size_t index = (y * width + x) * 4 + 3;
+
+						if (to_present_data_pointers[state][index] != 0)
+							all_transparent = false;
+					}
 				}
+			}
+
+			if (all_transparent)
+			{
+				it = blackening_age_map.erase(it);
+				continue;
 			}
 
 			++it;
@@ -763,9 +782,6 @@ public:
 		{
 			glm::vec2 point(ci->first.x, ci->first.y);
 
-			const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
-			const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-
 			int minX = std::max(0, (int)(point.x - BRUSH_RADIUS - 1));
 			int maxX = std::min(width - 1, (int)(point.x + BRUSH_RADIUS + 1));
 			int minY = std::max(0, (int)(point.y - BRUSH_RADIUS - 1));
@@ -774,7 +790,7 @@ public:
 
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.9)
+			if (dis_real(generator_real) > 0.99)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
@@ -917,9 +933,6 @@ public:
 				float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
 				glm::vec2 mapped_point(point.x, mapped_y);
 
-				const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
-				const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-
 				int minX = std::max(0, (int)(mapped_point.x - BRUSH_RADIUS - 1));
 				int maxX = std::min(width - 1, (int)(mapped_point.x + BRUSH_RADIUS + 1));
 				int minY = std::max(0, (int)(mapped_point.y - BRUSH_RADIUS - 1));
@@ -976,6 +989,7 @@ public:
 
 		update_tex();
 	}
+
 
 
 
@@ -8038,6 +8052,8 @@ void retrieve_level_data(const string& db_name)
 
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
+
+
 }
 
 
