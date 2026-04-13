@@ -721,7 +721,6 @@ public:
 		y = y + vel_y * dt;
 	}
 
-
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -947,8 +946,29 @@ public:
 			}
 		}
 
+		// Remove blackening_age_map entries where the pixel at (x, y) is now transparent
+		for (map<glm::vec2, float>::iterator it = blackening_age_map.begin(); it != blackening_age_map.end(); )
+		{
+			int px = (int)(it->first.x + 0.5f);
+			int py = (int)(it->first.y + 0.5f);
+
+			if (px >= 0 && px < width && py >= 0 && py < height)
+			{
+				const size_t index = (py * width + px) * 4 + 3;
+
+				if (to_present_data_pointers[state][index] == 0)
+				{
+					it = blackening_age_map.erase(it);
+					continue;
+				}
+			}
+
+			++it;
+		}
+
 		update_tex();
 	}
+
 };
 
 
@@ -1192,7 +1212,7 @@ public:
 	float target_tilt = 0.0f;       // What the player is currently trying to do
 
 	float tilt_speed = 3.0f;        // How fast we approach target (higher = snappier)
-	
+
 	friendly_ship() : ship() {
 		health = 1000.0f;
 		max_health = 1000.0f;
@@ -1328,7 +1348,7 @@ public:
 
 	void updateTiltFromInput()
 	{
-		if(vel_y < 0.1)
+		if (vel_y < 0.1)
 			target_tilt = -1.0f;
 		else if (vel_y > 0.1)
 			target_tilt = 1.0f;
@@ -4688,7 +4708,7 @@ void detectEdgeCollisions()
 				}
 			}
 
-			if(false == enemy_ships[h]->to_be_culled)
+			if (false == enemy_ships[h]->to_be_culled)
 				enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
 		}
 	}
