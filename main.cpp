@@ -730,6 +730,35 @@ public:
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
 
+
+
+		// Remove blackening_age_map entries where the pixel at (x, y) is now transparent
+		for (map<glm::vec2, float>::iterator it = blackening_age_map.begin(); it != blackening_age_map.end(); )
+		{
+			int px = (int)(it->first.x + 0.5f);
+			int py = (int)(it->first.y + 0.5f);
+
+			if (px >= 0 && px < width && py >= 0 && py < height)
+			{
+				const size_t index = (py * width + px) * 4 + 3;
+
+				if (to_present_data_pointers[state][index] == 0)
+				{
+					it = blackening_age_map.erase(it);
+					continue;
+				}
+			}
+
+			++it;
+		}
+
+
+
+
+
+
+
+
 		bool transparent = false;
 
 		for (map<glm::vec2, float>::const_iterator ci = blackening_age_map.begin(); ci != blackening_age_map.end(); ci++)
@@ -946,25 +975,7 @@ public:
 			}
 		}
 
-		// Remove blackening_age_map entries where the pixel at (x, y) is now transparent
-		for (map<glm::vec2, float>::iterator it = blackening_age_map.begin(); it != blackening_age_map.end(); )
-		{
-			int px = (int)(it->first.x + 0.5f);
-			int py = (int)(it->first.y + 0.5f);
 
-			if (px >= 0 && px < width && py >= 0 && py < height)
-			{
-				const size_t index = (py * width + px) * 4 + 3;
-
-				if (to_present_data_pointers[state][index] == 0)
-				{
-					it = blackening_age_map.erase(it);
-					continue;
-				}
-			}
-
-			++it;
-		}
 
 		update_tex();
 	}
