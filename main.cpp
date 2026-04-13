@@ -39,7 +39,7 @@ std::uniform_real_distribution<float> dis_real(0, 1);
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 30;
+const float FPS = 60;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -1191,9 +1191,8 @@ public:
 	float current_tilt = 0.0f;      // -1.0 = full up, +1.0 = full down, 0 = rest
 	float target_tilt = 0.0f;       // What the player is currently trying to do
 
-	float tilt_speed = 6.0f;        // How fast we approach target (higher = snappier)
-	float ease_out_speed = 6.0f;    // How fast we return to center when no input
-
+	float tilt_speed = 3.0f;        // How fast we approach target (higher = snappier)
+	
 	friendly_ship() : ship() {
 		health = 1000.0f;
 		max_health = 1000.0f;
@@ -1246,26 +1245,20 @@ public:
 			return;
 		}
 
-		cout << n << endl;
+		// Move toward target tilt at a constant linear rate
+		float diff = target_tilt - current_tilt;
+		float max_step = tilt_speed * DT;
 
-		// Ease towards target tilt
-		float speed = (target_tilt == 0.0f) ? ease_out_speed : tilt_speed;
-		float delta = (target_tilt - current_tilt) * speed * DT;
-
-		if (std::abs(delta) > std::abs(target_tilt - current_tilt))
+		if (std::abs(diff) <= max_step)
 			current_tilt = target_tilt;
 		else
-			current_tilt += delta;
+			current_tilt += std::copysign(max_step, diff);
 
 		current_tilt = std::clamp(current_tilt, -1.0f, 1.0f);
 
-		const float normalize_current_tilt = (current_tilt + 1.0f) / 2.0f;
-
 		// Map tilt [-1, 1] to frame [0, n-1]
-		int target_frame = (int)std::round((n - 1) * normalize_current_tilt);
-
-		// Clamp to valid range
-		target_frame = std::clamp(target_frame, 0, n - 1);
+		float normalized = (current_tilt + 1.0f) / 2.0f;
+		int target_frame = std::clamp((int)((n - 1) * normalized), 0, n - 1);
 
 		state = target_frame;
 		update_tex();
