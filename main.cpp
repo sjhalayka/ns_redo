@@ -913,8 +913,8 @@ public:
 				float cos_t = 0.5f * (1.0f - cosf(t_norm * 3.14159265f));
 
 				// Map to target extent using the cosine-weighted parameter
-				float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
-
+				//float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
+				float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
 				glm::vec2 mapped_point(point.x, mapped_y);
 
 				const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
@@ -935,11 +935,6 @@ public:
 						if (distSq < BRUSH_RADIUS_SQUARED)
 						{
 							const size_t index = (y * width + x) * 4;
-
-							// Skip pixels that are already fully transparent in the
-							// target state -- don't paint blackening onto empty space
-							if (to_present_data_pointers[i][index + 3] == 0)
-								continue;
 
 							const float duration = glut_curr_time - ci->second;
 
@@ -5767,7 +5762,8 @@ static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
 	// Cosine-based mapping: rotation compresses/expands non-linearly
 	float cos_t = 0.5f * (1.0f - cosf(t_norm * 3.14159265f));
 
-	float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
+//	float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
+	float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
 	return glm::vec2((float)c.x, mapped_y);
 }
 
