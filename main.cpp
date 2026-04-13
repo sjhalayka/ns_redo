@@ -721,6 +721,8 @@ public:
 		y = y + vel_y * dt;
 	}
 
+
+
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -908,10 +910,14 @@ public:
 				if (src_last > src_first)
 					t_norm = (point.y - (float)src_first) / (float)(src_last - src_first);
 
-				// Map to target extent (same as source, so mapped_y == point.y
-				// when extents match, but this keeps the framework in place for
-				// future refinement with original-extent caching)
-				float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
+				// Apply cosine-based mapping to account for rotation.
+				// Linear t_norm assumes uniform vertical stretching, but rotation
+				// compresses/expands with a cosine profile (center stays put,
+				// edges move most). This S-curve approximates that.
+				float cos_t = 0.5f * (1.0f - cosf(t_norm * 3.14159265f));
+
+				// Map to target extent using the cosine-weighted parameter
+				float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
 
 				glm::vec2 mapped_point(point.x, mapped_y);
 
@@ -979,6 +985,9 @@ public:
 
 		update_tex();
 	}
+
+
+
 
 };
 
@@ -5759,9 +5768,14 @@ static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
 	if (dst_first == -1 || dst_last == dst_first)
 		return glm::vec2((float)c.x, (float)c.y);
 
-	float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
+	// Cosine-based mapping: rotation compresses/expands non-linearly
+	float cos_t = 0.5f * (1.0f - cosf(t_norm * 3.14159265f));
+
+	float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
 	return glm::vec2((float)c.x, mapped_y);
 }
+
+
 
 
 void simulate()
