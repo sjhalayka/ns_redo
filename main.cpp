@@ -1320,6 +1320,76 @@ public:
 
 	float path_t = -1.0f;
 
+
+	float current_tilt = 0.0f;      // -1.0 = full up, +1.0 = full down, 0 = rest
+	float target_tilt = 0.0f;       // What the player is currently trying to do
+
+	float tilt_speed = 0.3f;        // How fast we approach target (higher = snappier)
+
+	void updateTiltFromInput()
+	{
+		if(vel_y < 0.1)
+			target_tilt = -1.0f;
+		else if (vel_y > 0.1)
+			target_tilt = 1.0f;
+		else
+			target_tilt = 0.0f;
+
+		updateTilt();
+	}
+
+
+	void set_velocity(const float src_x, const float src_y)
+	{
+		vel_x = src_x;
+		vel_y = src_y;
+
+		//// Determine desired tilt
+		//if (src_y < -10.0f) {           // Moving up
+		//	target_tilt = -1.0f;
+		//}
+		//else if (src_y > 10.0f) {       // Moving down
+		//	target_tilt = 1.0f;
+		//}
+		//else {
+		//	target_tilt = 0.0f;         // No vertical input → return to center
+		//}
+
+		//updateTilt();
+	}
+
+
+	void updateTilt()
+	{
+		const int n = num_frames();
+		if (n < 3)
+		{
+			state = rest_state_index();
+			update_tex();
+			return;
+		}
+
+		// Move toward target tilt at a constant linear rate
+		float diff = target_tilt - current_tilt;
+		float max_step = tilt_speed * DT;
+
+		if (std::abs(diff) <= max_step)
+			current_tilt = target_tilt;
+		else
+			current_tilt += std::copysign(max_step, diff);
+
+		current_tilt = std::clamp(current_tilt, -1.0f, 1.0f);
+
+		// Map tilt [-1, 1] to frame [0, n-1]
+		float normalized = (current_tilt + 1.0f) / 2.0f;
+		int target_frame = std::clamp((int)((n - 1) * normalized), 0, n - 1);
+
+		state = target_frame;
+		update_tex();
+	}
+
+
+
 	void integrate(float dt)
 	{
 		if (to_be_culled)
@@ -1331,21 +1401,6 @@ public:
 		x = x + vel_x * dt;
 		y = y + vel_y * dt;
 	}
-
-
-	void set_velocity(const float src_x, const float src_y)
-	{
-		vel_x = src_x;
-		vel_y = src_y;
-
-		//const int n = num_frames();
-		//const int rest = n / 2;
-
-		//state = rest;
-
-		//update_tex();
-	}
-
 
 };
 
@@ -4633,7 +4688,8 @@ void detectEdgeCollisions()
 				}
 			}
 
-			enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
+			if(false == enemy_ships[h]->to_be_culled)
+				enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
 		}
 	}
 }
@@ -5699,6 +5755,8 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		enemy_ships[i]->updateTiltFromInput();
+
 		if (enemy_ships[i]->to_be_culled || false == enemy_ships[i]->isOnscreen())
 			continue;
 
