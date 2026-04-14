@@ -791,7 +791,7 @@ public:
 
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.999)
+			if (dis_real(generator_real) > 0.95)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
