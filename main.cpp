@@ -9318,11 +9318,11 @@ void display()
 	static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
 	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-	const float d = 1.0f / FPS;
+//	const float DT = 1.0f / FPS;
 
-	DT = currentTime - lastTime;
+	float d = currentTime - lastTime;
 
-	if (DT > d)
+	if (DT < d)
 	{
 		if (!g_editorMode)
 		{
