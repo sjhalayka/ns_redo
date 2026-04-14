@@ -1342,8 +1342,8 @@ public:
 // foreground is chunked). Each chunk is a small multi-frame tri_sprite so
 // that tilt frames and animate_blackening (including cross-frame
 // propagation and erosion-based transparency) continue to work per-chunk.
-const int enemy_chunk_size_width = 128;
-const int enemy_chunk_size_height = 128;
+const int enemy_chunk_size_width = 32;
+const int enemy_chunk_size_height = 32;
 
 class enemy_chunk : public tri_sprite
 {
