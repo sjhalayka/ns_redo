@@ -40,7 +40,7 @@ std::uniform_real_distribution<float> dis_real(0, 1);
 bool red_mode = true;
 
 float GLOBAL_TIME = 0;
-const float FPS = 60;
+const float FPS = 30;
 float DT = 1.0f / FPS;
 const int COLLISION_INTERVAL_MS = 100; // 100ms = 10 times per second
 
@@ -1342,8 +1342,8 @@ public:
 // foreground is chunked). Each chunk is a small multi-frame tri_sprite so
 // that tilt frames and animate_blackening (including cross-frame
 // propagation and erosion-based transparency) continue to work per-chunk.
-const int enemy_chunk_size_width = 128;
-const int enemy_chunk_size_height = 128;
+const int enemy_chunk_size_width = 64;
+const int enemy_chunk_size_height = 64;
 
 class enemy_chunk : public tri_sprite
 {
