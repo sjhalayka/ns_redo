@@ -726,7 +726,7 @@ public:
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-		const float BRUSH_RADIUS = 30.0f;        // Radius of the soft brush in sprite pixels
+		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 		for (size_t i = 0; i < locations.size(); i++)
