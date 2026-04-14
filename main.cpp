@@ -725,7 +725,7 @@ public:
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-		const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
+		const float BRUSH_RADIUS = 10.0f;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 		for (size_t i = 0; i < locations.size(); i++)
@@ -1337,6 +1337,45 @@ public:
 	std::chrono::high_resolution_clock::time_point lastBulletTime = std::chrono::high_resolution_clock::now();
 };
 
+// Configurable chunk size for enemy sprites. Tweak these to change how
+// enemies are cut up visually. Each animation frame of each enemy template
+// is split into tiles of (enemy_chunk_size_width x enemy_chunk_size_height);
+// fully-transparent tiles are dropped (same policy as foreground chunking).
+// The whole point of chunking here is the same as for the foreground: it
+// lets animate_blackening() operate on small per-chunk pixel buffers
+// instead of one giant sprite buffer, which is where the real win is.
+int enemy_chunk_size_width = 64;
+int enemy_chunk_size_height = 64;
+
+// "Recipe" describing one spatial piece of an enemy, built once per template
+// and reused when spawning instances. It carries the pre-sliced pixel data
+// for *every* animation frame at this tile location, plus where this tile
+// lives inside the full sprite. Recipes are read-only and shared across
+// instances; per-instance state (GL texture, blackening_age_map, the
+// mutable to_present_data copy) lives in enemy_chunk_sprite below.
+struct enemy_chunk_recipe
+{
+	float local_x = 0.0f;   // offset inside the enemy sprite (top-left origin)
+	float local_y = 0.0f;
+	int width = 0;          // always enemy_chunk_size_width at build time
+	int height = 0;
+	// frame_pixels[f] = RGBA pixel buffer for animation frame f, laid out
+	// the same way tri_sprite::sprite_frames stores its full-frame buffers.
+	std::vector<std::vector<unsigned char>> frame_pixels;
+};
+
+// Per-instance chunk — a full tri_sprite so it plugs straight into
+// animate_blackening() and update_tex() without needing parallel machinery.
+// Each live enemy owns a vector of these (one per non-transparent tile of
+// the template). local_x / local_y are copied from the recipe so rendering
+// and collision can position the chunk relative to its owning enemy.
+class enemy_chunk_sprite : public tri_sprite
+{
+public:
+	float local_x = 0.0f;
+	float local_y = 0.0f;
+};
+
 class enemy_ship : public ship
 {
 public:
@@ -1346,6 +1385,19 @@ public:
 	//	health = 50.0f;
 	//	max_health = 50.0f;
 	//}
+
+	// Spatial pieces of this enemy. Populated when the enemy is spawned
+	// (built from the template's recipes). Each chunk is a self-contained
+	// tri_sprite with its own GL texture and its own blackening state, so
+	// damage effects only touch a small buffer instead of the full sprite.
+	std::vector<enemy_chunk_sprite> chunks;
+
+	// Template-side recipe list. Populated once by chunkEnemyTemplate() on
+	// each entry of enemy_templates. Copied by value into live instances
+	// (harmless — recipes are read-only and modestly sized relative to
+	// the sprite frames they're derived from). buildChunksFromRecipes()
+	// turns these into live enemy_chunk_sprites with their own GL textures.
+	std::vector<enemy_chunk_recipe> chunk_recipes;
 
 	int template_idx = 0; // tracks which enemy_template this ship is currently using
 
@@ -4355,6 +4407,14 @@ void initCollisionResources()
 }
 
 
+// Forward declarations for the chunk helpers — their definitions live
+// below drawSprite (near the other foreground-chunking code) but the
+// enemy collision/blackening loop above calls them.
+void syncEnemyChunkState(enemy_ship& e);
+void buildChunksFromRecipes(enemy_ship& e);
+void chunkEnemyTemplateRecipes(enemy_ship& tmpl);
+
+
 
 
 
@@ -4695,46 +4755,125 @@ void detectEdgeCollisions()
 
 		{
 			enemy_ships[h]->under_fire = false;
-			vector<glm::vec2> blackening_points;
+
+			// Keep chunks aligned with the enemy's current animation frame
+			// before we read/write their pixel buffers. (Rendering also
+			// calls this, but we might blacken before rendering this frame.)
+			syncEnemyChunkState(*enemy_ships[h]);
+
+			// If for some reason this enemy has no chunks (e.g. spawned via
+			// a path that bypasses buildChunksFromRecipes()), fall back to
+			// the original whole-sprite blackening so behavior is preserved.
+			if (enemy_ships[h]->chunks.empty())
+			{
+				vector<glm::vec2> blackening_points;
+
+				for (size_t i = 0; i < collisionPoints.size(); i++)
+				{
+					bool inside = false, transparent = false;
+					glm::vec2 hit;
+
+					if (isPixelInsideTriSpriteAndTransparent(
+						*enemy_ships[h],
+						enemy_ships[h]->tex,
+						static_cast<int>(enemy_ships[h]->x),
+						static_cast<int>(enemy_ships[h]->y),
+						enemy_ships[h]->width,
+						enemy_ships[h]->height,
+						static_cast<int>(collisionPoints[i].x),
+						static_cast<int>(collisionPoints[i].y),
+						inside, transparent, 127, hit))
+					{
+						if (inside && collisionPoints[i].z >= target)
+						{
+							enemy_ships[h]->health -= collisionPoints[i].z;
+							enemy_ships[h]->under_fire = true;
+							blackening_points.push_back(glm::vec2(hit.x, hit.y));
+						}
+					}
+				}
+
+				if (false == enemy_ships[h]->to_be_culled)
+					enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
+
+				continue;
+			}
+
+			// Fast path: route each collision point to the single chunk that
+			// contains it, and call animate_blackening on a small tile buffer
+			// instead of the full-sized enemy buffer. This is the whole point
+			// of chunking: per-hit cost scales with tile size, not sprite size.
+			//
+			// We also pre-bucket blackening points per chunk so each chunk's
+			// animate_blackening() is called exactly once per tick.
+			std::vector<std::vector<glm::vec2>> per_chunk_points(
+				enemy_ships[h]->chunks.size());
 
 			for (size_t i = 0; i < collisionPoints.size(); i++)
 			{
-				//cout << collisionPoints[i].x << " " << collisionPoints[i].y << endl;
-				//cout << collisionPoints[i].z << " " << collisionPoints[i].w << endl;
+				const int px = static_cast<int>(collisionPoints[i].x);
+				const int py = static_cast<int>(collisionPoints[i].y);
 
-
-
-				bool inside = false, transparent = false;
-
-
-
-				glm::vec2 hit;
-
-				if (isPixelInsideTriSpriteAndTransparent(
-					*enemy_ships[h],
-					enemy_ships[h]->tex,
-					static_cast<int>(enemy_ships[h]->x),
-					static_cast<int>(enemy_ships[h]->y),
-					enemy_ships[h]->width,
-					enemy_ships[h]->height,
-					static_cast<int>(collisionPoints[i].x),
-					static_cast<int>(collisionPoints[i].y),
-					inside,
-					transparent,
-					127,
-					hit))
+				// Cheap enemy-level bounding box reject before walking chunks.
+				if (px < enemy_ships[h]->x ||
+					px >= enemy_ships[h]->x + enemy_ships[h]->width ||
+					py < enemy_ships[h]->y ||
+					py >= enemy_ships[h]->y + enemy_ships[h]->height)
 				{
-					if (inside && collisionPoints[i].z >= target)
+					continue;
+				}
+
+				for (size_t c = 0; c < enemy_ships[h]->chunks.size(); c++)
+				{
+					enemy_chunk_sprite& ch = enemy_ships[h]->chunks[c];
+					const int chunkWorldX =
+						static_cast<int>(enemy_ships[h]->x + ch.local_x);
+					const int chunkWorldY =
+						static_cast<int>(enemy_ships[h]->y + ch.local_y);
+
+					bool inside = false, transparent = false;
+					glm::vec2 hit;
+
+					if (isPixelInsideTriSpriteAndTransparent(
+						ch, ch.tex,
+						chunkWorldX, chunkWorldY,
+						ch.width, ch.height,
+						px, py,
+						inside, transparent, 127, hit))
 					{
-						enemy_ships[h]->health -= collisionPoints[i].z;
-						enemy_ships[h]->under_fire = true;
-						blackening_points.push_back(glm::vec2(hit.x, hit.y));
+						if (inside && collisionPoints[i].z >= target)
+						{
+							// Damage is still applied at the whole-enemy
+							// level — chunks are purely a visual/perf
+							// subdivision, per the user spec.
+							enemy_ships[h]->health -= collisionPoints[i].z;
+							enemy_ships[h]->under_fire = true;
+							// hit is already chunk-local (the collision
+							// helper returns localX/localY in the space of
+							// whatever sprX/sprY/sprW/sprH you pass in).
+							per_chunk_points[c].push_back(hit);
+						}
+						// A collision point can only live inside one chunk,
+						// so we can stop walking once we found the owner.
+						break;
 					}
 				}
 			}
 
-			if (false == enemy_ships[h]->to_be_culled)
-				enemy_ships[h]->animate_blackening(blackening_points, enemy_ships[h]->state);
+			if (enemy_ships[h]->to_be_culled) continue;
+
+			// Run per-chunk blackening. Empty chunks (no hits this tick) still
+			// need animate_blackening called to age out existing blackening,
+			// but only if they currently have blackening state to evolve —
+			// otherwise we can skip entirely. This is where the chunking win
+			// actually lands: untouched chunks do zero pixel work.
+			for (size_t c = 0; c < enemy_ships[h]->chunks.size(); c++)
+			{
+				enemy_chunk_sprite& ch = enemy_ships[h]->chunks[c];
+				if (per_chunk_points[c].empty() && ch.blackening_age_map.empty())
+					continue;
+				ch.animate_blackening(per_chunk_points[c], ch.state);
+			}
 		}
 	}
 }
@@ -5363,6 +5502,145 @@ bool chunkForegroundTexture(const char* sourceFilename)
 }
 
 /**
+ * Slice every animation frame of an enemy template into fixed-size tiles
+ * and store the resulting per-tile pixel data as "recipes" on the template.
+ * Called once per template. No GL textures are created here — that happens
+ * at instance-spawn time in buildChunksFromRecipes() so each live enemy
+ * gets its own mutable buffers (blackening writes into them).
+ *
+ * Tiles that are fully transparent across *all* frames are skipped, so
+ * padding regions around the sprite don't produce empty chunks.
+ *
+ * The chunking policy mirrors chunkForegroundTexture(): ceiling division,
+ * right/bottom edge tiles padded with transparent black to a full tile.
+ */
+void chunkEnemyTemplateRecipes(enemy_ship& tmpl)
+{
+	tmpl.chunk_recipes.clear();
+
+	const int srcWidth = tmpl.width;
+	const int srcHeight = tmpl.height;
+	const size_t numFrames = tmpl.sprite_frames.size();
+	if (srcWidth <= 0 || srcHeight <= 0 || numFrames == 0) return;
+
+	const int tilesX = (srcWidth + enemy_chunk_size_width - 1) / enemy_chunk_size_width;
+	const int tilesY = (srcHeight + enemy_chunk_size_height - 1) / enemy_chunk_size_height;
+	const int tileBytes = enemy_chunk_size_width * enemy_chunk_size_height * 4;
+
+	for (int ty = 0; ty < tilesY; ty++)
+	{
+		for (int tx = 0; tx < tilesX; tx++)
+		{
+			const int srcStartX = tx * enemy_chunk_size_width;
+			const int srcStartY = ty * enemy_chunk_size_height;
+			const int copyWidth = std::min(
+				enemy_chunk_size_width, srcWidth - srcStartX);
+			const int copyHeight = std::min(
+				enemy_chunk_size_height, srcHeight - srcStartY);
+
+			// Build per-frame pixel buffers for this tile, and simultaneously
+			// track whether any frame contains a non-transparent pixel inside
+			// this tile. If none do, we discard the tile entirely.
+			std::vector<std::vector<unsigned char>> framePixels(numFrames);
+			bool any_non_transparent = false;
+
+			for (size_t f = 0; f < numFrames; f++)
+			{
+				const std::vector<unsigned char>& frame = tmpl.sprite_frames[f];
+				if (frame.empty()) { framePixels[f].assign(tileBytes, 0); continue; }
+
+				framePixels[f].assign(tileBytes, 0);
+				for (int y = 0; y < copyHeight; y++)
+				{
+					for (int x = 0; x < copyWidth; x++)
+					{
+						const int srcIdx =
+							((srcStartY + y) * srcWidth + (srcStartX + x)) * 4;
+						const int dstIdx =
+							(y * enemy_chunk_size_width + x) * 4;
+						framePixels[f][dstIdx + 0] = frame[srcIdx + 0];
+						framePixels[f][dstIdx + 1] = frame[srcIdx + 1];
+						framePixels[f][dstIdx + 2] = frame[srcIdx + 2];
+						framePixels[f][dstIdx + 3] = frame[srcIdx + 3];
+						if (frame[srcIdx + 3] > 0) any_non_transparent = true;
+					}
+				}
+			}
+
+			if (!any_non_transparent) continue;
+
+			enemy_chunk_recipe r;
+			r.local_x = static_cast<float>(srcStartX);
+			r.local_y = static_cast<float>(srcStartY);
+			r.width = enemy_chunk_size_width;
+			r.height = enemy_chunk_size_height;
+			r.frame_pixels = std::move(framePixels);
+			tmpl.chunk_recipes.push_back(std::move(r));
+		}
+	}
+
+	std::cout << "  chunked template into " << tmpl.chunk_recipes.size()
+		<< " chunk recipes (" << enemy_chunk_size_width << "x"
+		<< enemy_chunk_size_height << ", " << numFrames << " frames each)"
+		<< std::endl;
+}
+
+/**
+ * Build live, per-instance chunk sprites on a freshly spawned enemy by
+ * consuming its chunk_recipes. Each resulting enemy_chunk_sprite is a
+ * tri_sprite with its own GL texture and its own mutable per-frame pixel
+ * buffers — which is exactly what animate_blackening() needs in order to
+ * darken/erode pixels locally per chunk instead of touching a full-sized
+ * sprite buffer for every hit.
+ *
+ * Must be called after the enemy is constructed (copy-constructed from a
+ * template) and before it is rendered or collided against.
+ */
+void buildChunksFromRecipes(enemy_ship& e)
+{
+	e.chunks.clear();
+	e.chunks.reserve(e.chunk_recipes.size());
+
+	for (size_t i = 0; i < e.chunk_recipes.size(); i++)
+	{
+		const enemy_chunk_recipe& r = e.chunk_recipes[i];
+
+		enemy_chunk_sprite cs;
+		cs.width = r.width;
+		cs.height = r.height;
+		cs.local_x = r.local_x;
+		cs.local_y = r.local_y;
+
+		// manually_update_data() creates a fresh GL texture, installs the
+		// per-frame buffers, and wires up to_present_data_pointers for
+		// animate_blackening(). We pass the recipe's frame data by value.
+		cs.manually_update_data(r.frame_pixels);
+
+		e.chunks.push_back(std::move(cs));
+	}
+}
+
+/**
+ * Propagate the enemy's animation state to every chunk so that rendering
+ * and blackening operate on the right animation frame. Called each frame
+ * before rendering / collision handling. Cheap — just an integer write
+ * plus a glBindTexture/glTexImage2D per chunk when the state actually
+ * changes. (We unconditionally update_tex() here; if this shows up in a
+ * profile it's easy to gate on "state changed since last tick".)
+ */
+void syncEnemyChunkState(enemy_ship& e)
+{
+	for (size_t i = 0; i < e.chunks.size(); i++)
+	{
+		if (e.chunks[i].state != e.state)
+		{
+			e.chunks[i].state = e.state;
+			e.chunks[i].update_tex();
+		}
+	}
+}
+
+/**
  * Draw a texture to the screen using pixel-based coordinates.
  *
  * @param texture     OpenGL texture ID of the sprite to draw
@@ -5776,7 +6054,7 @@ static glm::vec2 getCannonLocalPos(const enemy_ship& e, const cannon& c)
 	// Cosine-based mapping: rotation compresses/expands non-linearly
 	float cos_t = 0.5f * (1.0f - cosf(t_norm * 3.14159265f));
 
-//	float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
+	//	float mapped_y = (float)dst_first + cos_t * (float)(dst_last - dst_first);
 	float mapped_y = (float)dst_first + t_norm * (float)(dst_last - dst_first);
 	return glm::vec2((float)c.x, mapped_y);
 }
@@ -6687,6 +6965,10 @@ static void editorRestoreState(const EditorUndoState& state)
 		enemy_ship* ne = enemy_ships.back().get();
 		ne->to_be_culled = false;
 		ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
+		// The copy-construct above carried chunk_recipes from the template;
+		// now give this instance its own live GL-backed chunks so blackening
+		// has small per-tile buffers to mutate.
+		buildChunksFromRecipes(*ne);
 	}
 
 	// Restore every enemy's editable fields
@@ -6706,6 +6988,13 @@ static void editorRestoreState(const EditorUndoState& state)
 				e->width = tmpl.width;
 				e->height = tmpl.height;
 				e->manually_update_data(tmpl.sprite_frames);
+				// Template swap — pick up the new template's chunk recipes
+				// and rebuild this instance's live chunks to match. Old
+				// chunk GL textures leak here (same pattern as the rest of
+				// the engine's texture lifetime — acceptable for an editor
+				// undo path).
+				e->chunk_recipes = tmpl.chunk_recipes;
+				buildChunksFromRecipes(*e);
 			}
 		}
 
@@ -7435,7 +7724,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 				? 0.0f
 				: (foreground_chunked[0].x - g_loadTimeFgX);
 
-			float nx = (e.path_points[j].x - (float)e.path_pixel_delay /*- fg_scroll*/) / SIM_WIDTH;
+			float nx = (e.path_points[j].x - (float)e.path_pixel_delay - fg_scroll) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 			int tid = use2D(nx, ny);
 
@@ -7556,6 +7845,13 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 	e->width = tmpl.width;
 	e->height = tmpl.height;
 	e->manually_update_data(tmpl.sprite_frames);
+
+	// Template changed → the recipe list and therefore the chunk geometry
+	// changed too. Pull the new recipes across and rebuild live chunks.
+	// (Old chunk GL textures are dropped on the floor; consistent with how
+	// other texture-owning objects are handled in this codebase.)
+	e->chunk_recipes = tmpl.chunk_recipes;
+	buildChunksFromRecipes(*e);
 
 	// Re-centre the sprite on screen
 	e->x = cx - e->width * 0.5f;
@@ -8020,6 +8316,14 @@ void retrieve_level_data(const string& db_name)
 			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 				enemy_templates[enemy_template_index].sprite_frames);
 
+			// Build this instance's live chunk sprites from the template's
+			// recipes (carried in via the copy-construct above). Must come
+			// after manually_update_data so the enemy's own pixel buffers
+			// are fully populated — though chunks read from recipes, not
+			// from the enemy's sprite_frames, so the order is not strictly
+			// required. Kept here for grouping with other instance setup.
+			buildChunksFromRecipes(*enemy_ships[enemy_ships.size() - 1]);
+
 			enemy_ships[enemy_ships.size() - 1]->set_velocity(enemy_ships[enemy_ships.size() - 1]->vel_x, enemy_ships[enemy_ships.size() - 1]->vel_y);
 
 
@@ -8223,6 +8527,12 @@ void load_media(const char* level_string)
 				std::cout << "Warning: Could not load enemy_" << enemyIdx << " sprite" << std::endl;
 				continue;
 			}
+
+			// Slice the template's animation frames into per-tile pixel
+			// "recipes". No GL textures are created here — live GL textures
+			// are built per-instance in buildChunksFromRecipes() so every
+			// spawned enemy has its own blackening-mutable buffers.
+			chunkEnemyTemplateRecipes(new_template);
 
 			enemy_templates.push_back(std::move(new_template));
 			std::cout << "Loaded enemy template: enemy_" << enemyIdx
@@ -8454,6 +8764,10 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->to_be_culled = false;
 
 			ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
+
+			// Chunk recipes came along with the copy-construct; build live
+			// per-chunk sprites so blackening operates on small buffers.
+			buildChunksFromRecipes(*ne);
 
 			g_selectedEnemy = (int)enemy_ships.size() - 1;
 			g_spawnTemplateIdx++;
@@ -8777,6 +9091,9 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
 				ne->to_be_culled = false;
 				ne->manually_update_data(enemy_templates[tIdx].sprite_frames);
+
+				// Live chunk build — blackening needs per-instance buffers.
+				buildChunksFromRecipes(*ne);
 
 				g_selectedEnemy = (int)enemy_ships.size() - 1;
 				e = enemy_ships.back().get();
@@ -9227,9 +9544,37 @@ void display()
 	{
 		if (enemy_ships[i]->tex != 0 && enemy_ships[i]->isOnscreen() && enemy_ships[i]->to_be_culled == false)
 		{
-			drawSprite(enemy_ships[i]->tex,
-				static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
-				enemy_ships[i]->width, enemy_ships[i]->height, enemy_ships[i]->under_fire);
+			enemy_ship& e = *enemy_ships[i];
+
+			// Make sure each chunk is showing its state's frame before we
+			// draw. (The collision stage also calls this, but it's safe to
+			// call again — it's a no-op when state hasn't changed since.)
+			syncEnemyChunkState(e);
+
+			if (!e.chunks.empty())
+			{
+				// Draw each chunk at its world position (enemy origin + chunk
+				// local offset). Chunks own their own GL textures (mutated by
+				// animate_blackening) so visual damage shows correctly.
+				for (size_t c = 0; c < e.chunks.size(); c++)
+				{
+					enemy_chunk_sprite& ch = e.chunks[c];
+					drawSprite(ch.tex,
+						static_cast<int>(e.x + ch.local_x),
+						static_cast<int>(e.y + ch.local_y),
+						ch.width, ch.height,
+						e.under_fire);
+				}
+			}
+			else
+			{
+				// Fallback for any enemy that somehow never had its chunks
+				// built (e.g. an in-editor clone path). Preserves the old
+				// monolithic rendering so nothing disappears.
+				drawSprite(e.tex,
+					static_cast<int>(e.x), static_cast<int>(e.y),
+					e.width, e.height, e.under_fire);
+			}
 		}
 	}
 
@@ -10020,7 +10365,7 @@ int main(int argc, char** argv)
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 	glutPassiveMotionFunc(passiveMotion);
-
+	glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
 	glutFullScreen();
 
 	// Main loop
