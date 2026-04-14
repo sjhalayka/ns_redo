@@ -725,7 +725,7 @@ public:
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-		const float BRUSH_RADIUS = 10.0f;        // Radius of the soft brush in sprite pixels
+		const float BRUSH_RADIUS = 15.0f;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 
 		for (size_t i = 0; i < locations.size(); i++)
@@ -7435,7 +7435,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 				? 0.0f
 				: (foreground_chunked[0].x - g_loadTimeFgX);
 
-			float nx = (e.path_points[j].x - (float)e.path_pixel_delay - fg_scroll) / SIM_WIDTH;
+			float nx = (e.path_points[j].x - (float)e.path_pixel_delay /*- fg_scroll*/) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 			int tid = use2D(nx, ny);
 
@@ -10020,7 +10020,7 @@ int main(int argc, char** argv)
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 	glutPassiveMotionFunc(passiveMotion);
-	glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
+
 	glutFullScreen();
 
 	// Main loop
