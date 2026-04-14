@@ -728,6 +728,9 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
+		const float transparent_threshold = 0.999;
+		const float animation_length = 5.0;
+
 
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
@@ -791,7 +794,7 @@ public:
 
 
 			// Do erosion
-			if (dis_real(generator_real) > 0.95)
+			if (dis_real(generator_real) > transparent_threshold)
 				transparent = true;
 
 			for (int y = minY; y <= maxY; ++y)
@@ -807,7 +810,7 @@ public:
 
 						const float duration = glut_curr_time - ci->second;
 
-						const float animation_length = 5.0;
+
 
 						if (duration >= animation_length)
 						{
@@ -1342,8 +1345,8 @@ public:
 // foreground is chunked). Each chunk is a small multi-frame tri_sprite so
 // that tilt frames and animate_blackening (including cross-frame
 // propagation and erosion-based transparency) continue to work per-chunk.
-const int enemy_chunk_size_width = 64;
-const int enemy_chunk_size_height = 64;
+const int enemy_chunk_size_width = 128;
+const int enemy_chunk_size_height = 128;
 
 class enemy_chunk : public tri_sprite
 {
@@ -1491,7 +1494,7 @@ public:
 	float current_tilt = 0.0f;      // -1.0 = full up, +1.0 = full down, 0 = rest
 	float target_tilt = 0.0f;       // What the player is currently trying to do
 
-	float tilt_speed = 0.3f;        // How fast we approach target (higher = snappier)
+	float tilt_speed = 1.0f;        // How fast we approach target (higher = snappier)
 
 	void updateTiltFromInput()
 	{
