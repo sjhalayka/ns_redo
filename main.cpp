@@ -10292,7 +10292,7 @@ int main(int argc, char** argv)
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 	glutPassiveMotionFunc(passiveMotion);
-	glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
+	//glutSetKeyRepeat(GLUT_KEY_REPEAT_OFF);
 	glutFullScreen();
 
 	// Main loop
