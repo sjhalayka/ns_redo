@@ -728,7 +728,7 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.99;
+		const float transparent_threshold = 0.999;
 		const float animation_length = 5.0;
 
 
@@ -7537,6 +7537,11 @@ static void ensureDatabaseSchema(sqlite3* db)
 	);)");
 }
 
+// Forward declaration: editorSaveToDatabase re-reads the canonical state it
+// just wrote so in-memory enemy_ships match disk exactly (Option A2).  The
+// full definition lives further down in this file.
+void retrieve_level_data(const std::string& db_name);
+
 static void editorSaveToDatabase(const std::string& db_name)
 {
 	sqlite3* db = nullptr;
@@ -7750,6 +7755,18 @@ static void editorSaveToDatabase(const std::string& db_name)
 	sqlite3_close(db);
 	std::cout << "[Editor] Saved " << enemy_ships.size()
 		<< " enemies to " << db_name << "\n";
+
+	// Option A2: rebuild in-memory enemy state from the canonical data we
+	// just wrote.  This guarantees the round-trip is stable — anything that
+	// fg_scroll stripped out on save is re-derived fresh on load — and
+	// makes a subsequent save-within-the-same-session idempotent.
+	//
+	// After reloading, reset the scroll reference so the next fg_scroll
+	// measurement is taken from this moment, not from an older load.
+	retrieve_level_data(db_name);
+	g_loadTimeFgX = foreground_chunked.empty()
+		? 0.0f
+		: foreground_chunked[0].x;
 }
 
 // ---- Keyboard handler (returns true if editor consumed the key) -------------
