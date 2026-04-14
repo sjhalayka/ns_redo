@@ -1367,6 +1367,14 @@ public:
 
 	int template_idx = 0; // tracks which enemy_template this ship is currently using
 
+	// Throttle blackening to at most once every 100ms per enemy.
+	// last_blacken_time_ms is the timestamp (in ms since epoch) of the
+	// last accepted blackenChunks call; BLACKEN_INTERVAL_MS is the
+	// minimum spacing between accepted calls. Tracked per-instance so
+	// each enemy has an independent cooldown.
+	long long last_blacken_time_ms = 0;
+	static const long long BLACKEN_INTERVAL_MS = 100;
+
 	// Visual decomposition of this enemy into a grid of small chunks.
 	// Populated by rebuildChunks() after manually_update_data. Templates
 	// leave this empty; only live enemies (in enemy_ships) build chunks.
@@ -1573,6 +1581,14 @@ public:
 	{
 		if (chunks.empty())
 			return;
+
+		// Throttle: skip if less than 100ms has passed since the last
+		// blackening on this specific enemy.
+		auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+		if (now_ms - last_blacken_time_ms < BLACKEN_INTERVAL_MS)
+			return;
+		last_blacken_time_ms = now_ms;
 
 		for (size_t ci = 0; ci < chunks.size(); ++ci)
 		{
@@ -9318,7 +9334,7 @@ void display()
 	static float lastTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Convert to seconds
 	float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-//	const float DT = 1.0f / FPS;
+	//	const float DT = 1.0f / FPS;
 
 	float d = currentTime - lastTime;
 
@@ -9383,6 +9399,7 @@ void display()
 				}
 			}
 		}
+
 		lastTime = currentTime;
 	}
 
