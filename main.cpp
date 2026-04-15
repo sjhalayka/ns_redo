@@ -728,7 +728,7 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.999;
+		const float transparent_threshold = 0.99;
 		const float animation_length = 5.0;
 
 
@@ -7537,11 +7537,6 @@ static void ensureDatabaseSchema(sqlite3* db)
 	);)");
 }
 
-// Forward declaration: editorSaveToDatabase re-reads the canonical state it
-// just wrote so in-memory enemy_ships match disk exactly (Option A2).  The
-// full definition lives further down in this file.
-void retrieve_level_data(const std::string& db_name);
-
 static void editorSaveToDatabase(const std::string& db_name)
 {
 	sqlite3* db = nullptr;
@@ -7656,22 +7651,21 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// path control-point locations
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
-			// path_points[j].x is in "runtime" space:
-			//   canonical_x  +  path_pixel_delay  +  world_scroll_since_load
+			// path_points[j].x is in world space with path_pixel_delay
+			// baked in.  Strip only the delay to get the canonical,
+			// scroll-independent normalised position.
 			//
-			// We need to remove both offsets so the DB always stores the
-			// canonical (delay-free, scroll-free) normalised position.
-			//
-			// World scroll = how far foreground_chunked[0] has drifted since the
-			// last load.  Both gameplay integration and editor left/right scroll
-			// apply the same delta to path_points and foreground tiles, so this
-			// single reference captures the full accumulated displacement.
-			float fg_scroll = foreground_chunked.empty()
-				? 0.0f
-				: (foreground_chunked[0].x - g_loadTimeFgX);
-
-			float nx = (e.path_points[j].x - (float)e.path_pixel_delay - fg_scroll) / SIM_WIDTH;
+			// Editor scroll is NOT an offset to remove here: when the user
+			// scrolls in the editor, the same delta is applied to both the
+			// foreground tiles and to every path_points entry, so the
+			// editor scroll is already part of the world coordinate we are
+			// reading.  The canonical position must be independent of where
+			// the editor happened to be scrolled at save time, and must not
+			// touch path_pixel_delay (which is immutable across save/load).
+			float nx = (e.path_points[j].x - static_cast<float>(e.path_pixel_delay)) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
+
+
 			int tid = use2D(nx, ny);
 
 			path_location_id++;
@@ -7755,18 +7749,6 @@ static void editorSaveToDatabase(const std::string& db_name)
 	sqlite3_close(db);
 	std::cout << "[Editor] Saved " << enemy_ships.size()
 		<< " enemies to " << db_name << "\n";
-
-	// Option A2: rebuild in-memory enemy state from the canonical data we
-	// just wrote.  This guarantees the round-trip is stable — anything that
-	// fg_scroll stripped out on save is re-derived fresh on load — and
-	// makes a subsequent save-within-the-same-session idempotent.
-	//
-	// After reloading, reset the scroll reference so the next fg_scroll
-	// measurement is taken from this moment, not from an older load.
-	retrieve_level_data(db_name);
-	g_loadTimeFgX = foreground_chunked.empty()
-		? 0.0f
-		: foreground_chunked[0].x;
 }
 
 // ---- Keyboard handler (returns true if editor consumed the key) -------------
@@ -8255,7 +8237,16 @@ void retrieve_level_data(const string& db_name)
 			// at which point the spline path takes over.
 			float desired_foreground_distance = static_cast<float>(path_pixel_delay);
 
-			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w + desired_foreground_distance;
+			// The initial enemy x is the spawn knot's canonical position
+			// (start_pos.x - half_w).  The path-point shift below re-bakes
+			// the delay into the path so the spline's spawn knot ends up
+			// at x + half_w + delay; adding the delay here as well would
+			// double-apply it and desync the enemy from its own path.
+			//
+			// The initial location must not depend on the editor's scroll
+			// state at save time, and path_pixel_delay must round-trip
+			// unchanged through save/load.
+			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w;
 
 			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
 
@@ -8302,7 +8293,14 @@ void retrieve_level_data(const string& db_name)
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 
-
+	if (!foreground_chunked.empty())
+	{
+		g_loadTimeFgX = foreground_chunked[0].x;
+	}
+	else
+	{
+		g_loadTimeFgX = 0.0f;
+	}
 }
 
 
