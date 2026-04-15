@@ -7683,6 +7683,8 @@ static void editorSaveToDatabase(const std::string& db_name)
 				? 0.0f
 				: (foreground_chunked[0].x - g_loadTimeFgX);
 
+
+
 			float nx = (e.path_points[j].x
 				- static_cast<float>(e.path_pixel_delay)
 				//- g_editorScrollAccum
