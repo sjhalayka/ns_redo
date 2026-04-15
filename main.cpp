@@ -7685,7 +7685,7 @@ static void editorSaveToDatabase(const std::string& db_name)
 
 			float nx = (e.path_points[j].x
 				- static_cast<float>(e.path_pixel_delay)
-				- g_editorScrollAccum 
+				//- g_editorScrollAccum
 				- fg_scroll) / SIM_WIDTH;
 
 			float ny = e.path_points[j].y / SIM_HEIGHT;
