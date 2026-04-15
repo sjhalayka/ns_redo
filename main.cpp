@@ -276,6 +276,9 @@ float foreground_vel = -50.0f;
 // editorSaveToDatabase subtracts this so canonical positions round-trip.
 // Reset to 0 on load and on save (after using it).
 float g_editorScrollAccum = 0.0f;
+float g_loadTimeFgX = 0.0f;
+
+
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
 float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
@@ -5586,6 +5589,8 @@ bool chunkForegroundTexture(const char* sourceFilename)
 	// Reset the editor-scroll accumulator: any prior editor scroll belonged
 	// to the previous level state and has now been discarded along with it.
 	g_editorScrollAccum = 0.0f;
+	g_loadTimeFgX = foreground_chunked.empty() ? 0.0f : foreground_chunked[0].x;
+
 
 	stbi_image_free(srcData);
 
@@ -7671,10 +7676,21 @@ static void editorSaveToDatabase(const std::string& db_name)
 			// Gameplay drift is NOT subtracted: while the level is being
 			// edited the simulation is paused, so no gameplay-drift offset
 			// can accumulate into path_points between load and save.
+
+
+
+			float fg_scroll = foreground_chunked.empty()
+				? 0.0f
+				: (foreground_chunked[0].x - g_loadTimeFgX);
+
 			float nx = (e.path_points[j].x
 				- static_cast<float>(e.path_pixel_delay)
-				- g_editorScrollAccum) / SIM_WIDTH;
+				- g_editorScrollAccum 
+				- fg_scroll) / SIM_WIDTH;
+
 			float ny = e.path_points[j].y / SIM_HEIGHT;
+
+
 
 
 			int tid = use2D(nx, ny);
@@ -8497,7 +8513,9 @@ void load_media(const char* level_string)
 
 		retrieve_level_data("level1.db");
 
-
+		g_loadTimeFgX = foreground_chunked.empty()
+			? 0.0f
+			: foreground_chunked[0].x;
 
 
 	}
