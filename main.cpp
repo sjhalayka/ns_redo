@@ -269,10 +269,13 @@ void main() {
 
 
 float foreground_vel = -50.0f;
-// X position of foreground_chunked[0] at the moment the level was last loaded.
-// Used to measure total world scroll (gameplay + editor) since load, so that
-// editorSaveToDatabase can strip it before writing canonical path positions.
-float g_loadTimeFgX = 0.0f;
+// Accumulated editor-only scroll applied to path_points since the last load.
+// Gameplay drift is already accounted for elsewhere (the spline gets consumed
+// as the enemy progresses), but editor arrow-key scroll bakes a raw offset
+// into every path_points[].x with no counterpart in the persisted state.
+// editorSaveToDatabase subtracts this so canonical positions round-trip.
+// Reset to 0 on load and on save (after using it).
+float g_editorScrollAccum = 0.0f;
 
 // Helper: Evaluate a single Catmull-Rom segment given 4 control points and t in [0,1]
 float catmull_rom_segment(float p0, float p1, float p2, float p3, float t)
@@ -5580,9 +5583,9 @@ bool chunkForegroundTexture(const char* sourceFilename)
 		foreground_chunked[i].vel_y = 0;
 	}
 
-	// Snapshot the initial X of tile 0 so editorSaveToDatabase can measure
-	// total world scroll (gameplay drift + editor scroll) since this load.
-	g_loadTimeFgX = foreground_chunked.empty() ? 0.0f : foreground_chunked[0].x;
+	// Reset the editor-scroll accumulator: any prior editor scroll belonged
+	// to the previous level state and has now been discarded along with it.
+	g_editorScrollAccum = 0.0f;
 
 	stbi_image_free(srcData);
 
@@ -7652,17 +7655,25 @@ static void editorSaveToDatabase(const std::string& db_name)
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
 			// path_points[j].x is in world space with path_pixel_delay
-			// baked in.  Strip only the delay to get the canonical,
-			// scroll-independent normalised position.
+			// AND any editor arrow-key scroll applied since load baked in.
+			// Strip both to get the canonical, scroll-independent position.
 			//
-			// Editor scroll is NOT an offset to remove here: when the user
-			// scrolls in the editor, the same delta is applied to both the
-			// foreground tiles and to every path_points entry, so the
-			// editor scroll is already part of the world coordinate we are
-			// reading.  The canonical position must be independent of where
-			// the editor happened to be scrolled at save time, and must not
-			// touch path_pixel_delay (which is immutable across save/load).
-			float nx = (e.path_points[j].x - static_cast<float>(e.path_pixel_delay)) / SIM_WIDTH;
+			// path_pixel_delay is immutable across save/load and is reapplied
+			// at load time, so we only remove it here, not modify it.
+			//
+			// g_editorScrollAccum is the sum of every arrow-key scrollDelta
+			// applied to path_points in editor mode since load. The foreground
+			// tiles are not persisted, so on the next load they will be
+			// reconstructed at their original positions; if we did not strip
+			// the editor delta here, every enemy would be shifted by exactly
+			// that delta relative to a foreground that no longer has it.
+			//
+			// Gameplay drift is NOT subtracted: while the level is being
+			// edited the simulation is paused, so no gameplay-drift offset
+			// can accumulate into path_points between load and save.
+			float nx = (e.path_points[j].x
+				- static_cast<float>(e.path_pixel_delay)
+				- g_editorScrollAccum) / SIM_WIDTH;
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 
 
@@ -8293,14 +8304,14 @@ void retrieve_level_data(const string& db_name)
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 
-	if (!foreground_chunked.empty())
-	{
-		g_loadTimeFgX = foreground_chunked[0].x;
-	}
-	else
-	{
-		g_loadTimeFgX = 0.0f;
-	}
+	//if (!foreground_chunked.empty())
+	//{
+	//	g_loadTimeFgX = foreground_chunked[0].x;
+	//}
+	//else
+	//{
+	//	g_loadTimeFgX = 0.0f;
+	//}
 }
 
 
@@ -9372,6 +9383,10 @@ void display()
 
 			if (scrollDelta != 0.0f)
 			{
+				// Track editor-only scroll so editorSaveToDatabase can strip it
+				// from path_points before writing canonical positions.
+				g_editorScrollAccum += scrollDelta;
+
 				for (size_t i = 0; i < foreground_chunked.size(); i++)
 					foreground_chunked[i].x += scrollDelta;
 
