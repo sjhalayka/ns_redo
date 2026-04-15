@@ -10361,11 +10361,7 @@ int main(int argc, char** argv)
 	load_media("level1");
 
 
-	//    printControls();
 
-
-
-		// Register callbacks
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
