@@ -1494,6 +1494,15 @@ public:
 	int path_pixel_delay = 0;
 	float path_scroll_rate = 0.0f; // computed at activation
 
+	// Accumulated foreground drift (in pixels) that occurred while this
+	// enemy was in the active spline phase, where path_points are held
+	// still in screen space but the foreground keeps drifting at
+	// foreground_vel. editorSaveToDatabase adds this back into the
+	// canonicalisation formula so positions round-trip correctly.
+	// Sign matches foreground_vel * elapsed (i.e. negative when drifting
+	// left). Reset on load and on save.
+	float spline_phase_drift = 0.0f;
+
 	float path_t = -1.0f;
 
 
@@ -6201,6 +6210,15 @@ void simulate()
 		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
 			enemy_ships[i]->path_points[j].x += scroll_rate * DT;
 
+		// While the enemy is on the spline, path_points are frozen in
+		// screen space but the foreground keeps scrolling. Track the
+		// resulting drift so editorSaveToDatabase can add it back when
+		// canonicalising path_points (otherwise the saved x would be
+		// over-corrected by exactly this amount, sliding the enemy
+		// rightward across save/load cycles).
+		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
+			enemy_ships[i]->spline_phase_drift += foreground_vel * DT;
+
 		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->appearance_time == 0)
 			enemy_ships[i]->appearance_time = GLOBAL_TIME;
 
@@ -6860,6 +6878,7 @@ struct EnemySnapshot {
 	float health, max_health;
 	int   path_pixel_delay;
 	float path_scroll_rate;
+	float spline_phase_drift;
 };
 
 struct EditorUndoState {
@@ -6888,6 +6907,7 @@ static EditorUndoState editorCaptureState()
 		snap.max_health = e.max_health;
 		snap.path_pixel_delay = e.path_pixel_delay;
 		snap.path_scroll_rate = e.path_scroll_rate;
+		snap.spline_phase_drift = e.spline_phase_drift;
 		snap.cannons.reserve(e.cannons.size());
 		for (const auto& c : e.cannons)
 		{
@@ -6956,6 +6976,7 @@ static void editorRestoreState(const EditorUndoState& state)
 		e->max_health = snap.max_health;
 		e->path_pixel_delay = snap.path_pixel_delay;
 		e->path_scroll_rate = snap.path_scroll_rate;
+		e->spline_phase_drift = snap.spline_phase_drift;
 
 		// Restore cannons
 		e->cannons.resize(snap.cannons.size());
@@ -7685,10 +7706,19 @@ static void editorSaveToDatabase(const std::string& db_name)
 
 
 
+			// During the active spline phase, path_points are frozen in
+			// screen space while the foreground continues to drift. The
+			// raw fg_scroll term over-corrects by exactly the amount of
+			// drift the path missed; spline_phase_drift records that
+			// missed amount per enemy and we add it back here so the
+			// canonical x round-trips. (For enemies that never entered
+			// the spline phase, spline_phase_drift is zero and this is
+			// a no-op.)
 			float nx = (e.path_points[j].x
 				- static_cast<float>(e.path_pixel_delay)
 				//- g_editorScrollAccum
-				- fg_scroll) / SIM_WIDTH;
+				- fg_scroll
+				+ e.spline_phase_drift) / SIM_WIDTH;
 
 			float ny = e.path_points[j].y / SIM_HEIGHT;
 
@@ -8278,6 +8308,9 @@ void retrieve_level_data(const string& db_name)
 			enemy_ships[enemy_ships.size() - 1]->x = start_pos.x - half_w;
 
 			enemy_ships[enemy_ships.size() - 1]->path_pixel_delay = path_pixel_delay;
+
+			// Fresh load: no spline-phase drift has been accumulated yet.
+			enemy_ships[enemy_ships.size() - 1]->spline_phase_drift = 0.0f;
 
 			// Shift path points by the pixel delay so the spline starts
 			// where the enemy actually is.  The foreground drift during
