@@ -734,7 +734,7 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.99;
+		const float transparent_threshold = 0.999;
 		const float animation_length = 5.0;
 
 
