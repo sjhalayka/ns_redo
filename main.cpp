@@ -677,7 +677,6 @@ struct EqualVec2
 };
 
 
-// to do: move cannons based on state
 
 class pre_sprite
 {
@@ -1274,19 +1273,6 @@ public:
 	{
 		vel_x = src_x;
 		vel_y = src_y;
-
-		//// Determine desired tilt
-		//if (src_y < -10.0f) {           // Moving up
-		//	target_tilt = -1.0f;
-		//}
-		//else if (src_y > 10.0f) {       // Moving down
-		//	target_tilt = 1.0f;
-		//}
-		//else {
-		//	target_tilt = 0.0f;         // No vertical input → return to center
-		//}
-
-		//updateTilt();
 	}
 
 
@@ -1529,18 +1515,18 @@ public:
 		vel_x = src_x;
 		vel_y = src_y;
 
-		//// Determine desired tilt
-		//if (src_y < -10.0f) {           // Moving up
-		//	target_tilt = -1.0f;
-		//}
-		//else if (src_y > 10.0f) {       // Moving down
-		//	target_tilt = 1.0f;
-		//}
-		//else {
-		//	target_tilt = 0.0f;         // No vertical input → return to center
-		//}
+		// Determine desired tilt
+		if (src_y < -1.0f) {           // Moving up
+			target_tilt = -1.0f;
+		}
+		else if (src_y > 1.0f) {       // Moving down
+			target_tilt = 1.0f;
+		}
+		else {
+			target_tilt = 0.0f;         // No vertical input → return to center
+		}
 
-		//updateTilt();
+		updateTilt();
 	}
 
 
