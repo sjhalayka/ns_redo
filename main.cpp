@@ -8739,6 +8739,21 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 		if (!enemy_templates.empty())
 		{
 			editorPushUndo();
+
+			// Snap every existing enemy to its rightmost path knot before
+			// spawning the new one — but skip any that have already begun
+			// spline interpolation (path_t > 0), so we don't yank them
+			// backwards along their path.
+			for (auto& es : enemy_ships)
+			{
+				if (es->path_points.empty()) continue;
+				if (es->path_t > 0.0f) continue; // already moving along spline
+
+				// path_points.front() is the right-side entry knot.
+				es->x = es->path_points.front().x - es->width * 0.5f;
+				es->y = es->path_points.front().y - es->height * 0.5f;
+			}
+
 			int tIdx = 0;//g_spawnTemplateIdx % (int)enemy_templates.size();
 			enemy_ships.push_back(std::make_unique<enemy_ship>(enemy_templates[tIdx]));
 			enemy_ship* ne = enemy_ships.back().get();
@@ -8758,8 +8773,6 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
 
 			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
-			// Anchor the delay to the leftmost (exit) knot. Canonical
-			// zero-delay position for that knot is -half_w.
 			ne->path_pixel_delay = (int)(ne->path_points.back().x + ne->width * 0.5f + foreground_scrolled);
 
 			ne->to_be_culled = false;
