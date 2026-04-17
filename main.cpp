@@ -41,6 +41,9 @@ std::uniform_real_distribution<float> dis_real(0, 1);
 sf::SoundBuffer explosion_buffer("media/sound/explosion.wav"); // Throws sf::Exception if an error occurs
 sf::Sound explosion_sound(explosion_buffer);
 
+sf::SoundBuffer laser_buffer("media/sound/Primary Laser.wav"); // Throws sf::Exception if an error occurs
+sf::Sound laser_sound(laser_buffer);
+
 sf::Music ms_music("media/sound/Moonlight Sonata Remix.wav");
 
 
@@ -742,7 +745,6 @@ public:
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
 		const float transparent_threshold = 0.999;
 		const float animation_length = 5.0;
-
 
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
@@ -5908,6 +5910,8 @@ void fireBullet(void)
 			ally_bullets.push_back(make_unique<straight_bullet>(newBullet));
 		}
 	}
+
+	laser_sound.play();
 }
 
 
