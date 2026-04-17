@@ -1269,10 +1269,51 @@ public:
 	}
 
 
+	// Target velocity set by key input; actual vel_x/vel_y lerps toward this
+	float target_vel_x = 0.0f;
+	float target_vel_y = 0.0f;
+
+	// How quickly velocity ramps up when a key is held (units/sec²)
+	float acceleration = 8.0f;
+	// How quickly velocity fades when no key is held (drag multiplier, 0-1 per second)
+	float drag = 6.0f;
+
 	void set_velocity(const float src_x, const float src_y)
 	{
 		vel_x = src_x;
 		vel_y = src_y;
+	}
+
+	// Sets the *desired* velocity from key input; inertia is applied in applyInertia()
+	void set_target_velocity(const float src_x, const float src_y)
+	{
+		target_vel_x = src_x;
+		target_vel_y = src_y;
+	}
+
+	// Called once per frame to smoothly blend actual velocity toward target
+	void applyInertia(float dt)
+	{
+		auto lerp_axis = [&](float current, float target, float acc, float drg) -> float {
+			if (target != 0.0f) {
+				// Accelerate toward target velocity
+				float diff = target - current;
+				float step = acc * std::abs(target) * dt;
+				if (std::abs(diff) <= step)
+					return target;
+				return current + std::copysign(step, diff);
+			}
+			else {
+				// No key held — apply drag to fade out
+				float step = drg * std::abs(current) * dt;
+				if (std::abs(current) <= step)
+					return 0.0f;
+				return current - std::copysign(step, current);
+			}
+			};
+
+		vel_x = lerp_axis(vel_x, target_vel_x, acceleration, drag);
+		vel_y = lerp_axis(vel_y, target_vel_y, acceleration, drag);
 	}
 
 
@@ -6023,6 +6064,7 @@ void simulate()
 
 
 	protagonist.updateTiltFromInput();
+	protagonist.applyInertia(DT);
 
 	protagonist.integrate(DT);
 
@@ -10066,7 +10108,7 @@ void specialKeys(int key, int x, int y) {
 		local_vel_y /= vel_length * 2;
 	}
 
-	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_target_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 void specialKeysUp(int key, int x, int y) {
@@ -10115,7 +10157,7 @@ void specialKeysUp(int key, int x, int y) {
 		local_vel_y /= vel_length * 2;
 	}
 
-	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_target_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 void mouse(int button, int state, int x, int y) {
@@ -10237,7 +10279,7 @@ void specialKeyboard(int key, int x, int y)
 		local_vel_y /= vel_length * 2;
 	}
 
-	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_target_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 // Modified specialKeyboardUp function to reset key states
@@ -10288,7 +10330,7 @@ void specialKeyboardUp(int key, int x, int y)
 		local_vel_y /= vel_length * 2;
 	}
 
-	protagonist.set_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
+	protagonist.set_target_velocity(local_vel_x * windowWidth, local_vel_y * windowHeight);
 }
 
 void keyboardup(unsigned char key, int x, int y) {
