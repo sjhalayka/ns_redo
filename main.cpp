@@ -10410,6 +10410,8 @@ int main(int argc, char** argv)
 
 	initCollisionResources();
 
+	ms_sound.setLooping(true);
+	ms_sound.play();
 
 	load_media("level1");
 
