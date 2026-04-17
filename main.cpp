@@ -8803,7 +8803,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			ne->template_idx = tIdx;
 			ne->x = SIM_WIDTH * 0.5f - ne->width * 0.5f;
 			ne->y = SIM_HEIGHT * 0.5f - ne->height * 0.5f;
-			ne->health = ne->max_health = 1000.f;
+			ne->health = ne->max_health = 100.0f;
 			ne->path_animation_length = 5.0f;
 			ne->path_points.push_back(glm::vec2(SIM_WIDTH + ne->width / 2.0, SIM_HEIGHT * 0.5f));
 			ne->path_points.push_back(glm::vec2(-(float)ne->width / 2.0, SIM_HEIGHT * 0.5f));
