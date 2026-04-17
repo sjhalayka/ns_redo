@@ -39,7 +39,11 @@ std::uniform_real_distribution<float> dis_real(0, 1);
 
 
 sf::SoundBuffer explosion_buffer("media/sound/explosion.wav"); // Throws sf::Exception if an error occurs
-sf::Sound sound(explosion_buffer);
+sf::Sound explosion_sound(explosion_buffer);
+
+sf::SoundBuffer ms_buffer("media/sound/Moonlight Sonata Remix.wav"); // Throws sf::Exception if an error occurs
+sf::Sound ms_sound(ms_buffer);
+
 
 
 bool red_mode = true;
@@ -5917,7 +5921,7 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 		return;
 
 
-	sound.play();
+	explosion_sound.play();
 
 
 	//const float aspect = SIM_WIDTH / float(SIM_HEIGHT);
