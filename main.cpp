@@ -41,9 +41,7 @@ std::uniform_real_distribution<float> dis_real(0, 1);
 sf::SoundBuffer explosion_buffer("media/sound/explosion.wav"); // Throws sf::Exception if an error occurs
 sf::Sound explosion_sound(explosion_buffer);
 
-sf::SoundBuffer ms_buffer("media/sound/Moonlight Sonata Remix.wav"); // Throws sf::Exception if an error occurs
-sf::Sound ms_sound(ms_buffer);
-
+sf::Music ms_music("media/sound/Moonlight Sonata Remix.wav");
 
 
 bool red_mode = true;
@@ -8409,8 +8407,9 @@ void retrieve_level_data(const string& db_name)
 
 void load_media(const char* level_string)
 {
-	ms_sound.setLooping(true);
-	ms_sound.play();
+	ms_music.setLooping(true);
+	ms_music.setVolume(75.0f);
+	ms_music.play();
 
 	// Load protagonist texture -- scan for protagonist0.png, protagonist1.png, ...
 	// The number of files must be odd (e.g. 3, 5, 7).
