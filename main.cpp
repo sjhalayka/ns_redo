@@ -7,8 +7,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <SFML/Audio.hpp>
+
 #pragma comment(lib, "freeglut")
 #pragma comment(lib, "glew32")
+#pragma comment(lib, "sfml-audio")
 
 #include <iostream>
 #include <string>
@@ -35,6 +38,8 @@ std::mt19937 generator_real(static_cast<unsigned>(0));
 std::uniform_real_distribution<float> dis_real(0, 1);
 
 
+sf::SoundBuffer explosion_buffer("media/sound/explosion.wav"); // Throws sf::Exception if an error occurs
+sf::Sound sound(explosion_buffer);
 
 
 bool red_mode = true;
@@ -5910,6 +5915,9 @@ void make_dying_bullets(const pre_sprite& stamp, const bool enemy)
 {
 	if (stamp.to_be_culled)
 		return;
+
+
+	sound.play();
 
 
 	//const float aspect = SIM_WIDTH / float(SIM_HEIGHT);
