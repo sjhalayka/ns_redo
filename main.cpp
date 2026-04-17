@@ -8409,6 +8409,9 @@ void retrieve_level_data(const string& db_name)
 
 void load_media(const char* level_string)
 {
+	ms_sound.setLooping(true);
+	ms_sound.play();
+
 	// Load protagonist texture -- scan for protagonist0.png, protagonist1.png, ...
 	// The number of files must be odd (e.g. 3, 5, 7).
 	{
@@ -10410,8 +10413,7 @@ int main(int argc, char** argv)
 
 	initCollisionResources();
 
-	ms_sound.setLooping(true);
-	ms_sound.play();
+
 
 	load_media("level1");
 
