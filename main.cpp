@@ -4503,6 +4503,8 @@ void drawLines(const std::vector<Line>& linesToDraw) {
 		vertices.data(),
 		GL_DYNAMIC_DRAW);
 
+	glEnable(GL_BLEND);
+
 	// Draw
 	glUseProgram(lineProgram);
 	glUniform2f(glGetUniformLocation(lineProgram, "resolution"),
@@ -4511,6 +4513,9 @@ void drawLines(const std::vector<Line>& linesToDraw) {
 	glBindVertexArray(lineVAO);
 	glDrawArrays(GL_LINES, 0, (GLsizei)vertices.size());
 	glBindVertexArray(0);
+
+	glDisable(GL_BLEND);
+
 }
 
 // Optional: Draw with custom line width
@@ -5377,8 +5382,8 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
-	if(repeat_texture)
-	{ 
+	if (repeat_texture)
+	{
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	}
@@ -7332,11 +7337,101 @@ static void editorDrawSelectionBox(const enemy_ship& e)
 	drawLinesWithWidth(v, 2.f);
 }
 
+// ---- Time ruler -------------------------------------------------------------
+// Draws vertical lines at one-second intervals of gameplay scroll. During
+// gameplay the foreground moves at foreground_vel px/s, so lines are spaced
+// |foreground_vel| pixels apart. They scroll with the editor view via
+// g_editorScrollAccum so the line labeled "Ns" always marks the world position
+// the foreground will occupy N seconds into the level.
+static void editorDrawTimeRuler()
+{
+	// No meaningful ruler if the foreground isn't scrolling.
+	if (std::fabs(foreground_vel) < 1e-3f) return;
+
+	// Pixels-per-second of gameplay scroll (always positive for spacing math).
+	const float pxPerSec = std::fabs(foreground_vel);
+
+	// Screen-x of the T-second marker:
+	//   screen_x(T) = foreground_vel * T + g_editorScrollAccum
+	// Solve for the range of T that falls within [0, windowWidth].
+	float t_at_left = (0.0f - g_editorScrollAccum) / foreground_vel;
+	float t_at_right = ((float)windowWidth - g_editorScrollAccum) / foreground_vel;
+	float t_min = std::min(t_at_left, t_at_right);
+	float t_max = std::max(t_at_left, t_at_right);
+
+	int iMin = (int)std::floor(t_min);
+	int iMax = (int)std::ceil(t_max);
+
+	// Sanity clamp so a weird scroll value can't spawn thousands of lines.
+	const int MAX_LINES = 4096;
+	if (iMax - iMin > MAX_LINES) return;
+
+	// Styling
+	const glm::vec4 colTick(0.55f, 0.75f, 0.95f, 0.2f);  // every second
+	const glm::vec4 colZero(1.00f, 0.55f, 0.20f, 0.2f);  // T = 0 (level start)
+	const glm::vec4 colLabel(0.85f, 0.95f, 1.00f, 0.95f);
+	const glm::vec4 colLabelZero(1.00f, 0.75f, 0.35f, 1.00f);
+
+	// Batch ticks and the T=0 line separately so each can have its own width.
+	std::vector<Line> tickLines;
+	std::vector<Line> zeroLines;
+
+	const float topY = 0.0f;
+	const float botY = (float)windowHeight;
+	const float labelY = 28.0f;         // top label
+	const float labelY2 = botY - 40.0f;  // bottom label (so it's visible even if HUD covers top)
+
+	for (int T = iMin; T <= iMax; ++T)
+	{
+		float x = foreground_vel * (float)T + g_editorScrollAccum;
+		if (x < -1.0f || x >(float)windowWidth + 1.0f) continue;
+
+		if (T == 0)
+			zeroLines.push_back(Line(glm::vec2(x, topY), glm::vec2(x, botY), colZero));
+		else
+			tickLines.push_back(Line(glm::vec2(x, topY), glm::vec2(x, botY), colTick));
+	}
+
+	if (!tickLines.empty()) drawLinesWithWidth(tickLines, 1.5f);
+	if (!zeroLines.empty()) drawLinesWithWidth(zeroLines, 3.0f);
+
+	// Labels: one per second. If the spacing is too tight for per-second
+	// labels without overlap (~40px wide for "00s" at scale 0.35), fall back
+	// to every-5th-second labels plus T=0 so the numbers stay readable.
+	const bool labelEverySecond = (pxPerSec >= 40.0f);
+
+	if (textRenderer)
+	{
+		for (int T = iMin; T <= iMax; ++T)
+		{
+			float x = foreground_vel * (float)T + g_editorScrollAccum;
+			if (x < 0.0f || x >(float)windowWidth) continue;
+
+			bool isZero = (T == 0);
+			if (!isZero && !labelEverySecond && (T % 5 != 0)) continue;
+
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%ds", T);
+
+			glm::vec4 col = isZero ? colLabelZero : colLabel;
+			float scale = isZero ? 0.45f : 0.38f;
+
+			// Nudge label a couple of pixels right of the line so it doesn't
+			// sit directly on top.
+			//textRenderer->renderText(buf, x + 3.0f, labelY, scale, col);
+			textRenderer->renderText(buf, x + 3.0f, labelY2, scale, col);
+		}
+	}
+}
+
 // ---- Main overlay render (called inside display()) --------------------------
 
 void renderEditorOverlay()
 {
 	if (!g_editorMode) return;
+
+	// Draw the time ruler first so spline/sprite overlays paint on top of it.
+	editorDrawTimeRuler();
 
 	for (size_t i = 0; i < enemy_ships.size(); ++i)
 	{
