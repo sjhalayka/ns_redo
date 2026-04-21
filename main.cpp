@@ -7379,7 +7379,7 @@ static void editorDrawTimeRuler()
 	const float topY = 0.0f;
 	const float botY = (float)windowHeight;
 	const float labelY = 28.0f;         // top label
-	const float labelY2 = botY - 40.0f;  // bottom label (so it's visible even if HUD covers top)
+	const float labelY2 = botY - 60.0f;  // bottom label (so it's visible even if HUD covers top)
 
 	for (int T = iMin; T <= iMax; ++T)
 	{
@@ -7411,10 +7411,10 @@ static void editorDrawTimeRuler()
 			if (!isZero && !labelEverySecond && (T % 5 != 0)) continue;
 
 			char buf[32];
-			snprintf(buf, sizeof(buf), "%ds", T);
+			snprintf(buf, sizeof(buf), "%d", T);
 
 			glm::vec4 col = isZero ? colLabelZero : colLabel;
-			float scale = isZero ? 0.45f : 0.38f;
+			float scale = 0.25;//isZero ? 0.45f : 0.38f;
 
 			// Nudge label a couple of pixels right of the line so it doesn't
 			// sit directly on top.
