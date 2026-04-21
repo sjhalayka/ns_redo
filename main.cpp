@@ -5352,7 +5352,7 @@ GLuint createRectangleStamp(int width, int height) {
  * @param outHeight   Output parameter for the image height in pixels
  * @return            OpenGL texture ID, or 0 if loading failed
  */
-GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data) {
+GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, vector<unsigned char>& out_data, bool repeat_texture = false) {
 	int width, height, channels;
 
 	out_data.clear();
@@ -5375,8 +5375,18 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+
+	if(repeat_texture)
+	{ 
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	}
+	else
+	{
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
 
 	for (size_t i = 0; i < width * height * channels; i++)
 		out_data.push_back(data[i]);
@@ -8494,7 +8504,7 @@ void load_media(const char* level_string)
 
 	string s = affix + "background.png";
 
-	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data);
+	background.tex = loadTextureFromFile(s.c_str(), &background.width, &background.height, background.to_present_data, true);
 	if (background.tex == 0)
 	{
 		std::cout << "Warning: Could not load background sprite" << std::endl;
