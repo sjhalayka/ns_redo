@@ -46,6 +46,7 @@ sf::Sound laser_sound(laser_buffer);
 
 sf::Music ms_music("media/sound/Moonlight Sonata Remix.wav");
 
+bool draw_time_lines = false;
 
 bool red_mode = true;
 
@@ -7345,6 +7346,11 @@ static void editorDrawSelectionBox(const enemy_ship& e)
 // the foreground will occupy N seconds into the level.
 static void editorDrawTimeRuler()
 {
+	if (draw_time_lines == false)
+		return;
+
+
+
 	// No meaningful ruler if the foreground isn't scrolling.
 	if (std::fabs(foreground_vel) < 1e-3f) return;
 
@@ -9189,7 +9195,11 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 25: // Ctrl+Y — Redo
 		editorRedo();
 		return true;
+	case 's':
+		draw_time_lines = !draw_time_lines;
 
+		return true;
+	
 	case 3: // Ctrl+C / Ctrl+Shift+C
 		if (e)
 		{

@@ -23,6 +23,8 @@ Y: Cycle enemy power up type
 h / H: Decrease / increase max health by 100.0
 j / J: Decrease / increase path animation length by 1.0
 
+s: Enable / disable drawing time lines
+
 Shift + arrow keys: Move selected enemy
 Left / Right arrow keys: Move environment
 
