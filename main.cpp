@@ -67,7 +67,7 @@ float TURBULENCE_AMPLITUDE = 2.0f;      // Controls noise strength
 float TURBULENCE_FREQUENCY = 10.0f;      // Controls noise frequency (scale)
 float TURBULENCE_SCALE = 0.05f;          // Overall turbulence strength
 
-
+float alpha = 0.5f;
 
 
 bool spacePressed = false;
@@ -742,10 +742,10 @@ public:
 	void animate_blackening(const vector<glm::vec2>& locations, size_t state)
 	{
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
+		const float BRUSH_RADIUS = 10.0f;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.9;
-		const float animation_length = 5.0;
+		const float transparent_threshold = 0.9f;
+		const float animation_length = 5.0f;
 
 		for (size_t i = 0; i < locations.size(); i++)
 			blackening_age_map[locations[i]] = glut_curr_time;
@@ -3337,6 +3337,8 @@ const char* spriteFragmentSource = R"(
 in vec2 texCoord;
 out vec4 fragColor;
 
+uniform float alpha = 1.0;
+
 uniform sampler2D spriteTexture;
 uniform int under_fire;
 uniform float time;
@@ -3356,8 +3358,8 @@ void main() {
 		color.rgb = vec3((color.r + 1.0) * 0.5 , (color.g + 1.0) * 0.5, (color.b + 1.0) * 0.5);
 	}
 
-
     fragColor = color;
+	fragColor.a = min(fragColor.a, alpha);
 }
 )";
 
@@ -4983,7 +4985,6 @@ void detectEdgeCollisions()
 		}
 
 
-
 		dis_real.reset();
 
 		for (size_t h = 0; h < foreground_lit_chunked.size(); h++)
@@ -5730,12 +5731,12 @@ bool chunkForegroundTexture(const char* sourceFilename, vector<foreground_tile>&
  *   // Draw a sprite scaled to 2x its original size
  *   drawSprite(myTexture, 200, 100, originalWidth * 2, originalHeight * 2);
  */
-void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight, bool under_fire) {
+void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixelHeight, bool under_fire, float alpha) {
 	if (texture == 0) return;
 
 	// Enable blending for transparency
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glUseProgram(spriteProgram);
 
@@ -5761,6 +5762,8 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 
 	glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
 	glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
+
+	glUniform1f(glGetUniformLocation(spriteProgram, "alpha"), alpha);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
@@ -6243,8 +6246,8 @@ void simulate()
 			else if (enemy_ships[i]->cannons[j].cannon_type == CANNON_TYPE_TRACKING)
 			{
 				glm::vec2 aim;
-				aim.x = (protagonist.x + protagonist.width * 0.5) - s.x;
-				aim.y = (protagonist.y + protagonist.height * 0.5) - s.y;
+				aim.x = (protagonist.x + protagonist.width * 0.5f) - s.x;
+				aim.y = (protagonist.y + protagonist.height * 0.5f) - s.y;
 
 				aim = normalize(aim) * BULLET_SPEED;
 
@@ -7531,7 +7534,7 @@ void renderEditorOverlay()
 				glm::vec4 col = highlighted
 					? glm::vec4(1.f, 1.f, 1.f, 1.f)     // white = selected
 					: glm::vec4(1.f, 1.f, 0.f, 1.f);    // yellow = normal
-				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50, 0.5f, col);
+				textRenderer->renderText(result[i].c_str(), 10, (i + 1) * 50.0f, 0.5f, col);
 			}
 
 			// ---- Speed-knot value labels (drawn next to each diamond marker) ----
@@ -9776,7 +9779,7 @@ void display()
 	{
 		drawSprite(protagonist.tex,
 			static_cast<int>(protagonist.x), static_cast<int>(protagonist.y),
-			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided > 0 && GLOBAL_TIME <= protagonist.last_time_collided + 0.5));
+			protagonist.width, protagonist.height, protagonist.under_fire || (protagonist.last_time_collided > 0 && GLOBAL_TIME <= protagonist.last_time_collided + 0.5), 1.0);
 	}
 
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
@@ -9785,7 +9788,7 @@ void display()
 		{
 			drawSprite(foreground_chunked[i].tex,
 				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
-				foreground_chunked[i].width, foreground_chunked[i].height, false);
+				foreground_chunked[i].width, foreground_chunked[i].height, false, 1.0);
 		}
 	}
 
@@ -9797,7 +9800,7 @@ void display()
 		{
 			drawSprite(foreground_lit_chunked[i].tex,
 				static_cast<int>(foreground_lit_chunked[i].x), static_cast<int>(foreground_lit_chunked[i].y),
-				foreground_lit_chunked[i].width, foreground_lit_chunked[i].height, false);
+				foreground_lit_chunked[i].width, foreground_lit_chunked[i].height, false, alpha);
 		}
 	}
 
@@ -9833,7 +9836,7 @@ void display()
 
 					drawSprite(c.tex,
 						ex + c.offset_x, ey + c.offset_y,
-						c.width, c.height, under_fire);
+						c.width, c.height, under_fire, 1.0);
 				}
 			}
 			else if (enemy_ships[i]->tex != 0)
@@ -9843,7 +9846,7 @@ void display()
 				// whole sprite the old way.
 				drawSprite(enemy_ships[i]->tex,
 					static_cast<int>(enemy_ships[i]->x), static_cast<int>(enemy_ships[i]->y),
-					enemy_ships[i]->width, enemy_ships[i]->height, enemy_ships[i]->under_fire);
+					enemy_ships[i]->width, enemy_ships[i]->height, enemy_ships[i]->under_fire, 1.0);
 			}
 		}
 	}
@@ -9856,7 +9859,7 @@ void display()
 			drawSprite(power_ups_alive[i]->tex,
 				static_cast<int>(power_ups_alive[i]->x),
 				static_cast<int>(power_ups_alive[i]->y),
-				power_ups_alive[i]->width, power_ups_alive[i]->height, false);
+				power_ups_alive[i]->width, power_ups_alive[i]->height, false, 1.0);
 		}
 	}
 
@@ -9910,7 +9913,7 @@ void display()
 	{
 		drawSprite(game_over_banner.tex,
 			0, 0,
-			game_over_banner.width, game_over_banner.height, false);
+			game_over_banner.width, game_over_banner.height, false, 1.0);
 	}
 
 
