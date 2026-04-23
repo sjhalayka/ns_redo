@@ -3345,8 +3345,6 @@ uniform float time;
 
 void main() {
     vec4 color = texture(spriteTexture, texCoord);
-    // Discard fully transparent pixels
-    //if (color.a < 0.01) discard;
 
 	// Do alternating colour / white blinking when under fire
 	if(under_fire == 1)
@@ -5763,7 +5761,12 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 	glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
 	glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
 
-	glUniform1f(glGetUniformLocation(spriteProgram, "alpha"), alpha);
+	float transformed = (sin(GLOBAL_TIME) + 1.0) / 2.0;
+
+	if (alpha == 1.0)
+		transformed = alpha;
+
+	glUniform1f(glGetUniformLocation(spriteProgram, "alpha"), transformed);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
