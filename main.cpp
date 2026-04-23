@@ -744,7 +744,7 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.999;
+		const float transparent_threshold = 0.9;
 		const float animation_length = 5.0;
 
 		for (size_t i = 0; i < locations.size(); i++)
@@ -1939,6 +1939,7 @@ const int foreground_chunk_size_height = 108;
 
 
 vector<foreground_tile> foreground_chunked;
+vector<foreground_tile> foreground_lit_chunked;
 
 
 
@@ -4937,8 +4938,10 @@ void detectEdgeCollisions()
 			protagonist.animate_blackening(protagonist_blackening_points, protagonist.state);
 		}
 
-		for (size_t h = 0; h < foreground_chunked.size(); h++)
 
+		dis_real.reset();
+
+		for (size_t h = 0; h < foreground_chunked.size(); h++)
 		{
 			vector<glm::vec2> blackening_points;
 
@@ -4977,6 +4980,43 @@ void detectEdgeCollisions()
 			}
 
 			foreground_chunked[h].animate_blackening(blackening_points, 0);
+		}
+
+
+
+		dis_real.reset();
+
+		for (size_t h = 0; h < foreground_lit_chunked.size(); h++)
+		{
+			vector<glm::vec2> blackening_points;
+
+			for (size_t i = 0; i < collisionPoints.size(); i++)
+			{
+				bool inside = false, transparent = false;
+				glm::vec2 hit;
+
+				if (isPixelInsideSpriteAndTransparent(
+					foreground_lit_chunked[h],
+					foreground_lit_chunked[h].tex,
+					static_cast<int>(foreground_lit_chunked[h].x),
+					static_cast<int>(foreground_lit_chunked[h].y),
+					foreground_lit_chunked[h].width,
+					foreground_lit_chunked[h].height,
+					static_cast<int>(collisionPoints[i].x),
+					static_cast<int>(collisionPoints[i].y),
+					inside,
+					transparent,
+					127,
+					hit))
+				{
+					if (inside)
+					{
+						blackening_points.push_back(glm::vec2(hit.x, hit.y));
+					}
+				}
+			}
+
+			foreground_lit_chunked[h].animate_blackening(blackening_points, 0);
 		}
 
 
@@ -5539,9 +5579,9 @@ GLuint loadTextureFromFile_NSprite(
  * @param sourceFilename  Path to the foreground image file
  * @return                True if chunking succeeded, false otherwise
  */
-bool chunkForegroundTexture(const char* sourceFilename)
+bool chunkForegroundTexture(const char* sourceFilename, vector<foreground_tile>& target = foreground_chunked)
 {
-	foreground_chunked.clear();
+	target.clear();
 
 	int srcWidth, srcHeight, channels;
 
@@ -5640,26 +5680,30 @@ bool chunkForegroundTexture(const char* sourceFilename)
 					static_cast<float>(srcStartY),
 					tileData);
 
-				foreground_chunked.push_back(tile);
+				target.push_back(tile);
 			}
 		}
 	}
 
-	for (size_t i = 0; i < foreground_chunked.size(); i++)
+	for (size_t i = 0; i < target.size(); i++)
 	{
-		foreground_chunked[i].vel_x = foreground_vel;
-		foreground_chunked[i].vel_y = 0;
+		target[i].vel_x = foreground_vel;
+		target[i].vel_y = 0;
 	}
 
-	// Reset the editor-scroll accumulator: any prior editor scroll belonged
-	// to the previous level state and has now been discarded along with it.
-	g_editorScrollAccum = 0.0f;
-	g_loadTimeFgX = foreground_chunked.empty() ? 0.0f : foreground_chunked[0].x;
+	// Only the base foreground owns the editor-scroll baseline — skip this for overlays.
+	if (&target == &foreground_chunked)
+	{
+		// Reset the editor-scroll accumulator: any prior editor scroll belonged
+		// to the previous level state and has now been discarded along with it.
+		g_editorScrollAccum = 0.0f;
+		g_loadTimeFgX = target.empty() ? 0.0f : target[0].x;
+	}
 
 
 	stbi_image_free(srcData);
 
-	std::cout << "Created " << foreground_chunked.size() << " foreground tiles" << std::endl;
+	std::cout << "Created " << target.size() << " foreground tiles" << std::endl;
 	return true;
 }
 
@@ -6355,6 +6399,13 @@ void simulate()
 	for (size_t i = 0; i < foreground_chunked.size(); i++)
 	{
 		foreground_chunked[i].integrate(DT);
+	}
+
+	// Integrate the lit overlay so it scrolls in lockstep with the base foreground.
+	// Purely visual — not part of collision resolution.
+	for (size_t i = 0; i < foreground_lit_chunked.size(); i++)
+	{
+		foreground_lit_chunked[i].integrate(DT);
 	}
 
 	// Calculate how much the foreground moved this frame
@@ -8619,6 +8670,13 @@ void load_media(const char* level_string)
 		return;
 	}
 
+	s = affix + "foreground_lit.png";
+	if (!chunkForegroundTexture(s.c_str(), foreground_lit_chunked))
+	{
+		std::cout << "Warning: Could not chunk foreground_lit sprite" << std::endl;
+		return;
+	}
+
 
 
 	// Dynamically load all enemy templates from the level's media directory.
@@ -8773,6 +8831,14 @@ void reset_game()
 		}
 	}
 	chunkForegroundTexture("media/level1/foreground.png");
+
+	// Same cleanup + reload for the lit overlay
+	for (size_t i = 0; i < foreground_lit_chunked.size(); i++) {
+		if (foreground_lit_chunked[i].tex) {
+			glDeleteTextures(1, &foreground_lit_chunked[i].tex);
+		}
+	}
+	chunkForegroundTexture("media/level1/foreground_lit.png", foreground_lit_chunked);
 
 	// ---- Reset timing ----
 	GLOBAL_TIME = 0;
@@ -9195,11 +9261,12 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 	case 25: // Ctrl+Y — Redo
 		editorRedo();
 		return true;
+
 	case 's':
 		draw_time_lines = !draw_time_lines;
 
 		return true;
-	
+
 	case 3: // Ctrl+C / Ctrl+Shift+C
 		if (e)
 		{
@@ -9621,6 +9688,9 @@ void display()
 				for (size_t i = 0; i < foreground_chunked.size(); i++)
 					foreground_chunked[i].x += scrollDelta;
 
+				for (size_t i = 0; i < foreground_lit_chunked.size(); i++)
+					foreground_lit_chunked[i].x += scrollDelta;
+
 				for (size_t i = 0; i < enemy_ships.size(); i++)
 				{
 					enemy_ships[i]->x += scrollDelta;
@@ -9716,6 +9786,18 @@ void display()
 			drawSprite(foreground_chunked[i].tex,
 				static_cast<int>(foreground_chunked[i].x), static_cast<int>(foreground_chunked[i].y),
 				foreground_chunked[i].width, foreground_chunked[i].height, false);
+		}
+	}
+
+	// Lit foreground overlay — drawn on top of the base foreground using alpha blending.
+	// Transparent pixels in foreground_lit.png let the base foreground show through.
+	for (size_t i = 0; i < foreground_lit_chunked.size(); i++)
+	{
+		if (foreground_lit_chunked[i].tex != 0 && foreground_lit_chunked[i].isOnscreen())
+		{
+			drawSprite(foreground_lit_chunked[i].tex,
+				static_cast<int>(foreground_lit_chunked[i].x), static_cast<int>(foreground_lit_chunked[i].y),
+				foreground_lit_chunked[i].width, foreground_lit_chunked[i].height, false);
 		}
 	}
 
