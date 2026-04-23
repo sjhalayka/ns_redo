@@ -744,7 +744,7 @@ public:
 		const float glut_curr_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 		const float BRUSH_RADIUS = 10.0f;        // Radius of the soft brush in sprite pixels
 		const float BRUSH_RADIUS_SQUARED = BRUSH_RADIUS * BRUSH_RADIUS;
-		const float transparent_threshold = 0.9f;
+		const float transparent_threshold = 0.999f;
 		const float animation_length = 5.0f;
 
 		for (size_t i = 0; i < locations.size(); i++)
@@ -5761,7 +5761,7 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 	glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
 	glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
 
-	float transformed = (sin(4.0f*GLOBAL_TIME) + 1.0) / 2.0;
+	float transformed = (sin(2.0f*GLOBAL_TIME) + 1.0) / 2.0;
 
 	if (alpha == 1.0)
 		transformed = alpha;
