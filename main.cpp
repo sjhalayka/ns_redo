@@ -1926,6 +1926,8 @@ vector<unique_ptr<enemy_ship>> enemy_ships;
 // These global objects do not need to generate new tex(es)
 friendly_ship protagonist;
 background_tile background;
+background_tile background_lit;
+
 bullet bullet_template;
 vector<enemy_ship> enemy_templates;  // Automatically populated from media/enemy_<N>_<frame>.png files
 boss_ship boss_template;
@@ -3210,6 +3212,7 @@ uniform sampler2D density;
 uniform sampler2D velocity;
 uniform sampler2D obstacles;
 uniform sampler2D background;
+uniform sampler2D background_lit;
 
 uniform vec2 texelSize;
 uniform float time;
@@ -3251,15 +3254,10 @@ void main()
     scrolledCoord.x += time * 0.01;
 
     vec4 bgColor = texture(background, scrolledCoord);
+	vec4 bgColor_lit = texture(background_lit, scrolledCoord);
+	float t = (sin(time * 2.0f) + 1.0f) / 2.0f;
 
-
-
-
-
-
-
-
-
+	bgColor = mix(bgColor, bgColor_lit, t);
   
     // Get density and colors at adjusted position
     float redIntensity = texture(density, texCoord).x;
@@ -5761,7 +5759,9 @@ void drawSprite(GLuint texture, int pixelX, int pixelY, int pixelWidth, int pixe
 	glUniform2f(glGetUniformLocation(spriteProgram, "spritePos"), spritePosX, spritePosY);
 	glUniform2f(glGetUniformLocation(spriteProgram, "spriteSize"), ndcWidth, ndcHeight);
 
-	float transformed = (sin(2.0f*GLOBAL_TIME) + 1.0) / 2.0;
+	static const float pi = 4.0f * atanf(1.0f);
+
+	float transformed = (sin(GLOBAL_TIME * 2.0f) + 1.0f) / 2.0f;
 
 	if (alpha == 1.0)
 		transformed = alpha;
@@ -8669,6 +8669,15 @@ void load_media(const char* level_string)
 		return;
 	}
 
+	s = affix + "background_lit.png";
+
+	background_lit.tex = loadTextureFromFile(s.c_str(), &background_lit.width, &background_lit.height, background_lit.to_present_data, true);
+	if (background_lit.tex == 0)
+	{
+		std::cout << "Warning: Could not load background_lit sprite" << std::endl;
+		return;
+	}
+
 	s = affix + "foreground.png";
 	if (!chunkForegroundTexture(s.c_str()))
 	{
@@ -9769,6 +9778,7 @@ void display()
 	setTextureUniform(displayProgram, "velocity", 1, velocityTex[currentVelocity]);
 	setTextureUniform(displayProgram, "obstacles", 2, obstacleTex);
 	setTextureUniform(displayProgram, "background", 3, background.tex);
+	setTextureUniform(displayProgram, "background_lit", 4, background_lit.tex);
 	glUniform1f(glGetUniformLocation(displayProgram, "time"), GLOBAL_TIME);
 	glUniform2f(glGetUniformLocation(displayProgram, "texelSize"), 1.0f / windowWidth, 1.0f / windowHeight);
 
