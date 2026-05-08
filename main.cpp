@@ -1111,6 +1111,12 @@ public:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+		if (GL_FALSE == glIsTexture(tex))
+		{
+			cout << "Texture creation failure" << endl;
+			exit(0);
+		}
+
 		rebuild_pointers();
 		update_tex();
 	}
@@ -2392,6 +2398,13 @@ GLuint loadFontTexture(const char* filename) {
 	GLuint textureID;
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	if (GL_FALSE == glIsTexture(textureID))
+	{
+		cout << "Font texture creation failure" << endl;
+		exit(0);
+	}
+
 
 	// Set texture parameters
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -3711,6 +3724,12 @@ void createTexture(GLuint& tex, int width, int height, GLenum internalFormat, GL
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	if (GL_FALSE == glIsTexture(tex))
+	{
+		cout << "Font texture creation failure" << endl;
+		exit(0);
+	}
 }
 
 void createFBO(GLuint& fbo, GLuint tex) {
@@ -3815,6 +3834,12 @@ void initSplatBatchResources() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	if (GL_FALSE == glIsTexture(splatsTex))
+	{
+		cout << "Splat texture creation failure" << endl;
+		exit(0);
+	}
 }
 
 
@@ -4629,6 +4654,13 @@ void initCollisionResources()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+
+	if (GL_FALSE == glIsTexture(collisionTex))
+	{
+		cout << "collisionTex texture creation failure" << endl;
+		exit(0);
+	}
+
 	glGenFramebuffers(1, &collisionFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, collisionFBO);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, collisionTex, 0);
@@ -5300,6 +5332,13 @@ GLuint createStampTextureFromData(const unsigned char* data, int width, int heig
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	
+	if (GL_FALSE == glIsTexture(tex))
+	{
+		cout << "createStampTextureFromData texture creation failure" << endl;
+		exit(0);
+	}
+	
 	return tex;
 }
 
@@ -5431,6 +5470,13 @@ GLuint loadTextureFromFile(const char* filename, int* outWidth, int* outHeight, 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 
+	if (GL_FALSE == glIsTexture(tex))
+	{
+		cout << "loadTextureFromFile texture creation failure" << endl;
+		exit(0);
+	}
+
+
 	for (size_t i = 0; i < width * height * channels; i++)
 		out_data.push_back(data[i]);
 
@@ -5517,6 +5563,13 @@ GLuint loadTextureFromFile_NSprite(
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	if (GL_FALSE == glIsTexture(tex))
+	{
+		cout << "loadTextureFromFile_NSprite texture creation failure" << endl;
+		exit(0);
+	}
+
 
 	stbi_image_free(rest_raw);
 
@@ -5641,7 +5694,11 @@ bool chunkForegroundTexture(const char* sourceFilename, vector<foreground_tile>&
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-
+			if (GL_FALSE == glIsTexture(tileTex))
+			{
+				cout << "tileTex texture creation failure" << endl;
+				exit(0);
+			}
 
 
 
