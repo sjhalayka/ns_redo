@@ -4426,13 +4426,11 @@ struct Line {
 	glm::vec4 color;  // RGBA, values 0.0-1.0
 
 	Line(glm::vec2 s, glm::vec2 e, glm::vec4 c)
-		: start(s), end(e), color(c) {
-	}
+		: start(s), end(e), color(c) {}
 
 	// Convenience constructor with default white color
 	Line(glm::vec2 s, glm::vec2 e)
-		: start(s), end(e), color(1.0f, 1.0f, 1.0f, 1.0f) {
-	}
+		: start(s), end(e), color(1.0f, 1.0f, 1.0f, 1.0f) {}
 };
 
 
@@ -4460,21 +4458,17 @@ struct Point {
 	glm::vec4 color;  // RGBA, values 0.0-1.0
 
 	Point(glm::vec2 p, glm::vec4 c)
-		: position(p), color(c) {
-	}
+		: position(p), color(c) {}
 
 	Point(float x, float y, glm::vec4 c)
-		: position(x, y), color(c) {
-	}
+		: position(x, y), color(c) {}
 
 	// Convenience constructor with default white color
 	Point(glm::vec2 p)
-		: position(p), color(1.0f, 1.0f, 1.0f, 1.0f) {
-	}
+		: position(p), color(1.0f, 1.0f, 1.0f, 1.0f) {}
 
 	Point(float x, float y)
-		: position(x, y), color(1.0f, 1.0f, 1.0f, 1.0f) {
-	}
+		: position(x, y), color(1.0f, 1.0f, 1.0f, 1.0f) {}
 };
 
 GLuint pointProgram = 0;
@@ -5332,13 +5326,13 @@ GLuint createStampTextureFromData(const unsigned char* data, int width, int heig
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	
+
 	if (GL_FALSE == glIsTexture(tex))
 	{
 		cout << "createStampTextureFromData texture creation failure" << endl;
 		exit(0);
 	}
-	
+
 	return tex;
 }
 
@@ -6366,15 +6360,13 @@ void simulate()
 			enemy_ships[i]->path_scroll_rate = 0.0f;
 		}
 
-		// Choose scroll rate depending on phase:
-		//   pre-activation  -> foreground_vel (keep path aligned with drifting enemy)
-		//   active spline   -> 0 (path knots are fixed in screen space)
-		//   post-animation  -> foreground_vel (resume world drift)
-		float scroll_rate;
-		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-			scroll_rate = enemy_ships[i]->path_scroll_rate;
-		else
-			scroll_rate = foreground_vel;
+
+		float actual_duration = calculate_actual_path_duration(
+			enemy_ships[i]->path_points, enemy_ships[i]->path_speeds, enemy_ships[i]->path_animation_length);
+		
+		float scroll_rate = -(enemy_ships[i]->width) / actual_duration;
+
+
 
 		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
 			enemy_ships[i]->path_points[j].x += scroll_rate * DT;
