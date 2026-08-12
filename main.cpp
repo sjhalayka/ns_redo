@@ -6363,10 +6363,13 @@ void simulate()
 
 		float actual_duration = calculate_actual_path_duration(
 			enemy_ships[i]->path_points, enemy_ships[i]->path_speeds, enemy_ships[i]->path_animation_length);
-		
-		float scroll_rate = -(enemy_ships[i]->width) / actual_duration;
 
+		float scroll_rate = 0;
 
+		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
+			scroll_rate = -(enemy_ships[i]->width) / actual_duration;
+		else
+			scroll_rate = foreground_vel;
 
 		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
 			enemy_ships[i]->path_points[j].x += scroll_rate * DT;
