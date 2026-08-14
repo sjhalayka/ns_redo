@@ -1528,6 +1528,23 @@ public:
 	float appearance_time = 0;
 	float path_animation_length = 0; // seconds
 	vector<glm::vec2> path_points;
+
+	// Canonical, drift-free copy of the control points.
+	//
+	// path_points is a *live* value: every simulated frame slides it by
+	// scroll_rate * DT, and editor foreground scrolling slides it again, so by
+	// the time a level is saved it no longer holds the positions that were
+	// loaded.  initial_path_points holds what was read from -- and what will be
+	// written back to -- the database: the same coordinate space path_points
+	// occupied at load time, i.e. world pixels with path_pixel_delay baked in
+	// and no scroll of any kind applied.
+	//
+	// Invariant: the two vectors are the same size and index-aligned, and
+	// differ only by one uniform x offset (the accumulated drift).  Drift must
+	// therefore only ever touch path_points; genuine edits must go through the
+	// edit_* helpers below so that both copies stay in step.
+	vector<glm::vec2> initial_path_points;
+
 	vector<float> path_speeds;
 	vector<cannon> cannons;
 
@@ -1540,13 +1557,100 @@ public:
 	float path_scroll_rate = 0.0f; // computed at activation
 
 	// Accumulated foreground drift (in pixels) that occurred while this
-	// enemy was in the active spline phase, where path_points are held
-	// still in screen space but the foreground keeps drifting at
-	// foreground_vel. editorSaveToDatabase adds this back into the
-	// canonicalisation formula so positions round-trip correctly.
-	// Sign matches foreground_vel * elapsed (i.e. negative when drifting
-	// left). Reset on load and on save.
+	// enemy was in the active spline phase, where path_points move at the
+	// spline rate rather than foreground_vel.  Sign matches
+	// foreground_vel * elapsed (i.e. negative when drifting left).
+	//
+	// NOTE: this used to be a save-time correction term -- the saver tried to
+	// reconstruct canonical positions by unwinding drift out of path_points.
+	// initial_path_points replaces that, so nothing reads this field any
+	// more; it is kept only as diagnostic state and can be deleted outright.
 	float spline_phase_drift = 0.0f;
+
+	// ---- canonical path bookkeeping ------------------------------------
+	// The helpers below are the only sanctioned way to change path_points
+	// from the editor: each applies the change to the live *and* the
+	// canonical copy, so editorSaveToDatabase can read initial_path_points
+	// directly instead of trying to subtract drift back out of a live value.
+
+	bool path_canonical_valid() const
+	{
+		return initial_path_points.size() == path_points.size();
+	}
+
+	// Adopt the current live points as canonical, less a uniform x offset.
+	// Used when knots arrive from outside the invariant (fresh spawn, paste)
+	// and the canonical copy has to be derived rather than tracked.
+	void path_adopt_canonical(float drift_x = 0.0f)
+	{
+		initial_path_points = path_points;
+		for (auto& p : initial_path_points) p.x -= drift_x;
+	}
+
+	// Uniform live-minus-canonical x offset.  Only meaningful while the
+	// invariant holds, and only valid before an edit is applied.
+	float path_drift_x() const
+	{
+		if (path_points.empty() || !path_canonical_valid()) return 0.0f;
+		return path_points[0].x - initial_path_points[0].x;
+	}
+
+	// Scroll every knot.  Drift only -- the canonical copy is deliberately
+	// left alone, which is the whole point of keeping it.
+	void path_drift_by(float dx)
+	{
+		for (auto& p : path_points) p.x += dx;
+	}
+
+	// --- genuine edits: applied to live AND canonical --------------------
+
+	void edit_translate_all(float dx, float dy)
+	{
+		for (auto& p : path_points) { p.x += dx; p.y += dy; }
+		if (path_canonical_valid())
+			for (auto& p : initial_path_points) { p.x += dx; p.y += dy; }
+	}
+
+	void edit_translate_point(size_t j, float dx, float dy)
+	{
+		if (j >= path_points.size()) return;
+		path_points[j].x += dx;
+		path_points[j].y += dy;
+		if (path_canonical_valid())
+		{
+			initial_path_points[j].x += dx;
+			initial_path_points[j].y += dy;
+		}
+	}
+
+	// Move one knot to an absolute *screen* position.  Expressed as a delta
+	// so the canonical copy needs no knowledge of the current drift.
+	void edit_move_point_to(size_t j, float x, float y)
+	{
+		if (j >= path_points.size()) return;
+		edit_translate_point(j, x - path_points[j].x, y - path_points[j].y);
+	}
+
+	// Insert a knot given in *screen* space; the canonical copy receives the
+	// same point with the current drift removed.
+	void edit_insert_point(size_t before, glm::vec2 screen_pos)
+	{
+		if (before > path_points.size()) return;
+		const float drift = path_drift_x(); // must be read before the insert
+		const bool  sync = path_canonical_valid();
+		path_points.insert(path_points.begin() + (ptrdiff_t)before, screen_pos);
+		if (sync)
+			initial_path_points.insert(initial_path_points.begin() + (ptrdiff_t)before,
+				glm::vec2(screen_pos.x - drift, screen_pos.y));
+	}
+
+	void edit_erase_point(size_t j)
+	{
+		if (j >= path_points.size()) return;
+		if (path_canonical_valid())
+			initial_path_points.erase(initial_path_points.begin() + (ptrdiff_t)j);
+		path_points.erase(path_points.begin() + (ptrdiff_t)j);
+	}
 
 	float path_t = -1.0f;
 
@@ -1947,6 +2051,18 @@ const int foreground_chunk_size_height = 108;
 
 
 vector<foreground_tile> foreground_chunked;
+
+// Total foreground displacement (pixels) since the level was loaded.
+// An enemy that has only ever drifted with the foreground satisfies
+//     path_points[j].x == initial_path_points[j].x + world_scroll_x()
+// This is used to derive canonical points for enemies *created* mid-session
+// (spawn, paste), which arrive already expressed in screen space.
+static float world_scroll_x()
+{
+	return foreground_chunked.empty()
+		? 0.0f
+		: (foreground_chunked[0].x - g_loadTimeFgX);
+}
 vector<foreground_tile> foreground_lit_chunked;
 
 
@@ -2477,6 +2593,7 @@ bool g_dragUndoPushed = false;   // true once editorPushUndo has been called for
 
 // Clipboard for copy/paste of path data (Ctrl+C / Ctrl+V)
 std::vector<glm::vec2> g_clipboard_path_points;
+std::vector<glm::vec2> g_clipboard_initial_path_points;
 std::vector<float>     g_clipboard_path_speeds;
 bool                   g_clipboard_has_data = false;
 
@@ -2789,8 +2906,14 @@ static ostringstream editorPrintState(int g_selectedEnemy)
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
 			const char* marker = ((int)j == g_selectedPoint) ? ">> " : "   ";
-			oss << "  " << marker << "[" << j << "] x=" << e.path_points[j].x / SIM_WIDTH
-				<< " y=" << e.path_points[j].y / SIM_HEIGHT << " (norm)\n";
+			// Show the canonical knot: these are the numbers that get written
+			// to the database, so displaying the drifted live value here would
+			// disagree with the saved level.
+			const glm::vec2& hud_knot = e.path_canonical_valid()
+				? e.initial_path_points[j]
+				: e.path_points[j];
+			oss << "  " << marker << "[" << j << "] x=" << hud_knot.x / SIM_WIDTH
+				<< " y=" << hud_knot.y / SIM_HEIGHT << " (norm)\n";
 		}
 
 		oss << "  Speed knots (" << e.path_speeds.size() << "):\n";
@@ -6371,8 +6494,9 @@ void simulate()
 		else
 			scroll_rate = foreground_vel;
 
-		for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
-			enemy_ships[i]->path_points[j].x += scroll_rate * DT;
+		// Drift: live knots only.  initial_path_points is intentionally left
+		// untouched so the canonical positions survive gameplay unchanged.
+		enemy_ships[i]->path_drift_by(scroll_rate * DT);
 
 		// While the enemy is on the spline, path_points are frozen in
 		// screen space but the foreground keeps scrolling. Track the
@@ -7013,6 +7137,7 @@ void simulate()
 struct EnemyClipboard {
 	int                    template_idx = 0;
 	std::vector<glm::vec2> path_points;
+	std::vector<glm::vec2> initial_path_points;
 	std::vector<float>     path_speeds;
 	std::vector<cannon>    cannons;
 	std::vector<int>       power_ups;
@@ -7042,6 +7167,7 @@ struct EnemySnapshot {
 	int   template_idx;
 	float x, y;
 	std::vector<glm::vec2>    path_points;
+	std::vector<glm::vec2>    initial_path_points;
 	std::vector<float>        path_speeds;
 	std::vector<CannonSnapshot> cannons;
 	std::vector<int> power_ups;
@@ -7072,6 +7198,7 @@ static EditorUndoState editorCaptureState()
 		snap.x = e.x;
 		snap.y = e.y;
 		snap.path_points = e.path_points;
+		snap.initial_path_points = e.initial_path_points;
 		snap.path_speeds = e.path_speeds;
 		snap.path_animation_length = e.path_animation_length;
 		snap.health = e.health;
@@ -7141,6 +7268,7 @@ static void editorRestoreState(const EditorUndoState& state)
 		e->x = snap.x;
 		e->y = snap.y;
 		e->path_points = snap.path_points;
+		e->initial_path_points = snap.initial_path_points;
 		e->path_speeds = snap.path_speeds;
 		e->path_animation_length = snap.path_animation_length;
 		e->health = snap.health;
@@ -7946,47 +8074,24 @@ static void editorSaveToDatabase(const std::string& db_name)
 		// path control-point locations
 		for (size_t j = 0; j < e.path_points.size(); ++j)
 		{
-			// path_points[j].x is in world space with path_pixel_delay
-			// AND any editor arrow-key scroll applied since load baked in.
-			// Strip both to get the canonical, scroll-independent position.
+			// Read the CANONICAL knot, not the live one.
+			//
+			// path_points[j] has had drift added to it every frame since load
+			// (gameplay scroll, spline-phase scroll, editor arrow-key scroll),
+			// so reconstructing the saved value from it meant subtracting each
+			// of those terms back out and getting every one of them right.
+			// initial_path_points[j] never receives drift in the first place --
+			// it holds exactly what was loaded, plus any genuine edits made
+			// through the edit_* helpers -- so no compensation is needed here.
 			//
 			// path_pixel_delay is immutable across save/load and is reapplied
-			// at load time, so we only remove it here, not modify it.
-			//
-			// g_editorScrollAccum is the sum of every arrow-key scrollDelta
-			// applied to path_points in editor mode since load. The foreground
-			// tiles are not persisted, so on the next load they will be
-			// reconstructed at their original positions; if we did not strip
-			// the editor delta here, every enemy would be shifted by exactly
-			// that delta relative to a foreground that no longer has it.
-			//
-			// Gameplay drift is NOT subtracted: while the level is being
-			// edited the simulation is paused, so no gameplay-drift offset
-			// can accumulate into path_points between load and save.
+			// at load time, so we only remove it here, never modify it.
+			const glm::vec2& knot = e.path_canonical_valid()
+				? e.initial_path_points[j]
+				: e.path_points[j];   // defensive: desynced, better than nothing
 
-
-
-			float fg_scroll = foreground_chunked.empty()
-				? 0.0f
-				: (foreground_chunked[0].x - g_loadTimeFgX);
-
-
-
-			// During the active spline phase, path_points are frozen in
-			// screen space while the foreground continues to drift. The
-			// raw fg_scroll term over-corrects by exactly the amount of
-			// drift the path missed; spline_phase_drift records that
-			// missed amount per enemy and we add it back here so the
-			// canonical x round-trips. (For enemies that never entered
-			// the spline phase, spline_phase_drift is zero and this is
-			// a no-op.)
-			float nx = (e.path_points[j].x
-				- static_cast<float>(e.path_pixel_delay)
-				//- g_editorScrollAccum
-				- fg_scroll
-				+ e.spline_phase_drift) / SIM_WIDTH;
-
-			float ny = e.path_points[j].y / SIM_HEIGHT;
+			float nx = (knot.x - static_cast<float>(e.path_pixel_delay)) / SIM_WIDTH;
+			float ny = knot.y / SIM_HEIGHT;
 
 
 
@@ -8097,6 +8202,7 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 
 	// Preserve everything that isn't visual
 	auto  saved_path_points = e->path_points;
+	auto  saved_initial_path_points = e->initial_path_points;
 	auto  saved_path_speeds = e->path_speeds;
 	auto  saved_cannons = e->cannons;
 	float saved_path_t = e->path_t;
@@ -8118,6 +8224,7 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 
 	// Restore gameplay state
 	e->path_points = saved_path_points;
+	e->initial_path_points = saved_initial_path_points;
 	e->path_speeds = saved_path_speeds;
 	e->path_t = saved_path_t;
 	e->path_animation_length = saved_path_animation_length;
@@ -8140,16 +8247,23 @@ static void editorApplyTemplate(enemy_ship* e, int tIdx)
 		float new_half_w = e->width * 0.5f;
 		float delta = new_half_w - old_half_w;
 
+		// These are genuine edits, so they go through the helper and land on
+		// the canonical copy as well as the live one.
+
 		// First endpoint moves further right when the sprite is wider.
-		e->path_points.front().x += delta;
+		e->edit_translate_point(0, delta, 0.0f);
 
 		// Last endpoint moves further left when the sprite is wider.
-		e->path_points.back().x -= delta;
+		e->edit_translate_point(e->path_points.size() - 1, -delta, 0.0f);
 
-		// Keep path_pixel_delay consistent: it is anchored to the
-		// leftmost (exit) knot, whose canonical position is -new_half_w.
-		// delay = path_points.back().x - (-new_half_w), clamped to >= 0.
-		e->path_pixel_delay = std::max(0, (int)(e->path_points.back().x + new_half_w));
+		// Keep path_pixel_delay consistent: it is anchored to the leftmost
+		// (exit) knot, whose canonical position is -new_half_w.  Measured on
+		// initial_path_points -- the live knot carries drift, which would
+		// leak straight into the persisted delay.
+		const float exit_knot_x = e->path_canonical_valid()
+			? e->initial_path_points.back().x
+			: e->path_points.back().x;
+		e->path_pixel_delay = std::max(0, (int)(exit_knot_x + new_half_w));
 	}
 
 	// Always recalculate path_scroll_rate (works for both active and pre-activation enemies).
@@ -8583,6 +8697,11 @@ void retrieve_level_data(const string& db_name)
 			// gameplay will cancel this out by the time the enemy activates.
 			for (size_t i = 0; i < enemy_ships[enemy_ships.size() - 1]->path_points.size(); i++)
 				enemy_ships[enemy_ships.size() - 1]->path_points[i].x += desired_foreground_distance;
+
+			// Freeze the canonical copy now, at the one moment the live knots
+			// are known to be drift-free.  Everything the saver writes back is
+			// this snapshot plus whatever genuine edits are made to it.
+			enemy_ships[enemy_ships.size() - 1]->path_adopt_canonical(0.0f);
 
 			enemy_ships[enemy_ships.size() - 1]->manually_update_data(
 				enemy_templates[enemy_template_index].sprite_frames);
@@ -9066,8 +9185,12 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 
 			ne->path_scroll_rate = -(ne->width * 0.5f) / actual_duration;
 
-			float foreground_scrolled = -foreground_vel * GLOBAL_TIME;
-			ne->path_pixel_delay = (int)(ne->path_points.back().x + ne->width * 0.5f + foreground_scrolled);
+			// The knots above were placed in screen space, so strip the scroll
+			// accumulated since load to get their canonical positions.
+			ne->path_adopt_canonical(world_scroll_x());
+
+			ne->path_pixel_delay =
+				(int)(ne->initial_path_points.back().x + ne->width * 0.5f);
 
 			ne->to_be_culled = false;
 
@@ -9343,6 +9466,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				// Ctrl+Shift+C — copy entire enemy
 				g_enemy_clipboard.template_idx = e->template_idx;
 				g_enemy_clipboard.path_points = e->path_points;
+				g_enemy_clipboard.initial_path_points = e->initial_path_points;
 				g_enemy_clipboard.path_speeds = e->path_speeds;
 				g_enemy_clipboard.cannons = e->cannons;
 				g_enemy_clipboard.power_ups = e->power_ups;
@@ -9360,6 +9484,7 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			{
 				// Ctrl+C — copy path data only
 				g_clipboard_path_points = e->path_points;
+				g_clipboard_initial_path_points = e->initial_path_points;
 				g_clipboard_path_speeds = e->path_speeds;
 				g_clipboard_has_data = true;
 				std::cout << "[Editor] Copied path data from enemy " << g_selectedEnemy
@@ -9416,6 +9541,10 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 			// Paste all saved properties
 			e->path_points = g_enemy_clipboard.path_points;
 			e->path_speeds = g_enemy_clipboard.path_speeds;
+			if (g_enemy_clipboard.initial_path_points.size() == g_enemy_clipboard.path_points.size())
+				e->initial_path_points = g_enemy_clipboard.initial_path_points;
+			else
+				e->path_adopt_canonical(world_scroll_x());
 			e->cannons = g_enemy_clipboard.cannons;
 			e->power_ups = g_enemy_clipboard.power_ups;
 			e->path_animation_length = g_enemy_clipboard.path_animation_length;
@@ -9450,6 +9579,12 @@ bool editorHandleKey(unsigned char key, int /*mx*/, int /*my*/)
 				editorPushUndo();
 				e->path_points = g_clipboard_path_points;
 				e->path_speeds = g_clipboard_path_speeds;
+				// Carry the canonical copy across too; if the clipboard predates
+				// it (or is desynced) rebuild it from the current world scroll.
+				if (g_clipboard_initial_path_points.size() == g_clipboard_path_points.size())
+					e->initial_path_points = g_clipboard_initial_path_points;
+				else
+					e->path_adopt_canonical(world_scroll_x());
 				g_selectedPoint = -1;
 				g_selectedSpeedKnot = -1;
 				g_draggingPoint = false;
@@ -9600,7 +9735,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 						float d = dx * dx + dy * dy;
 						if (d < bestDist) { bestDist = d; insertAfter = (int)i; }
 					}
-					e->path_points.insert(e->path_points.begin() + insertAfter + 1, np);
+					e->edit_insert_point((size_t)insertAfter + 1, np);
 					g_selectedPoint = insertAfter + 1;
 					g_draggingPoint = true;
 					g_dragUndoPushed = true; // insert already pushed undo
@@ -9659,7 +9794,7 @@ bool editorHandleMouse(int button, int state, int mx, int my)
 			if (idx >= 0 && e->path_points.size() > 2)
 			{
 				editorPushUndo();
-				e->path_points.erase(e->path_points.begin() + idx);
+				e->edit_erase_point((size_t)idx);
 				if (g_selectedPoint >= (int)e->path_points.size())
 					g_selectedPoint = (int)e->path_points.size() - 1;
 				std::cout << "[Editor] Deleted path point " << idx << "\n";
@@ -9690,9 +9825,10 @@ bool editorHandleMotion(int mx, int my)
 		bool isEndpoint = (g_selectedPoint == 0 ||
 			g_selectedPoint == (int)e->path_points.size() - 1);
 		// Endpoints: X is fixed (must enter/exit off-screen); only Y is editable
-		if (!isEndpoint)
-			e->path_points[g_selectedPoint].x = (float)mx;
-		e->path_points[g_selectedPoint].y = (float)my;
+		const float newX = isEndpoint
+			? e->path_points[g_selectedPoint].x
+			: (float)mx;
+		e->edit_move_point_to((size_t)g_selectedPoint, newX, (float)my);
 	}
 
 	return true;
@@ -9748,8 +9884,8 @@ void display()
 
 			if (scrollDelta != 0.0f)
 			{
-				// Track editor-only scroll so editorSaveToDatabase can strip it
-				// from path_points before writing canonical positions.
+				// Still tracked for the time-line overlay; the saver no longer
+				// needs it now that canonical knots are kept separately.
 				g_editorScrollAccum += scrollDelta;
 
 				for (size_t i = 0; i < foreground_chunked.size(); i++)
@@ -9761,8 +9897,9 @@ void display()
 				for (size_t i = 0; i < enemy_ships.size(); i++)
 				{
 					enemy_ships[i]->x += scrollDelta;
-					for (size_t j = 0; j < enemy_ships[i]->path_points.size(); j++)
-						enemy_ships[i]->path_points[j].x += scrollDelta;
+					// Scrolling the view is drift, not an edit: canonical knots
+					// stay put so the saved level is scroll-independent.
+					enemy_ships[i]->path_drift_by(scrollDelta);
 				}
 			}
 
@@ -10338,12 +10475,9 @@ void specialKeys(int key, int x, int y) {
 				// Move the sprite position
 				e->x += dx;
 				e->y += dy;
-				// Move every path control point so the spline travels with the enemy
-				for (auto& pt : e->path_points)
-				{
-					pt.x += dx;
-					pt.y += dy;
-				}
+				// Move every path control point so the spline travels with the
+				// enemy.  A real edit, so the canonical copy moves too.
+				e->edit_translate_all(dx, dy);
 				std::cout << "[Editor] Nudged enemy " << g_selectedEnemy
 					<< " by (" << dx << ", " << dy << ")  "
 					<< "pos=(" << e->x << ", " << e->y << ")\n";
@@ -10509,12 +10643,9 @@ void specialKeyboard(int key, int x, int y)
 				// Move the sprite position
 				e->x += dx;
 				e->y += dy;
-				// Move every path control point so the spline travels with the enemy
-				for (auto& pt : e->path_points)
-				{
-					pt.x += dx;
-					pt.y += dy;
-				}
+				// Move every path control point so the spline travels with the
+				// enemy.  A real edit, so the canonical copy moves too.
+				e->edit_translate_all(dx, dy);
 				std::cout << "[Editor] Nudged enemy " << g_selectedEnemy
 					<< " by (" << dx << ", " << dy << ")  "
 					<< "pos=(" << e->x << ", " << e->y << ")\n";
