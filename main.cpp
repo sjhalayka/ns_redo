@@ -6490,7 +6490,7 @@ void simulate()
 		float scroll_rate = 0;
 
 		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-			scroll_rate = -(enemy_ships[i]->width * 0.25f) / actual_duration;
+			scroll_rate = -(enemy_ships[i]->width) / actual_duration;
 		else
 			scroll_rate = foreground_vel;
 
