@@ -6469,110 +6469,145 @@ void simulate()
 
 
 
+	// ------------------------------------------------------------------
+	// Enemy movement.
+	//
+	// Three phases, in order:
+	//
+	//   1. Pre-activation (path_t < 0).  The whole path drifts left at
+	//      foreground_vel and the enemy is pinned to the entry knot, so it
+	//      rides the path instead of drifting independently.  Activation
+	//      happens when the EXIT box is halfway offscreen, i.e. the last
+	//      knot reaches x == 0 -- the width x height box centred on it then
+	//      straddles the left edge.  Pinning matters: without it a large
+	//      path_pixel_delay lets the enemy reach x < 0 and get culled while
+	//      still waiting, and activation causes a visible teleport onto
+	//      knot 0.
+	//
+	//   2. Spline phase (0 <= path_t <= 1).  The knots slide left by
+	//      path_scroll_rate, computed once at activation as
+	//      -half_w / actual_duration.  That is exactly half a sprite width
+	//      spread across the traversal, which cancels the half-width offset
+	//      the activation gate introduced: at t == 1 the live knots are back
+	//      on their authored positions, so the enemy exits where the level
+	//      was drawn.  Half out when it launches, fully out when it lands.
+	//
+	//   3. Past the end (path_t > 1), or no usable path at all.  Plain
+	//      foreground drift until the enemy leaves the left edge.
+	//
+	// Drift touches live knots only; initial_path_points is left alone so
+	// the canonical positions survive gameplay unchanged.
+	// ------------------------------------------------------------------
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
-		// Activate path when enemy drifts onscreen (for level-loaded enemies with path_t == -1)
-		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->path_t == -1)
+		enemy_ship* e = enemy_ships[i].get();
+
+		const float half_w = e->width * 0.5f;
+		const float half_h = e->height * 0.5f;
+
+		// A path needs at least two knots and a non-zero duration before any
+		// of the spline logic is meaningful.  Anything else falls through to
+		// the plain foreground-drift branch at the bottom.
+		const bool has_path =
+			(e->path_points.size() >= 2) && (e->path_animation_length > 0.0f);
+
+		// ---- phase 1: waiting for the exit box to reach half-offscreen ----
+		if (has_path && e->path_t < 0.0f)
 		{
-			enemy_ships[i]->path_t = 0.0;
-			// The path knots are already placed at their correct screen-space
-			// positions (knot 0 at SIM_WIDTH + half_w, last knot at -half_w).
-			// No scrolling during the spline phase: the rightmost knot stays at
-			// SIM_WIDTH + half_w while the enemy traverses to the leftmost knot
-			// at -half_w.
-			enemy_ships[i]->path_scroll_rate = 0.0f;
-		}
-
-
-		float actual_duration = calculate_actual_path_duration(
-			enemy_ships[i]->path_points, enemy_ships[i]->path_speeds, enemy_ships[i]->path_animation_length);
-
-		float scroll_rate = 0;
-
-		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-			scroll_rate = -(enemy_ships[i]->width) / actual_duration;
-		else
-			scroll_rate = foreground_vel;
-
-		// Drift: live knots only.  initial_path_points is intentionally left
-		// untouched so the canonical positions survive gameplay unchanged.
-		enemy_ships[i]->path_drift_by(scroll_rate * DT);
-
-		// While the enemy is on the spline, path_points are frozen in
-		// screen space but the foreground keeps scrolling. Track the
-		// resulting drift so editorSaveToDatabase can add it back when
-		// canonicalising path_points (otherwise the saved x would be
-		// over-corrected by exactly this amount, sliding the enemy
-		// rightward across save/load cycles).
-		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-			enemy_ships[i]->spline_phase_drift += foreground_vel * DT;
-
-		if (enemy_ships[i]->isOnscreen() && enemy_ships[i]->appearance_time == 0)
-			enemy_ships[i]->appearance_time = GLOBAL_TIME;
-
-		// Spline-driven movement: always follow path when path_t is active,
-		// even if the enemy is currently offscreen (e.g. starting from an offscreen knot)
-		if (enemy_ships[i]->path_t >= 0.0f && enemy_ships[i]->path_t <= 1.0f)
-		{
-			float t = enemy_ships[i]->path_t;
-
-			// Get speed multiplier at current path position
-			float speed_mult = get_spline_point(enemy_ships[i]->path_speeds, t);
-
-			// Advance path_t based on speed (base rate = 1/path_animation_length per second)
-			float base_rate = 1.0f / enemy_ships[i]->path_animation_length;
-			enemy_ships[i]->path_t += base_rate * speed_mult * DT;
-
-			// Set position directly from spline (more stable than velocity integration)
-			glm::vec2 pos = get_spline_point(enemy_ships[i]->path_points, t);
-			enemy_ships[i]->old_x = enemy_ships[i]->x;
-			enemy_ships[i]->old_y = enemy_ships[i]->y;
-			enemy_ships[i]->x = pos.x - enemy_ships[i]->width * 0.5f;
-			enemy_ships[i]->y = pos.y - enemy_ships[i]->height * 0.5f;
-
-
-			//enemy_ships[i]->vel_x = 0;
-			//enemy_ships[i]->vel_y = 0;
-
-
-			glm::vec2 tangent = get_spline_tangent(enemy_ships[i]->path_points, t);
-			float num_segments = (float)(enemy_ships[i]->path_points.size() - 1);
-			float speed_scale = num_segments / enemy_ships[i]->path_animation_length;
-			enemy_ships[i]->vel_x = tangent.x * speed_mult * speed_scale;
-			enemy_ships[i]->vel_y = tangent.y * speed_mult * speed_scale;
-
-			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-		}
-		else if (enemy_ships[i]->isOnscreen())
-		{
-			enemy_ships[i]->vel_x = foreground_vel;
-			enemy_ships[i]->vel_y = 0;
-
-			enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-			enemy_ships[i]->integrate(DT);
-		}
-		else
-		{
-			if (enemy_ships[i]->x < 0)
+			if (e->path_points.back().x <= 0.0f)
 			{
-				if (enemy_ships[i]->to_be_culled == false)
-					cout << enemy_ships[i]->x << endl;
+				e->path_t = 0.0f;
 
-				enemy_ships[i]->to_be_culled = true;
+				const float actual_duration = calculate_actual_path_duration(
+					e->path_points, e->path_speeds, e->path_animation_length);
+
+				// Half a sprite width of leftward slide, spread across the run.
+				e->path_scroll_rate =
+					(actual_duration > 0.0f) ? (-half_w / actual_duration) : 0.0f;
 			}
 			else
 			{
-				enemy_ships[i]->vel_x = foreground_vel;
-				enemy_ships[i]->vel_y = 0;
+				e->path_drift_by(foreground_vel * DT);
 
-				enemy_ships[i]->set_velocity(enemy_ships[i]->vel_x, enemy_ships[i]->vel_y);
-				enemy_ships[i]->integrate(DT);
+				// Ride the entry knot.  No integrate(): position comes from
+				// the path, so the enemy cannot drift out from under it.
+				e->old_x = e->x;
+				e->old_y = e->y;
+				e->x = e->path_points.front().x - half_w;
+				e->y = e->path_points.front().y - half_h;
+
+				e->vel_x = foreground_vel;
+				e->vel_y = 0.0f;
+				e->set_velocity(e->vel_x, e->vel_y);
+
+				continue;
 			}
-
-
 		}
 
+		// ---- phase 2: traversing the spline ----
+		if (has_path && e->path_t >= 0.0f && e->path_t <= 1.0f)
+		{
+			e->path_drift_by(e->path_scroll_rate * DT);
 
+			if (e->isOnscreen() && e->appearance_time == 0)
+				e->appearance_time = GLOBAL_TIME;
+
+			const float t = e->path_t;
+
+			// Speed multiplier at the current path position.
+			const float speed_mult = get_spline_point(e->path_speeds, t);
+
+			// Advance path_t (base rate = 1/path_animation_length per second).
+			const float base_rate = 1.0f / e->path_animation_length;
+			e->path_t += base_rate * speed_mult * DT;
+
+			// Position straight off the spline: more stable than integrating.
+			const glm::vec2 pos = get_spline_point(e->path_points, t);
+			e->old_x = e->x;
+			e->old_y = e->y;
+			e->x = pos.x - half_w;
+			e->y = pos.y - half_h;
+
+			const glm::vec2 tangent = get_spline_tangent(e->path_points, t);
+			const float num_segments = (float)(e->path_points.size() - 1);
+			const float speed_scale = num_segments / e->path_animation_length;
+			e->vel_x = tangent.x * speed_mult * speed_scale;
+			e->vel_y = tangent.y * speed_mult * speed_scale;
+
+			e->set_velocity(e->vel_x, e->vel_y);
+
+			continue;
+		}
+
+		// ---- phase 3: past the end of the path (or no path) ----
+		e->path_drift_by(foreground_vel * DT);
+
+		if (e->isOnscreen())
+		{
+			if (e->appearance_time == 0)
+				e->appearance_time = GLOBAL_TIME;
+
+			e->vel_x = foreground_vel;
+			e->vel_y = 0;
+
+			e->set_velocity(e->vel_x, e->vel_y);
+			e->integrate(DT);
+		}
+		else if (e->x < 0)
+		{
+			if (e->to_be_culled == false)
+				cout << e->x << endl;
+
+			e->to_be_culled = true;
+		}
+		else
+		{
+			e->vel_x = foreground_vel;
+			e->vel_y = 0;
+
+			e->set_velocity(e->vel_x, e->vel_y);
+			e->integrate(DT);
+		}
 	}
 
 
