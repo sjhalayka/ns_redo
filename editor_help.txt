@@ -7,7 +7,11 @@ CTRL + Y: Redo
 N: Spawn new enemy
 E: Cycle enemy type
 D: Remove selected enemy
+
 CTRL + LMB: Select enemy at mouse location
+Shift + LMB: Add speed knot
+Shift + RMB: Delete speed knot
+MMB up/down: Change selected speed knot
 
 { / }: Cycle selected cannon
 C: Add cannon at mouse location
