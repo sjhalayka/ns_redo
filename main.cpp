@@ -1421,6 +1421,51 @@ public:
 
 	int template_idx = 0; // tracks which enemy_template this ship is currently using
 
+	// ---- Dormancy -----------------------------------------------------------
+	// An enemy whose whole sprite is still past the right edge of the screen
+	// has not entered play yet.  Such enemies only get the cheap path-drift
+	// math that tells them when to enter; everything expensive (tilt + GPU
+	// texture uploads, blackening, collision tests, debug spline building)
+	// skips them.  Dormancy is derived from position every time it is asked
+	// for, so editor scrolling / moving / undo need no bookkeeping.
+	bool isDormant() const
+	{
+		return !to_be_culled && x >= windowWidth;
+	}
+
+	// set_velocity() also advances the tilt animation and re-uploads the
+	// sprite texture.  A dormant enemy can't be seen, so just store the
+	// velocity; the tilt catches up on the first frame it is on screen.
+	void set_velocity_or_defer(const float src_x, const float src_y)
+	{
+		if (isDormant())
+		{
+			vel_x = src_x;
+			vel_y = src_y;
+			return;
+		}
+
+		set_velocity(src_x, src_y);
+	}
+
+	// ---- Texture upload caching --------------------------------------------
+	// updateTilt() used to call glTexImage2D on the whole sprite every time it
+	// ran (twice per frame per enemy, on- or off-screen).  Now the parent
+	// texture is only re-uploaded when the displayed frame changes or its
+	// pixels were modified (blackening sync).
+	int uploaded_state = -1;
+	bool parent_tex_dirty = true;
+
+	void refreshTexIfNeeded()
+	{
+		if (state != uploaded_state || parent_tex_dirty)
+		{
+			update_tex();
+			uploaded_state = state;
+			parent_tex_dirty = false;
+		}
+	}
+
 	// Throttle blackening to at most once every 100ms per enemy.
 	// last_blacken_time_ms is the timestamp (in ms since epoch) of the
 	// last accepted blackenChunks call; BLACKEN_INTERVAL_MS is the
@@ -1699,7 +1744,7 @@ public:
 		if (n < 3)
 		{
 			state = rest_state_index();
-			update_tex();
+			refreshTexIfNeeded();
 			return;
 		}
 
@@ -1719,7 +1764,7 @@ public:
 		int target_frame = std::clamp((int)((n - 1) * normalized), 0, n - 1);
 
 		state = target_frame;
-		update_tex();
+		refreshTexIfNeeded();
 	}
 
 
@@ -1757,6 +1802,8 @@ public:
 			return;
 		last_blacken_time_ms = now_ms;
 
+		bool any_chunk_changed = false;
+
 		for (size_t ci = 0; ci < chunks.size(); ++ci)
 		{
 			enemy_chunk& c = chunks[ci];
@@ -1773,12 +1820,23 @@ public:
 				}
 			}
 
+			// A chunk with no new hits and no damage still animating has
+			// nothing to do: animate_blackening would change no pixels and
+			// then re-upload the texture anyway.  Leave c.state alone so the
+			// render loop still notices a tilt change and refreshes it.
+			if (local_hits.empty() && c.blackening_age_map.empty())
+				continue;
+
 			// Keep each chunk's displayed frame in sync with the parent
 			// enemy's current tilt state so blackening paints onto the
 			// frame the player actually sees.
 			c.state = state;
 			c.animate_blackening(local_hits, c.state);
+			any_chunk_changed = true;
 		}
+
+		if (!any_chunk_changed)
+			return;
 
 		// animate_blackening mutates each chunk's pixel buffers (coloring,
 		// fully-black pixels, and erosion-driven alpha=0). The parent
@@ -1796,6 +1854,10 @@ public:
 		// the accumulated damage.
 		for (int f = 0; f < (int)sprite_frames.size(); ++f)
 			syncChunksToParentFrame(f);
+
+		// The parent's pixels changed; its texture (used for the fluid
+		// obstacle stamp) must be re-uploaded on the next refresh.
+		parent_tex_dirty = true;
 	}
 
 	// Copy every chunk's pixel data for the given frame index back into
@@ -4566,6 +4628,10 @@ GLuint lineVAO = 0;
 GLuint lineVBO = 0;
 std::vector<Line> lines;  // Your vector of lines
 
+// Builds the (currently undrawn) per-enemy spline/tangent debug lines in
+// display().  Off by default: see the comment at its use site.
+bool g_debugBuildSplineLines = false;
+
 vector<Line> tangent_lines;
 
 
@@ -5170,6 +5236,13 @@ void detectEdgeCollisions()
 
 		{
 			enemy_ships[h]->under_fire = false;
+
+			// Collision points come from the on-screen fluid, so an enemy that
+			// is culled or not on screen (including dormant enemies waiting
+			// past the right edge) can't be hit and has nothing to animate.
+			if (enemy_ships[h]->to_be_culled || false == enemy_ships[h]->isOnscreen())
+				continue;
+
 			vector<glm::vec2> blackening_points;
 
 			for (size_t i = 0; i < collisionPoints.size(); i++)
@@ -6337,9 +6410,14 @@ void simulate()
 
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
+		// Dormant (not yet on screen) and culled enemies don't need their
+		// tilt animated -- that would just re-upload an invisible texture.
+		if (enemy_ships[i]->to_be_culled || enemy_ships[i]->isDormant())
+			continue;
+
 		enemy_ships[i]->updateTiltFromInput();
 
-		if (enemy_ships[i]->to_be_culled || false == enemy_ships[i]->isOnscreen())
+		if (false == enemy_ships[i]->isOnscreen())
 			continue;
 
 		for (size_t j = 0; j < enemy_ships[i]->cannons.size(); j++)
@@ -6497,6 +6575,9 @@ void simulate()
 	//
 	// Drift touches live knots only; initial_path_points is left alone so
 	// the canonical positions survive gameplay unchanged.
+	//
+	// Enemies still past the right edge (isDormant) only run this cheap
+	// position math; set_velocity_or_defer skips their tilt/texture work.
 	// ------------------------------------------------------------------
 	for (size_t i = 0; i < enemy_ships.size(); i++)
 	{
@@ -6538,7 +6619,7 @@ void simulate()
 
 				e->vel_x = foreground_vel;
 				e->vel_y = 0.0f;
-				e->set_velocity(e->vel_x, e->vel_y);
+				e->set_velocity_or_defer(e->vel_x, e->vel_y);
 
 				continue;
 			}
@@ -6574,7 +6655,7 @@ void simulate()
 			e->vel_x = tangent.x * speed_mult * speed_scale;
 			e->vel_y = tangent.y * speed_mult * speed_scale;
 
-			e->set_velocity(e->vel_x, e->vel_y);
+			e->set_velocity_or_defer(e->vel_x, e->vel_y);
 
 			continue;
 		}
@@ -6590,7 +6671,7 @@ void simulate()
 			e->vel_x = foreground_vel;
 			e->vel_y = 0;
 
-			e->set_velocity(e->vel_x, e->vel_y);
+			e->set_velocity_or_defer(e->vel_x, e->vel_y);
 			e->integrate(DT);
 		}
 		else if (e->x < 0)
@@ -6605,7 +6686,7 @@ void simulate()
 			e->vel_x = foreground_vel;
 			e->vel_y = 0;
 
-			e->set_velocity(e->vel_x, e->vel_y);
+			e->set_velocity_or_defer(e->vel_x, e->vel_y);
 			e->integrate(DT);
 		}
 	}
@@ -10157,9 +10238,23 @@ void display()
 	displayFPS();
 
 
-	for (size_t e = 0; e < enemy_ships.size(); e++)
+	// Debug-only spline/tangent visualisation.  It used to run every frame
+	// for every enemy that wasn't culled -- including all the ones waiting
+	// off-screen -- appending 100 segments per enemy per frame into the
+	// global 'lines' / 'tangent_lines' vectors, which were never cleared.
+	// The vectors grew by hundreds of MB per minute and every reallocation
+	// copied all of it: the sporadic multi-hundred-ms stalls.  It is now off
+	// by default, clears its buffers each frame, and only covers enemies
+	// that are actually on screen.
+	if (g_debugBuildSplineLines)
 	{
-		if (false == enemy_ships[e]->isOnscreen() && enemy_ships[e]->to_be_culled == true)
+		lines.clear();
+		tangent_lines.clear();
+	}
+
+	for (size_t e = 0; g_debugBuildSplineLines && e < enemy_ships.size(); e++)
+	{
+		if (false == enemy_ships[e]->isOnscreen() || enemy_ships[e]->to_be_culled == true)
 			continue;
 
 		glm::vec2 previous_pos = get_spline_point(enemy_ships[e]->path_points, 0.0f);
